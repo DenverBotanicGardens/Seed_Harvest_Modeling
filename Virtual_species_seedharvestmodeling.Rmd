@@ -1,0 +1,226 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# install.packages("popbio")
+library(popbio)
+library(ggplot2)
+```
+
+
+To multiply matrices 
+> v1 <- c(1,2,3)
+> v2 <- matrix(c(3,1,2,2,1,3,3,2,1), ncol = 3, byrow = TRUE)
+> v1 %*% t(v2)   
+
+
+or crossprod()    
+
+# Either use popbio to estimate from virtual plants counts or just start with the projection matrix for good and bad years   
+Then are larger numbers of seeds the 'good years' or need to make there be good fertility leading to lots of seeds    
+How to add in life, diminishing survival after life length number of years. 
+```{r}
+# 100 years, long persistence
+# seeds_produced <- rgamma(101, 9000, 5)
+seeds_produced <- runif(101,0,10000)
+virtualplant <- data.frame(year = 1:(length(seeds_produced)), seed = seeds_produced, seedling = 0, vegetative = 0, reproductive = 0, year_goodbad = NA, fecundity = seeds_produced)
+virtualplant$year_goodbad[1] <- "G"
+
+for(x in 2:(length(seeds_produced))){
+  # More seeds = good year, good for seed production might or might not be better for seed germination
+  # Some percent of seed will germinate
+  # good year survival rates
+  survrate_good <- runif(1,0.5,1)
+  growthrate_good <- runif(1,0.5,1)
+  # bad year survival and growth
+  survrate_bad <- runif(1,0,0.5)
+  growthrate_bad <- runif(1,0,0.5)
+  # good or bad year
+  year_goodbad <- sample(rep(c("G","G","B"),100),size = 1)##bernoulli needed
+  virtualplant$year_goodbad[x] <- year_goodbad
+  if(year_goodbad == "G"){
+    survrate <- survrate_good
+    growthrate <- growthrate_good
+  } else {
+    survrate <- survrate_bad
+    growthrate <- growthrate_bad
+  }
+  # A small fraction of the seeds will germinate
+  virtualplant$seedling[x] <- runif(1,0,0.05)*virtualplant$seed[x]
+  # Other seeds will die, most will survive with Beta(0.9,0.2) 
+  virtualplant$seed[x] <- ((virtualplant$seed[x]-virtualplant$seedling[x])*rbeta(1,.5,.2))+
+    (virtualplant$seed[x-1]*survrate)
+  # some seedlings will survive to be vegetative, Years good for germination likely better for survival to vegetative
+  virtualplant$vegetative[x] <- (rbeta(1,growthrate,0.2)*virtualplant$seedling[x])+
+    (virtualplant$vegetative[x-1]*survrate)
+  # similar vegetative to reproductive (check on based on Demographic data), but lower survival of reproductive
+  virtualplant$reproductive[x] <- (rbeta(1,growthrate, 0.2)*virtualplant$vegetative[x])+
+    (virtualplant$reproductive[x-1]*(rbeta(1,survrate,0.9)))
+}
+
+# hist(rgamma(100,9000,5))
+# hist(rbeta(100,.9,.2))
+# hist(rbeta(100,growthrate,0.9))
+# hist(rbeta(100,growthrate*0.5,0.9))
+# hist(rnorm(100, 0.5,0.05))
+
+plot(virtualplant$year, rowSums(virtualplant[,3:5]), type="l")
+
+ggplot(virtualplant)+
+  # geom_point(aes(year, reproductive, colour=year_goodbad))+
+  # geom_point(aes(year, seedling, colour=year_goodbad))+
+  # geom_point(aes(year, vegetative, colour=year_goodbad))+
+  geom_line(aes(year, reproductive), colour="grey")+
+  geom_line(aes(year, seedling), colour="blue")+
+  geom_line(aes(year, vegetative), colour="green")+
+  theme_bw()
+```
+
+# Sample from the virtual population
+```{r}
+
+
+```
+
+# or start with individuals and make them stage-fate marked already   
+```{r}
+# 100 years, long persistence
+# seeds_produced <- rgamma(101, 9000, 5)
+seeds_produced <- runif(101,0,10000)
+virtualplant_ind <- data.frame(year = 2, fate = NA, 
+                               year_goodbad = NA, 
+                               year.1 = 1, stage = NA)
+virtualplant_ind$stage <- ordered(virtualplant_ind$stage, 
+                                  levels = c("seed","seedling","vegetative","reproductive"))
+virtualplant_ind$fate <- ordered(virtualplant_ind$fate, 
+                                  levels = c("seed","seedling","vegetative","reproductive"))
+virtualplant_ind$year_goodbad[1] <- "G"
+
+for(x in 2:(length(seeds_produced))){
+  # More seeds = good year, good for seed production might or might not be better for seed germination
+  # Some percent of seed will germinate
+  # good year survival rates
+  survrate_good <- runif(1,0.5,1)
+  growthrate_good <- runif(1,0.5,1)
+  # bad year survival and growth
+  survrate_bad <- runif(1,0,0.5)
+  growthrate_bad <- runif(1,0,0.5)
+  # good or bad year
+  # good or bad probabilities
+  y_p <- 0.25
+  year_goodbad <- sample(c("G","B"), 1, replace = TRUE, prob=c(y_p,1-y_p)) ##bernoulli needed
+  virtualplant$year_goodbad[x] <- year_goodbad
+  if(year_goodbad == "G"){
+    survrate <- survrate_good
+    growthrate <- growthrate_good
+  } else {
+    survrate <- survrate_bad
+    growthrate <- growthrate_bad
+  }
+  # A small fraction of the seeds will germinate
+  for(i in 1:seeds_produced[x]){
+    virtualplant_ind <- rbind(virtualplant_ind,
+                              )
+  }
+  virtualplant_ind$stage <- virtualplant$seedling[x] <- runif(1,0,0.05)*virtualplant$seed[x]
+  # Other seeds will die, most will survive with Beta(0.9,0.2) 
+  virtualplant$seed[x] <- ((virtualplant$seed[x]-virtualplant$seedling[x])*rbeta(1,.5,.2))+
+    (virtualplant$seed[x-1]*survrate)
+  # some seedlings will survive to be vegetative, Years good for germination likely better for survival to vegetative
+  virtualplant$vegetative[x] <- (rbeta(1,growthrate,0.2)*virtualplant$seedling[x])+
+    (virtualplant$vegetative[x-1]*survrate)
+  # similar vegetative to reproductive (check on based on Demographic data), but lower survival of reproductive
+  virtualplant$reproductive[x] <- (rbeta(1,growthrate, 0.2)*virtualplant$vegetative[x])+
+    (virtualplant$reproductive[x-1]*(rbeta(1,survrate,0.9)))
+}
+
+# hist(rbinom(1:2,100,0.6 ))
+# hist(rgamma(100,9000,5))
+# hist(rbeta(100,.9,.2))
+# hist(rbeta(100,growthrate,0.9))
+# hist(rbeta(100,growthrate*0.5,0.9))
+# hist(rnorm(100, 0.5,0.05))
+
+plot(virtualplant$year, rowSums(virtualplant[,3:5]), type="l")
+
+ggplot(virtualplant)+
+  # geom_point(aes(year, reproductive, colour=year_goodbad))+
+  # geom_point(aes(year, seedling, colour=year_goodbad))+
+  # geom_point(aes(year, vegetative, colour=year_goodbad))+
+  geom_line(aes(year, reproductive), colour="grey")+
+  geom_line(aes(year, seedling), colour="blue")+
+  geom_line(aes(year, vegetative), colour="green")+
+  theme_bw()
+
+```
+
+Projection matrix wants each row is an individual. I have everything in percents.    
+Is this just percent statsis 
+```{r}
+
+# make each year the number of indivdiuals in each category that stay that transition...
+# seeds_produced is year 1 through 101 but is added from year 2?
+virtualplant_trans <- data.frame(virtualplant[-1,],virtualplant[-nrow(virtualplant),])
+
+# Need to round to whole number?
+# seed, seedling, vegetative, reproductive   
+
+#percent seed to seed; ignore the reproductive to seed
+A_matrix <- matrix(c(mean(((virtualplant_trans$seed-virtualplant_trans$fecundity) - virtualplant_trans$seed.1)/virtualplant_trans$seed.1), 
+    #percent seed to seedling
+                     mean((virtualplant_trans$seedling - virtualplant_trans$seed.1)/virtualplant_trans$seed.1), 
+    #percent seed to vegetative
+                     mean((virtualplant_trans$vegetative - virtualplant_trans$seed.1)/virtualplant_trans$seed.1),
+    #percent seed to reproductive
+                     mean((virtualplant_trans$reproductive - virtualplant_trans$seed.1)/virtualplant_trans$seed.1),
+    #percent seedling to seed
+                     0, 
+    #seedling to vegetative
+                     0, 
+    #percent seedling to vegetative
+                     mean((virtualplant_trans$vegetative-virtualplant_trans$seedling.1)/virtualplant_trans$seedling.1), 
+    #percent seedling to reproductive
+                     mean((virtualplant_trans$reproductive - virtualplant_trans$seedling.1)/virtualplant_trans$seedling.1), 
+    #percent vegetative to seed
+                     0,
+    #percent vegetative to seedling
+                     0,
+    #percent vegetative to vegetative
+                     mean((virtualplant_trans$vegetative - virtualplant_trans$vegetative.1)/virtualplant_trans$vegetative.1),
+    #percent vegetative to reproductive
+                     mean((virtualplant_trans$reproductive - virtualplant_trans$vegetative.1)/virtualplant_trans$vegetative.1),
+    #percent reproductive to seed; poop, is this where or do I ignore the fecundity in this matrix? What now! It's not the number, it's the bigger number of importance somehow...
+                     mean((virtualplant_trans$fecundity.1/virtualplant_trans$reproductive.1)*(virtualplant_trans$seed-virtualplant_trans$fecundity)),
+    #percent reproductive to seedling
+                     0,
+    #percent reproductive to vegetative
+                     0,
+    #percent reprodutive to reproductive
+                     mean((virtualplant_trans$reproductive - virtualplant_trans$reproductive.1)/virtualplant_trans$reproductive.1)), 4,4) 
+
+  
+A_matrix
+```
+
+```{r}
+
+eigen.analysis()
+```
+
+
+
+
+
+General Virtual plant types with long seed bank persistence to short to no seed bank   
+What are the differences in a good year and bad and in time since event (fire, introduction, establishment, disturbance)
+```{r}
+# Either directional or with retrogression
+stages <- c("seed","seedling","veg","rep")
+
+A_pers_good <- matrix(c())
+
+
+
+```
