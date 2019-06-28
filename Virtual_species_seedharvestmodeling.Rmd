@@ -7,6 +7,8 @@ output: html_notebook
 # install.packages("popbio")
 library(popbio)
 library(ggplot2)
+# install.packages("IPMpack")
+library(IPMpack)
 ```
 
 
@@ -224,3 +226,52 @@ A_pers_good <- matrix(c())
 
 
 ```
+
+
+# Integral Projection Model     
+<https://cmerow.github.io/RDataScience/21_assets/Intro_to_IPMs_short.pdf>   
+
+     1. Plot Growth as some measure of size   
+     2. Plot probability of survival over sizes   
+     3. Plot flowering probability, log(seed #), and recruits over size  
+     4. Vital rate regressions (Growth over sizes as $\beta_0 + \beta_1 size + \beta_2 size^2$)
+
+$$ logit[s(x)] = log\left(\frac{s(x)}{1-s(x)}\right) = \beta_1 + \beta_2 x$$
+
+glm(y ~ x, family=binomial) to get $\beta$ and then write the s(x) function
+
+$$s(x) = \frac{exp(\beta_1 + \beta_2 x)}{1 + exp(\beta_1 + \beta_2 x)}$$
+Exponential variance function gls(s1~s0, weight=varExp(form=~fitted(.)))
+```{r}
+
+```
+
+
+## Growth function g(x,y)   
+g(x,y) = dnorm($\mu_y, \sigma_y$)
+$\mu = \beta_1 + \beta_2 x$
+$\sigma_y = f(x, covariates, ...)$
+
+lm(y~x) to get $\beta s~and~\sigma_y$
+
+## Fertility function f(x,y)   
+glm(y~x, binomial)   
+glm(y~x, Poisson) to get $\beta s$ and $\mu_{sdl}$ and $\sigma_{sdl}$ from data; dnorm for f(x,y)    
+
+e <- eigen(M) # eigenanalysis
+lambda <- Re(e$values[1]) # dominant eigenvalues   
+
+### right eigenvector
+w<-Re(e$vectors[,1]) # stable (st)age distribution
+w<-v/sum(v) # standardize to total density   
+
+### left eigenvector
+et<- eigen(t(M)
+v<- Re(et$vectors[,1])
+v<-w/w[1] # reproductive value
+
+```{r}
+
+
+```
+
