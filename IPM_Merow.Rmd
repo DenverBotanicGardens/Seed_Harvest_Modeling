@@ -1,0 +1,297 @@
+---
+title: "IPM"
+output: html_document
+---
+
+```{r}
+library(lattice)
+library(fields)
+library(nlme)
+```
+
+Integral Project Models   
+Merow et al. 2014 Moethods in Ecology and Evolution   
+
+    1. Asymototic population growth rate
+    2. stable stage structure
+    3. reproductive values
+    4. sensitivites and elasticites to matrix elements
+```{r}
+currentyr <- as.numeric(format(as.Date(Sys.Date(),format="%Y-%m-%d"), "%Y"))
+rawdatapath <- paste("Q:/Research/All_Projects_by_Species/Astragalus SPECIES/Astragalus_microcymbus/Asmi_Excel/Yearly Summaries/", 
+                     currentyr-1,"_asmi/RawData_",
+                     currentyr-1, ".csv", collapse = '', sep = '')
+asmi.raw <- read.csv(path.expand(rawdatapath), na.strings = "na")
+# Need to add NA to length in years before something was measured so only growth in sizeNext and treated as a new recruit, fill in NA rows for year before something was a seedling
+
+# Need NA when dead for length
+# Need NA when vegetative or seedling, dormant or dead for fruit
+asmi.raw$length[asmi.raw$status %in% c("dead","dormant")] <- NA
+table(asmi.raw$fruit[asmi.raw$flower == 0]) # there are 7 times flower is 0 but fruit is 1
+asmi.raw$fruit[asmi.raw$flower == 0] <- NA
+
+ps.cor <- subset(merge(asmi.age, asmi.age, 
+                       by = c("AsMi_tag_id")), year.x == year.y - 1)
+
+
+ps.cor$surv <- 1
+ps.cor$surv[ps.cor$status.y == "dead"] <- 0
+
+
+# Add row of NA length for year before seedling was added
+ps.seedlings <- ps.cor[ps.cor$status.x == "seedling",]
+ps.seedlings$length.y <- ps.seedlings$length.x
+ps.seedlings$length.x <- NA
+ps.seedlings$surv <- NA
+ps.corSim <- rbind(ps.cor,ps.seedlings)
+
+ps.corSim <- ps.corSim[ps.corSim$status.x != "dormant",]
+ps.corSim <- ps.corSim[ps.corSim$status.y != "dormant",]
+# Create simulated data
+sim1 <- data.frame(size = ps.corSim$length.x, sizeNext = ps.corSim$length.y, 
+                   surv = ps.corSim$surv,
+                   fec.seed = ps.corSim$fruit.x,
+                   fec.flower = ps.corSim$flower.x)
+
+par(mfrow=c(2,2),mar=c(4,4,2,1))
+plot(sim1$size,jitter(sim1$surv),xlab="Size (t)", ylab="Survival to t+1") # jittered
+plot(sim1$size,sim1$sizeNext,xlab="Size (t)",ylab="Size (t+1)")
+plot(sim1$size,sim1$fec.seed,xlab="Size (t)",ylab="Seed Number")
+hist(sim1$sizeNext[is.na(sim1$size)],main="",xlab="Recruit Size") # probably because not true recruit
+
+```
+
+Create dataframe of model parameters
+```{r}
+params=data.frame(
+  surv.int=NA, # Intercept from logistic regression of survival
+  surv.slope=NA, # Slope from logistic regression of survival
+  growth.int=NA, # Intercept from linear regression of growth
+  growth.slope=NA, # Slope from linear regression of growth
+  growth.sd=NA, # Residual sd from the linear regression of growth
+  seed.int=NA, # Intercept from Poisson regression of seed number
+  seed.slope=NA, # Slope from Poisson regression of seed number
+  recruit.size.mean=NA, # Mean recruit size
+  recruit.size.sd=NA, # Standard deviation of recruit size
+  establishment.prob=NA # Probability of establishment
+)
+
+# 1. survival: logistic regression
+surv.reg<-glm(surv~size,data=sim1,family=binomial())
+summary(surv.reg)
+params$surv.int=coefficients(surv.reg)[1]
+params$surv.slope=coefficients(surv.reg)[2]
+
+# 2. growth: linear regression
+growth.reg=lm(sizeNext~size,data=sim1)
+params$growth.int=coefficients(growth.reg)[1]
+params$growth.slope=coefficients(growth.reg)[2]
+params$growth.sd=sd(resid(growth.reg))
+
+# 3. seeds: Poisson regression
+seed.reg=glm(fec.seed~size,data=sim1,family=poisson())
+params$seed.int=coefficients(seed.reg)[1]
+params$seed.slope=coefficients(seed.reg)[2]
+
+# 4. size distribution of recruits
+params$recruit.size.mean=mean(sim1$sizeNext[is.na(sim1$size)])
+params$recruit.size.sd=sd(sim1$sizeNext[is.na(sim1$size)])
+
+# 5. establishment probability
+# based off of one year, I need to sum over each year which I do not have in my data.frame but could add year and sum over the previous year, will want to add climate variables too
+params$establishment.prob=sum(is.na(sim1$size))/sum(sim1$fec.seed,na.rm=TRUE)
+
+```
+
+Plot, page 11
+```{r}
+
+par(mfrow=c(2,2))
+xx=seq(0,100,by=.01) # sizes at which to evaluate predictions
+plot(sim1$size,jitter(sim1$surv), xlab="Size (t)",ylab="Survival to t+1") # jittered
+lines(xx,predict(surv.reg,data.frame(size=xx),type="response"), col="red",lwd=3)
+plot(sim1$size,sim1$sizeNext,xlab="Size (t)",ylab="Size (t+1)")
+lines(xx,predict(growth.reg,data.frame(size=xx)),col="red",lwd=3)
+plot(sim1$size,sim1$fec.seed,xlab="Size (t)",ylab="Seed Number (t)")
+lines(xx,predict(seed.reg,
+data.frame(size=xx),type="response"),col="red",lwd=3)
+hist(sim1$sizeNext[is.na(sim1$size)],freq=FALSE,xlab="Recruit size",main=)
+lines(xx,dnorm(xx,params$recruit.size.mean,
+params$recruit.size.sd), col="red",lwd=3)
+
+
+
+```
+
+
+# Functions to describe life history   
+     1. Use the regressions from above to build the IPM 
+```{r}
+
+# 1. survival probability function
+s.x <- function(x,params) {
+  u=exp(params$surv.int+params$surv.slope*x)
+  return(u/(1+u))
+  }
+
+# 2. growth function
+g.yx <- function(xp,x,params) {
+  dnorm(xp,mean=params$growth.int+params$growth.slope*x,sd=params$growth.sd)
+}
+
+# 3. reproduction function
+f.yx <- function(xp,x,params) {
+  params$establishment.prob*
+  dnorm(xp,mean=params$recruit.size.mean,sd=params$recruit.size.sd)*
+  exp(params$seed.int+params$seed.slope*x)
+}
+```
+
+
+# Define the boundary points (edges of cells defining the matrix), mesh points (centers of cells defining the matrix, for midpoint rule), step size (h: widths of the cells), integration limits (min.size and max.size) span the range of sizes observed in data set plus some
+```{r}
+min.size=.9*min(c(sim1$size,sim1$sizeNext),na.rm=T)
+max.size=1.1*max(c(sim1$size,sim1$sizeNext),na.rm=T)
+n=100 # number of cells in the matrix
+b=min.size+c(0:n)*(max.size-min.size)/n # boundary points
+y=0.5*(b[1:n]+b[2:(n+1)]) # mesh points
+h=y[2]-y[1] # step size
+
+```
+
+# outer() to evalute matrix at all pairwise combintations of vectors y and y to get kernel components for growth and fecundity  (???)   
+    1. use midpoint rule estiamte the area under a curve
+    2. heights of rectangles by outer function and width of rectanges is h   
+    3. make K, the full matrix 100 x 100 cell discretization of the kernel    
+    
+```{r}
+G=h*outer(y,y,g.yx,params=params) # growth matrix
+S=s.x(y,params=params) # survival
+F=h*outer(y,y,f.yx,params=params) # reproduction matrix
+P=G # placeholder; redefine P on the next line
+for(i in 1:n) P[,i]=G[,i]*S[i] # growth/survival matrix
+K=P+F # full matrix
+
+```
+
+# get eigenvalues (</lambda) and eigenvectors (v-left, w-right)   
+     1. lambda = asympotoic population growth rate (the dominant eigenvalue)
+     2. w = stable stage distribution   
+     3. v = reproductive value when normalized     
+
+```{r}
+lam <- Re(eigen(K)$values[1])
+w.eigen <- Re(eigen(K)$vectors[,1])
+stable.dist <- w.eigen/sum(w.eigen)
+v.eigen <- Re(eigen(t(K))$vectors[,1])
+repro.val <- v.eigen/v.eigen[1]
+
+# Use eigen values to get sensitiviy and elasticity
+v.dot.w=sum(stable.dist*repro.val)*h
+sens=outer(repro.val,stable.dist)/v.dot.w
+elas=matrix(as.vector(sens)*as.vector(K)/lam,nrow=n)
+```
+
+```{r}
+par(mfrow=c(2,3),mar=c(4,5,2,2))
+image.plot(y,y,t(K), xlab="Size (t)",ylab="Size (t+1)",
+col=topo.colors(100), main="IPM matrix")
+contour(y,y,t(K), add = TRUE, drawlabels = TRUE)
+plot(y,stable.dist,xlab="Size",type="l",main="Stable size distribution")
+plot(y,repro.val,xlab="Size",type="l",main="Reproductive values")
+image.plot(y,y,t(elas),xlab="Size (t)",ylab="Size (t+1)",main="Elasticity")
+image.plot(y,y,t(sens),xlab="Size (t)",ylab="Size (t+1)", main="Sensitivity")
+
+```
+
+# Improvments   
+     1. add variance in growth among individuals a function of size   
+     2. quadratic term for size in growth function to capture plateauing pattern in growth data (to allow for plateauing pattern)    
+     3. include flowering probability in fecundity - not all individuals reproduce
+```{r}
+plot(growth.reg$model$size,abs(resid(growth.reg)),xlab="size",ylab="residual")
+
+```
+
+```{r}
+ # build a regression on the residuals of growth regression as function of size using GLS (easiest)
+growth.reg=gls(sizeNext~size,weights=varExp(),na.action=na.omit, data=sim1)
+summary(growth.reg)
+plot(sim1$size,sim1$sizeNext,main="Growth/Shrinkage/Stasis")
+lines(xx,predict(growth.reg,data.frame(size=xx)),col="red",lwd=3)
+```
+
+modify params data frame, coefficients called growth.sd.int and growth.sd.slope 
+```{r}
+params$growth.int=coefficients(growth.reg)[1]
+params$growth.slope=coefficients(growth.reg)[2]
+params$growth.sigma2=summary(growth.reg)$sigma^2
+params$growth.sigma2.exp=as.numeric(growth.reg$modelStruct$varStruct)
+
+```
+Let the growth function g.xy() allow standard deviation to be a function of size.  
+```{r}
+g.yx <- function(xp,x,params) {
+  dnorm(xp,mean=params$growth.int+params$growth.slope*x,
+  sd=sqrt(params$growth.sigma2*exp(2*params$growth.sigma2.exp*x)))
+}
+
+```
+
+Rerun code to get lambda, sensitivies, elasticities
+```{r}
+G=h*outer(y,y,g.yx,params=params) # growth matrix
+S=s.x(y,params=params) # survival
+P=G # placeholder; redefine P on the next line
+for(i in 1:n) P[,i]=G[,i]*S[i] # growth/survival matrix
+F=h*outer(y,y,f.yx,params=params) # reproduction matrix
+K=P+F # full matrix
+(lam=Re(eigen(K)$values[1])) # new population growth rate
+w.eigen=Re(eigen(K)$vectors[,1])
+stable.dist=w.eigen/sum(w.eigen)
+v.eigen=Re(eigen(t(K))$vectors[,1])
+repro.val=v.eigen/v.eigen[1]
+v.dot.w=sum(stable.dist*repro.val)*h
+sens=outer(repro.val,stable.dist)/v.dot.w
+elas=matrix(as.vector(sens)*as.vector(K)/lam,nrow=n)
+
+```
+
+```{r}
+par(mfrow=c(2,3),mar=c(4,5,2,2))
+image.plot(y,y,t(K), xlab="Size (t)",ylab="Size (t+1)",
+col=topo.colors(100), main="IPM matrix")
+contour(y,y,t(K), add = TRUE, drawlabels = TRUE)
+plot(y,stable.dist,xlab="Size",type="l",main="Stable size distribution")
+plot(y,repro.val,xlab="Size",type="l",main="Reproductive values")
+image.plot(y,y,t(elas),xlab="Size (t)",ylab="Size (t+1)",main="Elasticity")
+image.plot(y,y,t(sens),xlab="Size (t)",ylab="Size (t+1)", main="Sensitivity")
+
+```
+
+
+#ScGl example
+```{r}
+sg <- read.csv(paste("Q:/Research/All_Projects_by_Species/Sclerocactus SPECIES/Sclerocactus_glaucus/R_code_ScGl/R_tables/RawData_scgl_", "2018",".csv",
+                     sep=""))
+table(sg$Site,sg$Year) 
+#Remove rows where Site is blank, if any
+sg[which(sg$Site == ""),]
+if(nrow(sg[-which(sg$Site == ""),])>0){
+  sg <- sg[-which(sg$Site == ""),]
+  }
+
+# Create simulated data
+sim1 <- data.frame(size = rnorm(), sizeNext = ps.cor$length.y, 
+                   fec.seed = ps.cor$fruit.x,
+                   fec.flower = ps.cor$flower.x)
+
+par(mfrow=c(2,2),mar=c(4,4,2,1))
+plot(sim1$size,jitter(sim1$surv),xlab="Size (t)", ylab="Survival to t+1") # jittered
+plot(sim1$size,sim1$sizeNext,xlab="Size (t)",ylab="Size (t+1)")
+plot(sim1$size,sim1$fec.seed,xlab="Size (t)",ylab="Seed Number")
+hist(sim1$sizeNext[!is.na(sim1$size)],main="",xlab="Recruit Size") # probably because not true recruit
+
+
+```
+
