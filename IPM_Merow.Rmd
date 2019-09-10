@@ -10,7 +10,7 @@ library(nlme)
 ```
 
 Integral Project Models   
-Merow et al. 2014 Moethods in Ecology and Evolution   
+Merow et al. 2014 Methods in Ecology and Evolution   
 
     1. Asymototic population growth rate
     2. stable stage structure
