@@ -3,40 +3,84 @@ title: "IPM"
 output: html_document
 ---
 
+<https://github.com/ropensci/prism>
 ```{r}
+# IPM
 library(lattice)
 library(fields)
 library(nlme)
+library(IPMpack)
+
+# Visualization
+library(ggplot2)
+
+# Climate data
+library(prism)
+
+# Mapping
+library(rgdal)
+library(raster)
+```
+
+Datasets
+```{r}
+
+load("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/sim1.Rda")
+
+
 ```
 
 Integral Project Models   
-Merow et al. 2014 Methods in Ecology and Evolution   
+Merow et al. 2014 Moethods in Ecology and Evolution   
 
     1. Asymototic population growth rate
     2. stable stage structure
     3. reproductive values
-    4. sensitivites and elasticites to matrix elements
+    4. sensitivites and elasticites to matrix elements    
+    
+Local data, skip after loading datasets
 ```{r}
+
+# A little clunky but missing code to make original sim1
+sim2 <- sim1
+rm(sim1)
+
 currentyr <- as.numeric(format(as.Date(Sys.Date(),format="%Y-%m-%d"), "%Y"))
 rawdatapath <- paste("Q:/Research/All_Projects_by_Species/Astragalus SPECIES/Astragalus_microcymbus/Asmi_Excel/Yearly Summaries/", 
                      currentyr-1,"_asmi/RawData_",
                      currentyr-1, ".csv", collapse = '', sep = '')
 asmi.raw <- read.csv(path.expand(rawdatapath), na.strings = "na")
 # Need to add NA to length in years before something was measured so only growth in sizeNext and treated as a new recruit, fill in NA rows for year before something was a seedling
+```
 
+
+
+# Turn AsMi data into something approrpriate for IPM
+```{r}
 # Need NA when dead for length
 # Need NA when vegetative or seedling, dormant or dead for fruit
 asmi.raw$length[asmi.raw$status %in% c("dead","dormant")] <- NA
+asmi.raw$length[asmi.raw$length>100 & !is.na(asmi.raw$length)] <- NA
 table(asmi.raw$fruit[asmi.raw$flower == 0]) # there are 7 times flower is 0 but fruit is 1
 asmi.raw$fruit[asmi.raw$flower == 0] <- NA
 
-ps.cor <- subset(merge(asmi.age, asmi.age, 
+# Some lengths are zero instead of NA
+asmi.raw[asmi.raw$length==0 & !is.na(asmi.raw$length),]  # 23 rows! What is wrong with these?
+nrow(asmi.raw[!(asmi.raw$length==0 & !is.na(asmi.raw$length)),])
+nrow(asmi.raw[asmi.raw$length==0 & !is.na(asmi.raw$length),] )
+asmi.raw <- asmi.raw[!(asmi.raw$length==0 & !is.na(asmi.raw$length)),]
+
+
+# ps.cor <- subset(merge(asmi.age, asmi.age, 
+#                        by = c("AsMi_tag_id")), year.x == year.y - 1)
+ps.cor <- subset(merge(asmi.raw, asmi.raw, 
                        by = c("AsMi_tag_id")), year.x == year.y - 1)
 
 
 ps.cor$surv <- 1
 ps.cor$surv[ps.cor$status.y == "dead"] <- 0
 
+table(ps.cor$surv)
 
 # Add row of NA length for year before seedling was added
 ps.seedlings <- ps.cor[ps.cor$status.x == "seedling",]
@@ -45,20 +89,68 @@ ps.seedlings$length.x <- NA
 ps.seedlings$surv <- NA
 ps.corSim <- rbind(ps.cor,ps.seedlings)
 
+# remove dormant indivduals
 ps.corSim <- ps.corSim[ps.corSim$status.x != "dormant",]
 ps.corSim <- ps.corSim[ps.corSim$status.y != "dormant",]
+
+
+
 # Create simulated data
+# Add climate data as climate and climateNext
 sim1 <- data.frame(size = ps.corSim$length.x, sizeNext = ps.corSim$length.y, 
                    surv = ps.corSim$surv,
                    fec.seed = ps.corSim$fruit.x,
-                   fec.flower = ps.corSim$flower.x)
+                   fec.flower = ps.corSim$flower.x,
+                   year = ps.corSim$year.x,
+                   yearNext = ps.corSim$year.y)
+
+# still seems correct, some died, some have been recruited
+sum(table(is.na(sim1$size)))
+sum(table(is.na(sim1$sizeNext)))
+
+# sim1 is saved on the Github repo
+
+# save(sim1,file = "Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/sim1.Rda")
+
+head(sim1)
+# This way I could split by year to see variation among years, could add in plots/sites too
+
+sim1$fec.flower[sim1$fec.flower==0] <- NA
+sim2$fec.flower[sim2$fec.flower==0] <- NA
+```
+
+
+Errors?  
+```{r}
+table(sim1$sizeNext[is.na(sim1$size)]) # five had size zero before I got rid of the ones above! Now none are zero
+
+sim1[sim1$sizeNext == 0 & !is.na(sim1$sizeNext),]
+sim2[sim2$sizeNext == 0 & !is.na(sim2$sizeNext),] # 3044 that are zero as sizeNext, should they just be NA?, probably
+sim2$sizeNext[sim2$sizeNext == 0 & !is.na(sim2$sizeNext)] <- NA #Oops, should have checked if they were all surv == 0
+
+nrow(sim1[!(is.na(sim1$size) & is.na(sim1$sizeNext)),])
+sim1 <- sim1[!(is.na(sim1$size) & is.na(sim1$sizeNext)),]
+
+```
+
+
+
+```{r}
+# load("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/sim1.Rda")
 
 par(mfrow=c(2,2),mar=c(4,4,2,1))
 plot(sim1$size,jitter(sim1$surv),xlab="Size (t)", ylab="Survival to t+1") # jittered
 plot(sim1$size,sim1$sizeNext,xlab="Size (t)",ylab="Size (t+1)")
 plot(sim1$size,sim1$fec.seed,xlab="Size (t)",ylab="Seed Number")
 hist(sim1$sizeNext[is.na(sim1$size)],main="",xlab="Recruit Size") # probably because not true recruit
+```
 
+```{r}
+par(mfrow=c(2,2),mar=c(4,4,2,1))
+plot(sim2$size,jitter(sim2$surv),xlab="Size (t)", ylab="Survival to t+1") # jittered
+plot(sim2$size,sim2$sizeNext,xlab="Size (t)",ylab="Size (t+1)")
+plot(sim2$size,sim2$fec.seed,xlab="Size (t)",ylab="Seed Number")
+hist(sim2$sizeNext[is.na(sim2$size)],main="",xlab="Recruit Size") # probably because not true recruit
 ```
 
 Create dataframe of model parameters
@@ -94,14 +186,18 @@ params$seed.int=coefficients(seed.reg)[1]
 params$seed.slope=coefficients(seed.reg)[2]
 
 # 4. size distribution of recruits
-params$recruit.size.mean=mean(sim1$sizeNext[is.na(sim1$size)])
+params$recruit.size.mean=mean(sim1$sizeNext[is.na(sim1$size)]) #Oh, some of the sizeNext and size are both NA! That's silly
 params$recruit.size.sd=sd(sim1$sizeNext[is.na(sim1$size)])
 
 # 5. establishment probability
-# based off of one year, I need to sum over each year which I do not have in my data.frame but could add year and sum over the previous year, will want to add climate variables too
+# based off of one year, I need to sum over each year which I do not have in my data.frame but could add year and sum over the previous year, will want to add climate variables too  
+# this is the total individuals that have length (not dormant, not dead) divided by the total fruit
 params$establishment.prob=sum(is.na(sim1$size))/sum(sim1$fec.seed,na.rm=TRUE)
 
 ```
+
+
+
 
 Plot, page 11
 ```{r}
@@ -115,13 +211,14 @@ lines(xx,predict(growth.reg,data.frame(size=xx)),col="red",lwd=3)
 plot(sim1$size,sim1$fec.seed,xlab="Size (t)",ylab="Seed Number (t)")
 lines(xx,predict(seed.reg,
 data.frame(size=xx),type="response"),col="red",lwd=3)
-hist(sim1$sizeNext[is.na(sim1$size)],freq=FALSE,xlab="Recruit size",main=)
+hist(sim1$sizeNext[is.na(sim1$size)],freq=FALSE,xlab="Recruit size",main="Size of Recruits")
 lines(xx,dnorm(xx,params$recruit.size.mean,
 params$recruit.size.sd), col="red",lwd=3)
 
 
 
 ```
+
 
 
 # Functions to describe life history   
@@ -150,12 +247,12 @@ f.yx <- function(xp,x,params) {
 
 # Define the boundary points (edges of cells defining the matrix), mesh points (centers of cells defining the matrix, for midpoint rule), step size (h: widths of the cells), integration limits (min.size and max.size) span the range of sizes observed in data set plus some
 ```{r}
-min.size=.9*min(c(sim1$size,sim1$sizeNext),na.rm=T)
-max.size=1.1*max(c(sim1$size,sim1$sizeNext),na.rm=T)
+min.size=.9*min(c(sim1$size,sim1$sizeNext),na.rm=T) # 0 probably wrong, want a little smaller than minimum
+max.size=1.1*max(c(sim1$size,sim1$sizeNext),na.rm=T) # 110; get a little larger than largest size
 n=100 # number of cells in the matrix
-b=min.size+c(0:n)*(max.size-min.size)/n # boundary points
-y=0.5*(b[1:n]+b[2:(n+1)]) # mesh points
-h=y[2]-y[1] # step size
+b <- min.size+c(0:n)*(max.size-min.size)/n # boundary points
+y <- 0.5*(b[1:n]+b[2:(n+1)]) # mesh points, length 100
+h <- y[2]-y[1] # step size
 
 ```
 
@@ -165,10 +262,10 @@ h=y[2]-y[1] # step size
     3. make K, the full matrix 100 x 100 cell discretization of the kernel    
     
 ```{r}
-G=h*outer(y,y,g.yx,params=params) # growth matrix
-S=s.x(y,params=params) # survival
-F=h*outer(y,y,f.yx,params=params) # reproduction matrix
-P=G # placeholder; redefine P on the next line
+G <- h*outer(y,y,g.yx,params=params) # growth matrix
+S <- s.x(y,params=params) # survival  
+F <- h*outer(y,y,f.yx,params=params) # Previously had many individuals that were NA for both size and sizeNext, that broke this
+P <- G # placeholder; redefine P on the next line
 for(i in 1:n) P[,i]=G[,i]*S[i] # growth/survival matrix
 K=P+F # full matrix
 
@@ -268,6 +365,372 @@ image.plot(y,y,t(elas),xlab="Size (t)",ylab="Size (t+1)",main="Elasticity")
 image.plot(y,y,t(sens),xlab="Size (t)",ylab="Size (t+1)", main="Sensitivity")
 
 ```
+
+   
+Check that integration happens over all size classes possible. Avoid 'eviction' where sizes are missed because are beyond the thesholds choosen. 
+```{r}
+plot(y,s.x(y,params),xlab="Size",type="l",
+ylab="Survival Probability",lwd=12)
+points(y,apply(P,2,sum),col="red",lwd=3,cex=.1,pch=19)
+
+```
+
+Oops, yes, column sums are lower than suvival model suggests.
+
+See Williams et al. 2012 for ways to deal with eviction. Can add the larger individuals back into the largest stage, smaller into the smallest. 
+Loop to correct for large and for offspring
+```{r}
+G=h*outer(y,y,g.yx,params=params) # growth matrix
+S=s.x(y,params=params)
+P=G
+# fix eviction of offspring
+for(i in 1:(n/2)) {
+G[1,i]<-G[1,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+# fix eviction of large adults
+for(i in (n/2+1):n) {
+G[n,i]<-G[n,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+F=h*outer(y,y,f.yx,params=params) # reproduction matrix
+K=P+F # full matrix
+(lam=Re(eigen(K)$values[1])) # new population growth rate
+
+
+```
+
+
+Wow, it worked!
+```{r}
+plot(y,s.x(y,params),xlab="Size",type="l",
+ylab="Survival Probability",lwd=12)
+points(y,apply(P,2,sum),col="red",lwd=3,cex=.1,pch=19)
+
+```
+
+Allow for a slight downturn in growth by adding a quadratic term "I(size^2)"   
+```{r}
+growth.reg=gls(sizeNext~size+I(size^2),weights=varExp(), na.action=na.omit, data=sim1)
+summary(growth.reg)
+
+```
+
+Add it into the params object
+```{r}
+params$growth.int=coefficients(growth.reg)[1]
+params$growth.slope=coefficients(growth.reg)[2]
+params$growth.sqrd=coefficients(growth.reg)[3]
+params$growth.sigma2=summary(growth.reg)$sigma^2
+params$growth.sigma2.exp=as.numeric(growth.reg$modelStruct$varStruct)
+g.yx=function(xp,x,params) {
+dnorm(xp,
+mean=params$growth.int+params$growth.slope*x+params$growth.sqrd*x^2,
+sd=sqrt(params$growth.sigma2*exp(2*params$growth.sigma2.exp*x)))
+}
+
+```
+
+We rerun the code to build the matrix and obtain l, sensitivities, elasticities, etc.  
+```{r}
+G=h*outer(y,y,g.yx,params=params) # growth matrix
+S=s.x(y,params=params) # survival
+P=G # placeholder; redefine P on the next line
+# fix eviction of offspring
+for(i in 1:(n/2)) {
+G[1,i]<-G[1,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+# fix eviction of large adults
+for(i in (n/2+1):n) {
+G[n,i]<-G[n,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+#for(i in 1:n) P[,i]=G[,i]*S[i] # growth/survival matrix
+F=h*outer(y,y,f.yx,params=params) # reproduction matrix
+K=P+F # full matrix
+(lam=Re(eigen(K)$values[1])) # new population growth rate
+```
+
+
+```{r}
+w.eigen=Re(eigen(K)$vectors[,1])
+stable.dist=w.eigen/sum(w.eigen)
+v.eigen=Re(eigen(t(K))$vectors[,1])
+repro.val=v.eigen/v.eigen[1]
+v.dot.w=sum(stable.dist*repro.val)*h
+sens=outer(repro.val,stable.dist)/v.dot.w
+elas=matrix(as.vector(sens)*as.vector(K)/lam,nrow=n)
+
+```
+
+```{r}
+
+par(mfrow=c(2,3),mar=c(4,5,2,2))
+image.plot(y,y,t(K), xlab="Size (t)",ylab="Size (t+1)",
+col=topo.colors(100), main="IPM matrix")
+contour(y,y,t(K), add = TRUE, drawlabels = TRUE)
+plot(y,stable.dist,xlab="Size",type="l",main="Stable size distribution")
+plot(y,repro.val,xlab="Size",type="l",main="Reproductive values")
+image.plot(y,y,t(elas),xlab="Size (t)",ylab="Size (t+1)",main="Elasticity")
+image.plot(y,y,t(sens),xlab="Size (t)",ylab="Size (t+1)", main="Sensitivity")
+```
+
+lots of individuals that are dormant? 
+
+# add probability of flowering (interoparity)   
+use the reproduction kernel (f.xy()) and add a flowering probability.   
+(could also use the 'zero-inflated model' but have information on flowering so can split up distinct processes of flowering and seed conditional on flowering.)
+# Flowerin probability model requires 5 steps    
+
+     1. write flowering probability function. use logistic regression (simliar to survival function) 
+
+```{r}
+p.flower.x=function(x,params) {
+  u=exp(params$flower.int+params$flower.slope*x)
+  return(u/(1+u))
+}
+
+```
+
+
+     2. modify reproduction function (f.xy) to indclude flowring probability function... multiply argument in f.xy by p.flower.x    
+     
+```{r}
+f.yx=function(xp,x,params) {
+  p.flower.x(x,params)*
+    params$establishment.prob*
+    dnorm(xp,mean=params$recruit.size.mean,sd=params$recruit.size.sd)*
+    exp(params$seed.int+params$seed.slope*x)
+}
+
+
+```
+
+    3. fit logistic regression fo rflowering probability. (in as asmi.raw$flower) get the slope and intercept
+
+```{r}
+table(asmi.raw$flower)
+table(sim1$fec.flower)
+
+flower.reg <- glm(fec.flower~size,data=sim1,family=binomial())
+params$flower.int=coefficients(flower.reg)[1]
+params$flower.slope=coefficients(flower.reg)[2]
+```
+
+     4. Update regression for seed number to include only individuals that flowered   
+     
+```{r}
+seed.reg <- glm(fec.seed~size,data=sim1[sim1$fec.flower==1,],family=poisson())
+params$seed.int=coefficients(seed.reg)[1]
+params$seed.slope=coefficients(seed.reg)[2]
+
+```
+
+# run code with full model, including additional fixes for eviction and probability of flowering
+```{r}
+G=h*outer(y,y,g.yx,params=params) # growth matrix
+S=s.x(y,params=params) # survival
+P=G # placeholder; redefine P on the next line
+# fix eviction of offspring
+for(i in 1:(n/2)) {
+G[1,i]<-G[1,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+# fix eviction of large adults
+for(i in (n/2+1):n) {
+G[n,i]<-G[n,i]+1-sum(G[,i])
+P[,i]<-G[,i]*S[i]
+}
+
+ for(i in 1:n) P[,i]=G[,i]*S[i] # growth/survival matrix
+F=h*outer(y,y,f.yx,params=params) # reproduction matrix
+K=P+F # full matrix
+(lam=Re(eigen(K)$values[1])) # new population growth rate
+
+w.eigen=Re(eigen(K)$vectors[,1])
+stable.dist=w.eigen/sum(w.eigen)
+v.eigen=Re(eigen(t(K))$vectors[,1])
+repro.val=v.eigen/v.eigen[1]
+v.dot.w=sum(stable.dist*repro.val)*h
+sens=outer(repro.val,stable.dist)/v.dot.w
+elas=matrix(as.vector(sens)*as.vector(K)/lam,nrow=n)
+
+
+```
+
+```{r}
+par(mfrow=c(2,3),mar=c(4,5,2,2))
+image.plot(y,y,t(K), xlab="Size (t)",ylab="Size (t+1)",
+  col=topo.colors(100), main="IPM matrix")
+contour(y,y,t(K), add = TRUE, drawlabels = TRUE)
+plot(y,stable.dist,xlab="Size",type="l",main="Stable size distribution")
+plot(y,repro.val,xlab="Size",type="l",main="Reproductive values")
+image.plot(y,y,t(elas),xlab="Size (t)",ylab="Size (t+1)",main="Elasticity")
+image.plot(y,y,t(sens),xlab="Size (t)",ylab="Size (t+1)", main="Sensitivity")
+plot(y,predict(flower.reg,newdata=data.frame(size=y),type="response"),
+  xlab="Size (t)", ylab="Flowering probability",type="l")
+
+
+````
+
+
+# Life expectancy   
+Convert matrix to object class IPMmatrix
+```{r}
+# Pmat <- new("IPMmatrix", nDiscrete = 0, nEnvClass = 0,
+#             nBigMatrix = n, nrow = n, ncol = n, meshpoints = y,
+#             env.index = 0, names.discrete = )
+Pmat <- new("IPMmatrix")
+Pmat[, ] = P
+str(Pmat)
+
+mle<- meanLifeExpect(Pmat)
+```
+
+
+
+
+
+
+
+#SpaDES 
+Individual-based integral projection models     
+
+     1. Make processes as modules that don't interact but are scheduled (growth, reproduction, death, climate, seed harvest) **I need climate and growth, reprodution, death... to interact! or maybe there's a good year and bad year module for each growth that is scheudled as well as harvest intensities and come at differing frequencies. 
+```{r}    
+
+
+
+```
+
+Build modules <Individual-based integral projection models>    
+```{r}
+
+
+
+```
+
+
+
+# Integrate climate via Bayesian approach with joint likelihood and prior probability distributions of paramteters   
+Follow Oppel et al. 2014 Ecology
+```{r}
+library(R2WinBUGS)
+
+# Set path to WinBUGS
+bugs.dir <- "C:\\Program Files\\winbugs14_full_patched\\WinBUGS14\\WinBUGS14"
+
+load("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/MontserratOriole_data.RData")
+
+y 						## count data index of the number of Montserrat Orioles counted at 50 point count stations from 2000 - 2013
+J						## number of fledglings observed in years where intensive nest monitoring was carried out
+R						## number of breeding pairs in years where intensive nest monitoring was carried out
+m						## m-array recapture matrix for ADULT Montserrat Orioles individually color-banded
+mj						## m-array recapture matrix for JUVENILE Montserrat Orioles individually color-banded
+rain						## pre-breeding rainfall in Montserrat from 2000 - 2013 in decimeters (= mm/100, to avoid numerical overflow in BUGS)
+volc						## indicator variable for intense volcanic ashfall events from 2000 - 2013   
+
+# WinBUGs code   
+# diverts R output to a connection
+sink("PVA.ipm.txt")
+cat("
+    
+    model {
+    
+    # Priors for all parameters
+
+# Initial populaiton sizes 
+N1[1] ~ dnorm
+    
+    ")
+
+```
+
+
+
+Add climate data
+```{r}
+# Set wd for prism
+options(prism.path = "Q:/Research/All_Projects_by_Species/Astragalus SPECIES/Astragalus_microcymbus/PRISM_asmiclimate")
+
+# Update current year's monthly climate data
+
+#Precipitation total, rain and snow
+get_prism_monthlys(type="ppt", mon = 1:12, keepZip = FALSE, years = (currentyr-1):currentyr)
+#Maximum temperature (average)
+get_prism_monthlys(type="tmax", mon = 1:12, keepZip = FALSE, years = (currentyr-1):currentyr)
+#Minimum temperature (average)
+get_prism_monthlys(type="tmin", mon = 1:12, keepZip = FALSE, years = (currentyr-1):currentyr)
+
+
+
+```
+
+UTM Zone 13 from ArcGIS
+```{r}
+asmilatlong <- read.csv("Q:/Research/All_Projects_by_Species/Astragalus SPECIES/Astragalus_microcymbus/Asmi_Word/2016_asmi/UTM_asmiplots.csv")
+# Convert from UTM to lat/long
+asmi.ll <- spTransform(SpatialPoints(cbind(asmilatlong$Easting,asmilatlong$Northing), 
+                                     proj4string = CRS("+proj=utm +zone=13 + datum=WGS84")), 
+                       CRS("+proj=longlat +datum=WGS84"))
+asmiLL <- data.frame(coordinates(asmi.ll),asmilatlong$Tag__,asmilatlong$Tag_Commen)
+
+ggplot(asmiLL, aes(coords.x1, coords.x2, colour = asmilatlong.Tag_Commen))+
+  geom_point()
+```
+
+# Want Site, Year, Month, ppt, tmin, tmax  
+```{r}
+maxs <- grep("tmax", ls_prism_data(absPath=TRUE)[,2])
+mins <- grep("tmin", ls_prism_data(absPath = TRUE)[,2])
+ppt <- grep("ppt", ls_prism_data(absPath = TRUE)[,2])
+avgTemps.max <- lapply(maxs, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = extract(rastertemps, asmiLL[,c("coords.x1","coords.x2")]), date = ls_prism_data()[x,])
+})
+avgTemps.min <- lapply(mins, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = extract(rastertemps, asmiLL[,c("coords.x1","coords.x2")]), date = ls_prism_data()[x,])
+})
+avgPrecip <- lapply(ppt, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = extract(rastertemps, asmiLL[,c("coords.x1","coords.x2")]), date = ls_prism_data()[x,])
+})
+mins.avg <- do.call(rbind, avgTemps.min)
+maxs.avg <- do.call(rbind, avgTemps.max)
+ppt.avg <- do.call(rbind, avgPrecip)
+mins.avg <- data.frame(mins.avg, asmilatlong$Tag__, asmilatlong$Tag_Commen)
+maxs.avg <- data.frame(maxs.avg, asmilatlong$Tag__, asmilatlong$Tag_Commen)
+ppt.avg <- data.frame(ppt.avg, asmilatlong$Tag__, asmilatlong$Tag_Commen)
+asmi.climate <- cbind(mins.avg, maxs.avg[,1], ppt.avg[,1])
+names(asmi.climate) <- c("tmin","date","Plot","Site","tmax","Precip")
+
+#date is a factor
+asmi.climate$date <- as.character(asmi.climate$date)
+#split by _ select the YYYYMM numbers
+asmi.climate$Year <- as.numeric(substr(vapply(strsplit(asmi.climate$date, '_'), 
+                                   function(x) x[5], character(1)), 1,4))
+asmi.climate$Month <- as.numeric(substr(vapply(strsplit(asmi.climate$date, '_'), 
+                                   function(x) x[5], character(1)), 5,6))
+asmi.c <- asmi.climate[,-2]
+
+# Data is taken annually in July
+# Label Prev12 as 08 through 12 of the previous year and give it the year for 01-07 (of the previous year (the next year) 
+asmi.c$Prev12 <- asmi.c$Year
+asmi.c$Prev12[asmi.c$Month > 7] <- asmi.c$Year[asmi.c$Month > 7]+1
+head(asmi.c[with(asmi.c, order(Year,Month,Site,Plot))&asmi.c$Year==1980,],1000)
+
+# get previous 12 month averages
+asmi.season <- aggregate(.~Prev12+Plot+Site, data=asmi.c[,-c(6:7)], mean)
+
+```
+
+
+
+
+
+
 
 
 #ScGl example
