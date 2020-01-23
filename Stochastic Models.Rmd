@@ -5,26 +5,103 @@ date: "January 23, 2020"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r, results='hide'}
+library(raster)
+library(gstat)
+library(virtualspecies)
+library(DiagrammeR)
+library(diagram)
+library(popdemo)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+MatrixSplit: Divided means A broken into process-based submatrices U (survival), F (sexual reproduction), and C (clonal reproduction)  
+Different conditions of the matrices by $MatrixTreatment
+```{r}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+table(compadre$metadata$SpeciesAccepted) # how many matrixes there are per species
+hist(table(compadre$metadata$SpeciesAccepted))
+
+
+# example from Wall et al. 2012 
+compadre$mat[compadre$metadata$SpeciesAccepted == "Astragalus michauxii"]
+compadre$metadata[compadre$metadata$SpeciesAccepted == "Astragalus michauxii",] # 4 for a three year study, all same location, one unmanipulated, one burned current year, 1yr post, 2yr post
+
+```
+Average length of studies (N+1):number of transitions (N)
+```{r}
+# Years would be N+1
+hist(compadre$metadata$StudyDuration, breaks = 100)
+mean(compadre$metadata$StudyDuration, na.rm = TRUE) # 7.07
+
+# The projection interal, time step of the transition matrix. as a proportion of a year; i.e. 0.1 would be 36.5 days; 0.1666 would be 60 days; 0.5  would be 6 month
+table(compadre$metadata$AnnualPeriodicity)
+
+table(compadre$metadata$MatrixDimension)
+
+
+table(compadre$metadata$MatrixCriteriaOntogeny)
+
+
+table(compadre$metadata$OrganismType)
+
+# brief description of experimental treatments of the population intentially imposed by humans
+table(compadre$metadata$MatrixTreatment)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+Get the A matrices   
+```{r}
+AsMi_A <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Astragalus michauxii"], '[[', 1)
+
+
+```
+
+
+Pull perennials and annuals 
+```{r}
+
+table(compadre$metadata$OrganismType)
+write.csv(unique(compadre$metadata[grep("harvest" ,compadre$metadata$MatrixTreatment),
+                         c("SpeciesAccepted", "OrganismType", "Authors","Journal","YearPublication")]), 
+          "C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/COMPADRE_harvestmatrices.csv")
+
+write.csv(perennial_com <- compadre$metadata[grepl("perennial", compadre$metadata$OrganismType) &
+                    compadre$metadata$StudyDuration > 2,], 
+          "C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/COMPADRE_perennialmatrices.csv")
+table(perennial_com$MatrixTreatment)
+
+perennial_com_harvest <- perennial_com[grep("harvest", perennial_com$MatrixTreatment),]
+table(perennial_com_harvest$SpeciesAccepted)
+
+perennial_com <- perennial_com[grepl("Unmanipulated",perennial_com$MatrixTreatment),]
+perennial_com <- perennial_com[grep("Divided", perennial_com$MatrixSplit, invert = TRUE),] 
+# don't want ones where process (survival) seperated from fertility
+
+
+annual_com <- compadre$metadata[grepl("Annual", compadre$metadata$OrganismType) &
+                    compadre$metadata$StudyDuration > 2,]
+table(annual_com$MatrixTreatment)
+
+annual_com <- annual_com[grepl("Unmanipulated",annual_com$MatrixTreatment),]
+annual_com <- annual_com[grep("Divided", annual_com$MatrixSplit, invert = TRUE),] 
+
+table(perennial_com$SpeciesAccepted)
+table(annual_com$SpeciesAccepted)
+
+```
+
+
+
+
