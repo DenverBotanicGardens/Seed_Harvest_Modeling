@@ -14,13 +14,179 @@ knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
 
 ```{r, results='hide'}
 library(raster)
+library(sp)
 library(gstat)
 library(virtualspecies)
 library(DiagrammeR)
 library(diagram)
 library(popdemo)
+library(prism)
+
+# Bayesian 
+library(R2jags)
+library(rjags)
+library(coda)
+
+# MPM
+library(popbio)
 
 ```
+
+```{r}
+
+tm <- read.csv("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
+
+# strsplit(gsub("[^[:alnum:]]", " ", tm$Mx[1]), " ") # remove all non-aphanumeric characters
+
+
+m1 <- gsub("\\[|\\]", "", tm$Mx[1]) 
+m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+(m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " "))) # split each list element after removing leading whitespace
+(m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE))
+
+# Mx: Annual transition matrix
+# Tmx: Annual trnasition matrix with transition probabilities, no fecundity
+# Nx: Vector of observed stage structures (counts in each stage); must be at the start
+```
+
+```{r}
+
+levels(tm$SPP)
+
+transition_matrices <- lapply(split(tm, tm$SPP), function(m){ 
+  out <- lapply(1:nrow(m), function(x){
+    m1 <- gsub("\\[|\\]", "", m$Mx[x]) # remove "[" and "]" 
+    m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+    m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " ")) # split each list element after removing leading whitespace
+    m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
+    m4
+    })
+  out
+  })
+
+transition_matrices[[1]]
+# ARFE with 6, 4, 4 per the there populations
+```
+
+Estimate the paramters of how does climate impact the transitions?  Worry about lag effects? 
+```{r}
+# Need to know about the species, where it is to get the climate
+sp.info <- read.csv("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/Kaye_speciesinfo.csv")
+
+pop.info <- read.csv("Q:/Research/Projects/SeedHarvestModeling_2019/SeedHarvestModeling/Seed_Harvest_Modeling/Kaye_popdata.csv")
+
+r <- getData("worldclim",var="bio",res=10)
+r@layers
+
+plot(r@layers[[1]])
+```
+
+```{r}
+options(prism.path = "Q:/Research/All_Projects_by_Species/Astragalus SPECIES/Astragalus_microcymbus/PRISM_asmiclimate")
+
+maxs <- grep("tmax", ls_prism_data(absPath=TRUE)[,2])
+mins <- grep("tmin", ls_prism_data(absPath = TRUE)[,2])
+ppt <- grep("ppt", ls_prism_data(absPath = TRUE)[,2])
+
+asmiLL <- pop.info[pop.info$SPP == levels(pop.info$SPP)[1],c("Lat","Long")]
+
+avgTemps.max <- lapply(maxs, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = raster::extract(rastertemps, asmiLL[,c("Long","Lat")]), date = ls_prism_data()[x,])
+})
+avgTemps.min <- lapply(mins, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = raster::extract(rastertemps, asmiLL[,c("Long","Lat")]), date = ls_prism_data()[x,])
+})
+avgPrecip <- lapply(ppt, function(x){
+  rastertemps <- raster(ls_prism_data(absPath=TRUE)[x,2])
+  data.frame(data = raster::extract(rastertemps, asmiLL[,c("Long","Lat")]), date = ls_prism_data()[x,])
+})
+mins.avg <- do.call(rbind, avgTemps.min)
+maxs.avg <- do.call(rbind, avgTemps.max)
+ppt.avg <- do.call(rbind, avgPrecip)
+mins.avg <- data.frame(mins.avg, levels(pop.info$SPP)[1], pop.info$POP[pop.info$SPP == levels(pop.info$SPP)[1]])
+maxs.avg <- data.frame(maxs.avg, levels(pop.info$SPP)[1], pop.info$POP[pop.info$SPP == levels(pop.info$SPP)[1]])
+ppt.avg <- data.frame(ppt.avg, levels(pop.info$SPP)[1], pop.info$POP[pop.info$SPP == levels(pop.info$SPP)[1]])
+mins.avg$Year <- as.numeric(substr(vapply(strsplit(as.character(mins.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 1,4))
+mins.avg$Month <- as.numeric(substr(vapply(strsplit(as.character(mins.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 5,6))
+maxs.avg$Year <- as.numeric(substr(vapply(strsplit(as.character(maxs.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 1,4))
+maxs.avg$Month <- as.numeric(substr(vapply(strsplit(as.character(maxs.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 5,6))
+ppt.avg$Year <- as.numeric(substr(vapply(strsplit(as.character(ppt.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 1,4))
+ppt.avg$Month <- as.numeric(substr(vapply(strsplit(as.character(ppt.avg$date), '_'), 
+                                   function(x) x[5], character(1)), 5,6))
+
+climate <- merge(mins.avg, maxs.avg, by = c("Year","Month","levels.pop.info.SPP..1.","pop.info.POP.pop.info.SPP....levels.pop.info.SPP..1.."))
+climate <- merge(climate, ppt.avg, by = c("Year","Month","levels.pop.info.SPP..1.","pop.info.POP.pop.info.SPP....levels.pop.info.SPP..1.."))
+names(climate) <- c(names(climate)[1:2],"SPP","POP","tmin","tminprism","tmax","tmaxprism","ppt","pptprism")
+```
+If the matrix transitions are correlated to each other and to climate or correlated to each other given climate... 
+```{r}
+# Project starting pop size with first transition matrix
+transition_matrices[[1]][[1]] %*% as.numeric(unlist(strsplit(gsub("\\[|\\]", "",tm$Nx[1]), " ")))
+
+# transition_matrices[[1]][1:6] are the first site
+# transition_matrices[[1]][7:10] are the second site
+# transition_matrices[[1]][11:14] are the third site
+
+climate.annual <- aggregate(.~SPP+POP+Year, merge(climate, tm[tm$POP %in% 
+                                                                tm$POP[tm$SPP == levels(tm$SPP)[1]],c("SPP","POP","YR")], 
+                                    by.x = c("SPP","POP","Year") ,by.y = c("SPP","POP","YR"))[,c(1:3,5,7)], mean) 
+                            
+climate.annual.ppt <- aggregate(.~SPP+POP+Year, merge(climate, tm[tm$POP %in% 
+                                                                tm$POP[tm$SPP == levels(tm$SPP)[1]],c("SPP","POP","YR")], 
+                                    by.x = c("SPP","POP","Year") ,by.y = c("SPP","POP","YR"))[,c(1:3,9)], sum) 
+climate.annual <- merge(climate.annual, climate.annual.ppt, by=c("SPP","POP","Year"))               
+
+
+setClass("Climate_MPM", slots=list(species="character", pop="factor", Year_t0="numeric", MPM = "list",climate="data.frame"))
+
+# setMethod("Climate_MPM", )
+
+class(transition_matrices[[1]][[1]])
+
+lambda(transition_matrices[[1]][[1]])
+
+
+lambda.bt <- boot.transitions(transition_matrices[[1]], iterations = 100)
+
+lambdas <- lapply(transition_matrices[[1]], function(x){
+  lambda(x)
+})
+
+climate.mpm <- new("Climate_MPM", species = levels(pop.info$SPP)[1], 
+                   pop = pop.info$POP[pop.info$SPP == levels(pop.info$SPP)[1]],
+                   Year_t0 = tm$YR[tm$SPP == levels(pop.info$SPP)[1]], 
+                   climate =  climate.annual, MPM = transition_matrices[[1]])
+
+MPM.df <- data.frame(t(sapply(transition_matrices[[1]], function(x) as.vector(x))))
+names(MPM.df) <- c("f11","t12","t13","t14","f21","t22","t23","t24","f31","t32","t33","t34","f41","t42","t43","t44")
+lMPM <- data.frame(lambdas = unlist(lambdas), MPM.df, climate.annual)
+
+# Correlations within the MPM
+library(corrplot)
+corrplot(cor(MPM.df), method="circle")
+
+
+
+summary(lm(lambdas~f11+f21+f31+f41+tmin+tmax+ppt , data=lMPM))
+
+# AIC among which climate variable best explains variation among transtion rates
+
+
+
+
+lm.models <- lapply(unique.target, function(x) {lm(as.formula(paste(x,"~ .", sep = "")), 
+      data = data.frame(valuesMatrix[,colnames(valuesMatrix) %in% 
+                                       c(x,as.character(modelMatrix$source[which(modelMatrix$target==x)]))]))})
+
+```
+
 
 
 MatrixSplit: Divided means A broken into process-based submatrices U (survival), F (sexual reproduction), and C (clonal reproduction)  
@@ -39,6 +205,67 @@ compadre$mat[compadre$metadata$SpeciesAccepted == "Astragalus michauxii"]
 compadre$metadata[compadre$metadata$SpeciesAccepted == "Astragalus michauxii",] # 4 for a three year study, all same location, one unmanipulated, one burned current year, 1yr post, 2yr post
 
 ```
+
+
+Find datasets with multiple survival matrices   
+```{r}
+# Want only species that have more than one matU
+matU_all <- mapply("[[", compadre$mat, 2)
+
+```
+
+
+Following Fieberg and Ellner 2001 example    
+Random transition matrix (RTM)    
+Parametric matrix method (PMM)    
+Tuljapurkar's small fluctuations approximation (SFA)      
+```{r}
+
+
+
+# year since fire (instead of water level) x(t)
+# Survival of each of the 4 size classes (using Astragalus michauxii) 
+# t is year or space for time
+
+t <- 1:4
+# alpha is the intercept, the survival average, logistic response, of each stage class 
+matU <- mapply("[[", compadre$mat[compadre$metadata$SpeciesAccepted == "Astragalus michauxii"], 2)
+matU.mat <- rowSums(matrix(matU[,1], nrow = 4, byrow = FALSE)) # As the survival of each class???
+# I think instead it is either averaged or just different group measures of survival
+y <- lapply(1:4, function(x) matU.mat[x,])
+
+# But only have survival matrices for 1
+# S <- array(matrix(NA, nrow=4, ncol=1), dim = list(4, 1, length(t)))
+
+
+set.seed(1234)
+
+# unburned, current year, 1 yr post, 2 yr post, environment/habitat differences  
+(x <- compadre$metadata$MatrixTreatment[compadre$metadata$SpeciesAccepted == "Astragalus michauxii"])
+
+# # intercept
+# alpha <- rbeta(1,1,1)
+# beta1 <- runif(1, -1, 1)
+# eps <- rbeta(1, 1, 1)
+
+S[,t,x] <- 1/(1 + exp(-))
+
+# JAGS models  
+jagsdata1 <- with(data.frame(x1 = x, x2 = ))
+
+for(t in 1:4){
+  for(firefactor in 1:4){
+    # Enter survival of the four stages per transition matrix of the four conditions 
+    S[, x, t] <- (1 + exp())
+  }
+}
+
+
+```
+
+
+
+
 Average length of studies (N+1):number of transitions (N)
 ```{r}
 # Years would be N+1
