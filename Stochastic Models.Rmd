@@ -172,6 +172,7 @@ lMPM <- data.frame(lambdas = unlist(lambdas), MPM.df, climate.annual)
 library(corrplot)
 corrplot(cor(MPM.df), method="circle")
 
+(cor(MPM.df))
 
 
 summary(lm(lambdas~f11+f21+f31+f41+tmin+tmax+ppt , data=lMPM))
