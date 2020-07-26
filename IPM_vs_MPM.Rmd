@@ -178,10 +178,9 @@ Model uncertainty (see Bakker et al. 2009)
         
 ```{r}
 ######### ScGl survival #########################
-# do it my way 
 
-glm1 <- glm(survival ~ t0, family = "binomial", data = size_scgl1)
-glm2 <- glm(survival ~ t0 + t0sq, family = "binomial", data = size_scgl1)
+glm1 <- glm(survival ~ t0, family = "binomial", data = size_scgl1) # survival depending on size
+glm2 <- glm(survival ~ t0 + t0sq, family = "binomial", data = size_scgl1) # survival depending on size squared (curve)
 glm3 <- glm(survival ~ t0 + Site + t0*Site, family = "binomial", data = size_scgl1) # The slope and the intecept could differ
 glm4 <- glm(survival ~ t0*Site, family = "binomial", data = size_scgl1)
 
@@ -212,4 +211,51 @@ ggplot(size_scgl1, aes(t0sq, survival))+
   theme_bw()
 ```
         
+Model comparing all the climate drivers
 
+Dredge
+```{r}
+globaldredge.survival <- glm(survival ~ t0+Site+(t0*Site)+ ppt.fall+tmax.fall+tmin.fall+ 
+                              ppt.spring+tmax.spring+ppt.summer+tmax.summer+
+                              tmin.summer+ppt.winter+tmax.winter+tmin.winter+sum.ppt.spring+tmin.spring+sum.ppt.winter+
+                               sum.ppt.fall+sum.ppt.summer, data = size_scgl1, family = "binomial", na.action = 'na.fail')
+
+dredgemodtemp1 <- dredge(globaldredge.survival, fixed = c("t0"), subset = !(ppt.spring && sum.ppt.spring) &&
+                                                                          !(tmax.spring && ppt.spring) &&
+                                                                          !(tmax.spring && tmin.spring) &&
+                                                                          !(tmax.spring && ppt.winter) &&
+                                                                          !(tmax.spring && tmax.winter) &&
+                                                                          !(tmax.spring && sum.ppt.winter) &&
+                                                                          !(tmax.spring && tmax.fall) &&
+                                                                          !(tmax.spring && tmax.summer) &&
+                                                                          !(tmin.spring && ppt.winter) &&
+                                                                          !(tmin.spring && tmax.winter) &&
+                                                                          !(tmin.spring && ppt.winter) &&
+                                                                          !(tmin.spring && tmin.winter) &&
+                                                                          !(tmin.spring && sum.ppt.winter) &&
+                                                                          !(tmin.spring && tmin.fall) &&
+                                                                          !(tmin.spring && ppt.summer) &&
+                                                                          !(tmin.spring && tmax.summer) &&
+                                                                          !(tmin.spring && tmin.summer) &&
+                                                                          !(ppt.winter && tmax.winter) &&
+                                                                          !(ppt.winter && sum.ppt.winter) &&
+                                                                          !(tmax.winter && tmin.winter) &&
+                                                                          !(tmax.winter && sum.ppt.winter) &&
+                                                                          !(tmin.winter && tmin.fall) &&
+                                                                          !(ppt.fall && tmax.fall) &&
+                                                                          !(ppt.fall && sum.ppt.fall) &&
+                                                                          !(tmax.fall && sum.ppt.fall) &&
+                                                                          !(tmin.fall && tmin.summer) &&
+                                                                          !(ppt.summer && tmax.summer) &&
+                                                                          !(ppt.summer && sum.ppt.summer), beta = 'none', trace=2)
+
+subset(dredgemodtemp1, delta <=2, recalc.weights=FALSE)
+# this is a the way to display the best model (you can also look at the table of all the models to see what is displayed)
+(besttempmod1=get.models(dredgemodtemp1, subset = 1)[[1]])
+summary(besttempmod1)
+AICc(besttempmod1)
+
+ctemppredictions = predict(besttempmod1)
+plot(ctemppredictions~size_scgl1$survival)
+abline(a=0,b=1)
+```
