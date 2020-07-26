@@ -1,0 +1,23 @@
+---
+title: "Seed Harvest IPM and MPM"
+author: "Michelle DePrenger-Levin"
+date: "7/26/2020"
+output: html_document
+---
+
+Example data for Sclerocactus glaucus where size measurements are the width at widest point for these ball cacti
+'t0' and 't1' are the widths (cm) and survival is for the tagged cactus from year t to t+1. 'reproyesno' is for 't0'. 'flowers0' is a Poisson distribution based on a linear model of number of flowers by size on the one year we took that data. 'minis0' and 'minis1' are the number of seedlings (cacti with < 0.5 cm in width) in year t and t+1
+```{r}
+
+
+```
+
+
+
+Code from Dan Doak
+
+```{r}
+
+
+```
+
