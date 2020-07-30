@@ -20,10 +20,12 @@ library(prism)
 library(raster)
 library(lme4)
 
+# download the Rdata files into your working directory, set your working directory and load them
 setwd("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/")
 load("size_scgl.Rda") # data converted to yearly transition
 load("allsdszs_scgl.Rda") # only individuals that were < 0.5 and considered seedlings
 load("size_scgl1.Rda")
+
 ```
 
 
@@ -36,9 +38,7 @@ load("size_scgl1.Rda")
 seedlings_per_seed <- 10/500 # 0.000001 # the rate that a seed germinates I'm making a wild estimate
 
 # Changed our methods from measuring all individuals to only measuring individuals >= 0.5 cm width in 2012. 
-surv_minis1 <- 0.8118812 # from pre-2012 all indiviudals < 0.5 that survived
-surv_minis2 <- 0.8157139 # minis1/minis0 using the number of minis associated with a tag at time t+1 accounting for the number of new vegetative individuals (change in number of minis associated with those minis that grew into small vegetative individuals) assuming some die and some new germinants are added but we are unable to measure this
-(surv_minis <- mean(c(surv_minis2, surv_minis1)))
+(surv_minis <- 0.7008745Ñ)
 
 # set the minimum size and maximum size
 minsize_scgl <- 0.01
@@ -156,7 +156,7 @@ IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdsz
 
 
 # ScGl
-seedlings_per_seed # not sure if this should be the 
+seedlings_per_seed # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
 testbins <- c(4,5,6,7,8) # I don't have enough individuals to get estimates if I break this into too many bins
 df <- size_scgl
 minsize <- minsize_scgl
@@ -164,6 +164,8 @@ maxsize <- maxsize_scgl
 bin.num <- testbins
 allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
 surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+
+scgl_IPM <- 
 
 ```
 
