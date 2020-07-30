@@ -32,6 +32,7 @@ load("size_scgl1.Rda")
 
 ```{r}
 
+# Unknown, test correlation of t-1, t-2 ... reproductive output on seedlings to see if there's an indication of a persistent seed bank
 seedlings_per_seed <- 10/500 # 0.000001 # the rate that a seed germinates I'm making a wild estimate
 
 # Changed our methods from measuring all individuals to only measuring individuals >= 0.5 cm width in 2012. 
@@ -75,85 +76,95 @@ plot(pdfsz2_scgl, type="l")
   Estimate vital rates, populate matrix, for models with different numbers of classes/ bins    
 
 ```{r ScGl matrix}
-(seed_per_flower <- seedlings_per_seed)
 
-bin.num <- c(4,5,6,7,8) # I don't have enough individuals to get estimates if I break this into too many bins
-# ScGl
-
-lambdas_matrix <- rep(NA, length(bin.num))
-dampratio_matrix = rep(NA, length(bin.num))
-lifespan_matrix=rep(NA, length(bin.num))
-mincounts=NULL
-
-for(i in 1:length(bin.num)){
-  ss=as.numeric(size_scgl$t0)
-  vec.bin = c(minsize_scgl, minsize_scgl+1:bin.num[i]*(maxsize_scgl-minsize_scgl)*(1/bin.num[i]))  # really should split at < 0.6 and then < 2.5 as the non-reproductive sizes, then split above
-  # breaks2add <- 2.5+1:(bin.num[i]-1)*(maxsize_scgl-2.1)*(1/(bin.num[i]-1))
-  # vec.bin <- c(minsize_scgl, 2.5, breaks2add[1:(bin.num[i]-1)])
-  # use vec.bin as the boundaries for size classes
-  nums=hist(ss,breaks=vec.bin, plot=FALSE)$counts 
-  mincounts=c(mincounts,min(nums))
-  
-  if (min(nums)>2) {  
-    ## Initialize storage
-    n.bin <- length(vec.bin)-1                  # this is a workaround
-    n <- rep(NA, n.bin)                         # count of indvs per bin
-    medians <- rep(NA, n.bin)                    # median size per bin for F
-    surv <- rep(NA, n.bin)                      # survivorship for each class
-    grow <- matrix(NA, n.bin, n.bin)            # store growth probabilites for each class
-    reproduction <- rep(NA, n.bin)
+IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdszs, surv_seedlings, seeds_per_flower){
+    # Empty list items
+    lambdas_matrix <- rep(NA, length(bin.num))
+    dampratio_matrix = rep(NA, length(bin.num))
+    lifespan_matrix=rep(NA, length(bin.num))
+    mincounts=NULL
     
-    totnums = 0 # this is just monitoring for errors
-    # bin, survival, growth  test j<-4
-     for(j in 1:(length(vec.bin)-1)){
-      # set limits for size subset according to bin breaks
-      bounds <- c(vec.bin[j], vec.bin[j+1])
-      # subset data according to bounds
-      subset <- size_scgl[size_scgl$t0 > bounds[1] & size_scgl$t0 <= bounds[2],]
-      # store number of inviduals in this bin for future reference
-      n[j] <- length(subset$t0)
-      medians[j] <- median(subset$t0)
-      # calculate survivorship for this class
-      surv[j] <- sum(subset$survival) / length(subset$t0) # of those alive in year 1, how many survived by bin/size class
-      # store histo as object, to access counts per bin
-      histo <- hist(subset$t1, breaks = vec.bin, plot = FALSE)
-      # $counts returns the number of individuals of a certain size class
-      grow[,j] <- histo$counts/length(subset$t0[subset$survival==1]) 
-      reproduction[j] <- mean(subset$flowers0, na.rm = TRUE) # bulbils produced per plant in start yr - not the same for ScGl, minis aren't produced, not the same as fruit count, which we didn't take or seed count - so estimate how many flower there would likely have been; but there aren't going to be any flowers until >2.5 width
+    # test each number of bins, break by size 
+    for(i in 1:length(bin.num)){
+      ss=as.numeric(df$t0)
+      vec.bin = c(minsize, minsize+1:bin.num[i]*(maxsize-minsize)*(1/bin.num[i]))
+      nums=hist(ss,breaks=vec.bin, plot=FALSE)$counts 
+      mincounts=c(mincounts,min(nums))
       
-      totnums = totnums + sum(histo$counts)
-    }
-    
-    # make a vector of the prob of seedling sizes: 
-    sdlggrow <- hist(allsdszs_scgl, breaks = vec.bin, plot = FALSE)$counts/length(allsdszs_scgl)
-    reproduction[is.nan(reproduction)] <- 0
-    
-    M1 <- matrix(NA, n.bin, n.bin)   # initiate projection matrix
-    M <- matrix(0, (n.bin+1), (n.bin+1))
-    # populate projection matrix
-  
-    for(j in 1:length(surv)){
-      M1[,j] <- surv[j] * grow[,j]
-      M1[,j] <- (surv[j] * grow[,j])
-    }
+      if (min(nums)>2) {  
+        ## Initialize storage
+        n.bin <- length(vec.bin)-1            # this is a workaround
+        n <- rep(NA, n.bin)                   # count of indvs per bin
+        medians <- rep(NA, n.bin)             # median size per bin for F
+        surv <- rep(NA, n.bin)                # survivorship for each class
+        grow <- matrix(NA, n.bin, n.bin)      # store growth probabilites for each class
+        reproduction <- rep(NA, n.bin)        # store reproduction probabilites for each class
+        
+        totnums = 0 # this is just monitoring for errors, start at zero before next loop per size subset
+        # bin, survival, growth
+         for(j in 1:(length(vec.bin)-1)){
+          # set limits for size subset according to bin breaks
+          bounds <- c(vec.bin[j], vec.bin[j+1])
+          # subset data according to bounds
+          subset <- df[df$t0 > bounds[1] & df$t0 <= bounds[2],]
+          # store number of inviduals in this bin for future reference
+          n[j] <- length(subset$t0)
+          medians[j] <- median(subset$t0)
+          # calculate survivorship for this class
+          surv[j] <- sum(subset$survival) / length(subset$t0) # of those alive in year 1, how many survived by bin/size class
+          # store histo as object, to access counts per bin
+          histo <- hist(subset$t1, breaks = vec.bin, plot = FALSE)
+          # $counts returns the number of individuals of a certain size class
+          grow[,j] <- histo$counts/length(subset$t0[subset$survival==1]) 
+          reproduction[j] <- mean(subset$flowers0*seeds_per_flower, na.rm = TRUE) # seedlings produced per plant in start yr
+          
+          totnums = totnums + sum(histo$counts)
+        }
+        
+        # make a vector of the prob of seedling sizes: 
+        sdlggrow <- hist(allsdszs, breaks = vec.bin, plot = FALSE)$counts/length(allsdszs)
+        reproduction[is.nan(reproduction)] <- 0
+        
+        M1 <- matrix(NA, n.bin, n.bin)   # initiate projection matrix
+        M <- matrix(0, (n.bin+1), (n.bin+1))
+        # populate projection matrix
       
-      # add lines for the creation of bulblings and thier transition to first size class
-      M[2:(n.bin+1), 2:(n.bin+1)] = M1
-      M[2:(n.bin+1),1] = surv_minis*sdlggrow 
-      M[1,2:(n.bin+1)] = reproduction*seed_per_flower  
-    
-    
-    lambdas_matrix[i] <- lambda(M) # calls popbio f'n 'lambda'
-    dampratio_matrix[i]=damping.ratio(M)
-    lifespan_matrix[i] =lifespan(M)
-    
-    print(c(i,totnums)) 
-  } else {
-    lambdas_matrix[i]=NA
-    dampratio_matrix[i] = NA
-    lifespan_matrix[i] = NA
-  }
+        for(j in 1:length(surv)){
+          M1[,j] <- surv[j] * grow[,j]
+          M1[,j] <- (surv[j] * grow[,j])
+        }
+          
+          # add lines for the creation of bulblings and thier transition to first size class
+          M[2:(n.bin+1), 2:(n.bin+1)] = M1
+          M[2:(n.bin+1),1] = surv_seedlings*sdlggrow 
+          M[1,2:(n.bin+1)] = reproduction*seedlings_per_seed  
+        
+        
+        lambdas_matrix[i] <- lambda(M) # calls popbio f'n 'lambda'
+        dampratio_matrix[i]=damping.ratio(M)
+        lifespan_matrix[i] =lifespan(M)
+        
+        print(c(i,totnums)) 
+      } else {
+        lambdas_matrix[i]=NA
+        dampratio_matrix[i] = NA
+        lifespan_matrix[i] = NA
+      }
+    }
+    list(lambdas_matrix, dampratio_matrix, lifespan_matrix)
 }
+
+
+# ScGl
+seedlings_per_seed # not sure if this should be the 
+testbins <- c(4,5,6,7,8) # I don't have enough individuals to get estimates if I break this into too many bins
+df <- size_scgl
+minsize <- minsize_scgl
+maxsize <- maxsize_scgl
+bin.num <- testbins
+allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
+surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+
 ```
 
 
@@ -162,100 +173,4 @@ for(i in 1:length(bin.num)){
 (dampratio_matrix)
 (lifespan_matrix)
 
-```
-
-Find best models of climate and size (site...) describing vital rates 
-Model uncertainty (see Bakker et al. 2009)  
-    
-        1. AICc regression models for vital rates
-        2. Estimate proportion of process variance not assigned to ecological drivers
-        3. Select a model in proportion to its AIC weight
-        4. Select model parameters (within distribution of estimate and variance and covariances around estimate)   
-        5. Reject parameter sets with unrealistic behavior (if lambda goes haywire)    
-        6. Simulate with 100s or 1000s of parameter sets    
-        7. for each parameter set, simulate trajectories for scenarios of interest (with starting densities, seed harvest rates)    
-        8. Output quasi-extiction probability, pop. growth rates for each different scenario    
-        
-```{r}
-######### ScGl survival #########################
-
-glm1 <- glm(survival ~ t0, family = "binomial", data = size_scgl1) # survival depending on size
-glm2 <- glm(survival ~ t0 + t0sq, family = "binomial", data = size_scgl1) # survival depending on size squared (curve)
-glm3 <- glm(survival ~ t0 + Site + t0*Site, family = "binomial", data = size_scgl1) # The slope and the intecept could differ
-glm4 <- glm(survival ~ t0*Site, family = "binomial", data = size_scgl1)
-
-lm.list <- list(glm1, glm2, glm3, glm4)
-lm.names <- as.character(unlist(lapply(lm.list, formula)))
-(lm.results <- aictab(lm.list, modnames = lm.names))
-# evidence ratio
-for(i in 2:length(lm.list)){
-  print(exp(0.5*lm.results$Delta_AICc[i]))
-}
-
-library(lattice)
-xyplot(survival ~ t0|Site, size_scgl1,
-       type = c("g","p","r"),
-       index = function(x,y) coef(lm(y ~ x))[1],
-       xlab = "Size at t0",
-       ylab = "Survival", aspect = "xy")
-################################################
- 
-ggplot(size_scgl1, aes(t0, survival, colour = Site))+
-  geom_point()+
-  stat_smooth(se = FALSE)+
-  theme_bw()
-
-ggplot(size_scgl1, aes(t0sq, survival))+
-  geom_point()+
-  stat_smooth(se = FALSE)+
-  theme_bw()
-```
-        
-Model comparing all the climate drivers
-
-Dredge
-```{r}
-globaldredge.survival <- glm(survival ~ t0+Site+(t0*Site)+ ppt.fall+tmax.fall+tmin.fall+ 
-                              ppt.spring+tmax.spring+ppt.summer+tmax.summer+
-                              tmin.summer+ppt.winter+tmax.winter+tmin.winter+sum.ppt.spring+tmin.spring+sum.ppt.winter+
-                               sum.ppt.fall+sum.ppt.summer, data = size_scgl1, family = "binomial", na.action = 'na.fail')
-
-dredgemodtemp1 <- dredge(globaldredge.survival, fixed = c("t0"), subset = !(ppt.spring && sum.ppt.spring) &&
-                                                                          !(tmax.spring && ppt.spring) &&
-                                                                          !(tmax.spring && tmin.spring) &&
-                                                                          !(tmax.spring && ppt.winter) &&
-                                                                          !(tmax.spring && tmax.winter) &&
-                                                                          !(tmax.spring && sum.ppt.winter) &&
-                                                                          !(tmax.spring && tmax.fall) &&
-                                                                          !(tmax.spring && tmax.summer) &&
-                                                                          !(tmin.spring && ppt.winter) &&
-                                                                          !(tmin.spring && tmax.winter) &&
-                                                                          !(tmin.spring && ppt.winter) &&
-                                                                          !(tmin.spring && tmin.winter) &&
-                                                                          !(tmin.spring && sum.ppt.winter) &&
-                                                                          !(tmin.spring && tmin.fall) &&
-                                                                          !(tmin.spring && ppt.summer) &&
-                                                                          !(tmin.spring && tmax.summer) &&
-                                                                          !(tmin.spring && tmin.summer) &&
-                                                                          !(ppt.winter && tmax.winter) &&
-                                                                          !(ppt.winter && sum.ppt.winter) &&
-                                                                          !(tmax.winter && tmin.winter) &&
-                                                                          !(tmax.winter && sum.ppt.winter) &&
-                                                                          !(tmin.winter && tmin.fall) &&
-                                                                          !(ppt.fall && tmax.fall) &&
-                                                                          !(ppt.fall && sum.ppt.fall) &&
-                                                                          !(tmax.fall && sum.ppt.fall) &&
-                                                                          !(tmin.fall && tmin.summer) &&
-                                                                          !(ppt.summer && tmax.summer) &&
-                                                                          !(ppt.summer && sum.ppt.summer), beta = 'none', trace=2)
-
-subset(dredgemodtemp1, delta <=2, recalc.weights=FALSE)
-# this is a the way to display the best model (you can also look at the table of all the models to see what is displayed)
-(besttempmod1=get.models(dredgemodtemp1, subset = 1)[[1]])
-summary(besttempmod1)
-AICc(besttempmod1)
-
-ctemppredictions = predict(besttempmod1)
-plot(ctemppredictions~size_scgl1$survival)
-abline(a=0,b=1)
 ```
