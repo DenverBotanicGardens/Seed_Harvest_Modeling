@@ -19,6 +19,7 @@ require(AICcmodavg)
 library(prism)
 library(raster)
 library(lme4)
+library(ggplot2)
 
 # download the Rdata files into your working directory, set your working directory and load them
 setwd("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/")
@@ -35,14 +36,14 @@ load("size_scgl1.Rda")
 ```{r}
 
 # Unknown, test correlation of t-1, t-2 ... reproductive output on seedlings to see if there's an indication of a persistent seed bank
-seedlings_per_seed <- 10/500 # 0.000001 # the rate that a seed germinates I'm making a wild estimate
+seedlings_per_seed_sg <- 10/500 # 0.000001 # the rate that a seed germinates I'm making a wild estimate
 
 # Changed our methods from measuring all individuals to only measuring individuals >= 0.5 cm width in 2012. 
-(surv_minis <- 0.7008745Ñ)
+surv_minis <- 0.69 # this is an average of two estimates, should test both 0.59 and 0.78
 
 # set the minimum size and maximum size
 minsize_scgl <- 0.01
-maxsize_scgl <- 14.51
+maxsize_scgl <- 12.61 # was Fram, excluded 14.51
 
 ```
 
@@ -76,6 +77,19 @@ plot(pdfsz2_scgl, type="l")
   Estimate vital rates, populate matrix, for models with different numbers of classes/ bins    
 
 ```{r ScGl matrix}
+# testing
+# seedlings_per_seed <- seedlings_per_seed_sg # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
+# testbins <- c(4,5,6,7,8,10,15,19) # I don't have enough individuals to get estimates if I break this into too many bins
+# df <- size_scgl
+# minsize <- minsize_scgl
+# maxsize <- maxsize_scgl
+# bin.num <- testbins
+# allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
+# surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+# bin.num <-  c(4,5,6,7,8)
+# i <- 3
+# seeds_per_flower <- 150
+# rm(bin.num); rm(i); rm(df);rm(seedlings_per_seed);rm(minsize); rm(maxsize); rm(allsdszs); rm(surv_seedlings); rm(seeds_per_flower)
 
 IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdszs, surv_seedlings, seeds_per_flower){
     # Empty list items
@@ -87,8 +101,8 @@ IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdsz
     # test each number of bins, break by size 
     for(i in 1:length(bin.num)){
       ss=as.numeric(df$t0)
-      vec.bin = c(minsize, minsize+1:bin.num[i]*(maxsize-minsize)*(1/bin.num[i]))
-      nums=hist(ss,breaks=vec.bin, plot=FALSE)$counts 
+      vec.bin = c(minsize, minsize+1:bin.num[i]*(maxsize-minsize)*(1/bin.num[i])) # the upper and lower size limits to make the designated number of bins
+      nums=hist(ss,breaks=vec.bin, plot=FALSE)$counts  # the number of individuals that fall in each group
       mincounts=c(mincounts,min(nums))
       
       if (min(nums)>2) {  
@@ -153,20 +167,49 @@ IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdsz
     }
     list(lambdas_matrix, dampratio_matrix, lifespan_matrix)
 }
+```
 
 
+```{r}
 # ScGl
-seedlings_per_seed # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
-testbins <- c(4,5,6,7,8) # I don't have enough individuals to get estimates if I break this into too many bins
-df <- size_scgl
-minsize <- minsize_scgl
-maxsize <- maxsize_scgl
-bin.num <- testbins
-allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
-surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+# seedlings_per_seed # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
+testbins <- c(4,5,6,10,30,50,100) # I don't have enough individuals to get estimates if I break this into too many bins
+# df <- size_scgl
+# minsize <- minsize_scgl
+# maxsize <- maxsize_scgl
+# bin.num <- testbins
+# allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
+# surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
 
-scgl_IPM <- 
+scgl_IPM_all <- IPM_basic(df = size_scgl, minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
 
+scgl_IPM_all
+
+
+scgl_IPM_NS <- lapply(unique(size_scgl$Region), function(x){
+  IPM_basic(df = size_scgl[size_scgl$Region == x,], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+  })
+
+IPM_basic(df = size_scgl[size_scgl$Region == "South",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+
+scgl_IPM_sites <- lapply(unique(size_scgl$Site), function(x){
+  IPM_basic(df = size_scgl[size_scgl$Site == x,], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+})
+
+size_scgl[size_scgl$Site == "Escalante Canyon",]
+
+# Errors
+IPM_basic(df = size_scgl[size_scgl$Site ==  "Escalante Canyon",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+
+# Works
+sc_Atwell <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Atwell Gulch",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+
+# Nope
+sc_Bridgeport <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Bridgeport",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+
+sc_OilPad <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Oil Pad",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+
+sc_PyramidRock <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Pyramid Rock",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
 ```
 
 
