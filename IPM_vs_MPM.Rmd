@@ -91,13 +91,15 @@ plot(pdfsz2_scgl, type="l")
 # seeds_per_flower <- 150
 # rm(bin.num); rm(i); rm(df);rm(seedlings_per_seed);rm(minsize); rm(maxsize); rm(allsdszs); rm(surv_seedlings); rm(seeds_per_flower)
 
-IPM_basic <- function(df, minsize, maxsize, bin.num, seedlings_per_seed, allsdszs, surv_seedlings, seeds_per_flower){
+IPM_basic <- function(df, bin.num, seedlings_per_seed, surv_seedlings, seeds_per_flower, seedling_size){
     # Empty list items
     lambdas_matrix <- rep(NA, length(bin.num))
     dampratio_matrix = rep(NA, length(bin.num))
     lifespan_matrix=rep(NA, length(bin.num))
     mincounts=NULL
-    
+    minsize <- min(c(df$t0, df$t1), na.rm=TRUE) -0.01
+    maxsize <- max(c(df$t0, df$t1), na.rm=TRUE) +0.01
+    allsdszs <- df$t0[df$t0 < seedling_size]
     # test each number of bins, break by size 
     for(i in 1:length(bin.num)){
       ss=as.numeric(df$t0)
@@ -181,35 +183,32 @@ testbins <- c(4,5,6,10,30,50,100) # I don't have enough individuals to get estim
 # allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
 # surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
 
-scgl_IPM_all <- IPM_basic(df = size_scgl, minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+scgl_IPM_all <- IPM_basic(df = size_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150, seedling_size = 0.5)
 
 scgl_IPM_all
 
 
 scgl_IPM_NS <- lapply(unique(size_scgl$Region), function(x){
-  IPM_basic(df = size_scgl[size_scgl$Region == x,], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+  IPM_basic(df = size_scgl[size_scgl$Region == x,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150,  seedling_size = 0.5)
   })
 
-IPM_basic(df = size_scgl[size_scgl$Region == "South",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
-
 scgl_IPM_sites <- lapply(unique(size_scgl$Site), function(x){
-  IPM_basic(df = size_scgl[size_scgl$Site == x,], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+  IPM_basic(df = size_scgl[size_scgl$Site == x,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 })
 
-size_scgl[size_scgl$Site == "Escalante Canyon",]
-
-# Errors
-IPM_basic(df = size_scgl[size_scgl$Site ==  "Escalante Canyon",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+# Works
+IPM_basic(df = size_scgl[size_scgl$Site ==  "Escalante Canyon",], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 
 # Works
-sc_Atwell <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Atwell Gulch",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+sc_Atwell <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Atwell Gulch",], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 
 # Nope
-sc_Bridgeport <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Bridgeport",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+sc_Bridgeport <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Bridgeport",],seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 
-sc_OilPad <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Oil Pad",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+sc_OilPad <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Oil Pad",], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 
-sc_PyramidRock <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Pyramid Rock",], minsize = minsize_scgl, maxsize = maxsize_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, allsdszs = allsdszs_scgl, surv_seedlings = surv_minis, seeds_per_flower = 150)
+# Works
+sc_PyramidRock <- IPM_basic(df = size_scgl[size_scgl$Site ==  "Pyramid Rock",], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
 ```
 
 
