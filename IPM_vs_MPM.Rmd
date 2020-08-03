@@ -29,6 +29,25 @@ load("size_scgl1.Rda")
 
 ```
 
+Merow et al 2014 Advancing population ecology   
+```{r}
+params <- data.frame(
+  surv.int=NA, # Intercept from logistic regression of survival
+  surv.slope=NA, # Slope from logistic regression of survival
+  growth.int=NA, # Intercept from linear regression of growth
+  growth.slope=NA, # Slope from linear regression of growth
+  growth.sd=NA, # Residual sd from the linear regression of growth
+  seed.int=NA, # Intercept from Poisson regression of seed number
+  seed.slope=NA, # Slope from Poisson regression of seed number
+  recruit.size.mean=NA, # Mean recruit size
+  recruit.size.sd=NA, # Standard deviation of recruit size
+  establishment.prob=NA # Probability of establishment
+)
+
+# build vital rate regressions and store coefficients
+
+```
+
 
 
 # Code adapted from Dan Doak for an IPM
