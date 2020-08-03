@@ -43,9 +43,32 @@ params <- data.frame(
   recruit.size.sd=NA, # Standard deviation of recruit size
   establishment.prob=NA # Probability of establishment
 )
+```
+
 
 # build vital rate regressions and store coefficients
+```{r}
+# example data frame
+size_scgl
 
+# Test if there are differences in vital rates among sites and years
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  theme_bw()+
+  geom_jitter(height = 0.1, width = 0)+
+  facet_wrap(~Site)
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  theme_bw()+
+  geom_jitter(height = 0.1, width = 0)+
+  facet_wrap(~year0)
+
+# survival
+surv.reg1 <- glm(survival ~ t0 + Site + as.factor(year0), data = size_scgl, family = binomial()) # survival by size (slope) comparing different intercepts by site and year
+surv.reg2 <- glm(survival ~ t0, data = size_scgl, family = binomial()) # survival by size (slope)
+summary(surv.reg2)
 ```
 
 
