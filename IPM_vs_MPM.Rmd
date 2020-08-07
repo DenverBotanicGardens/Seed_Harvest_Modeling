@@ -29,8 +29,75 @@ load("size_scgl1.Rda")
 
 ```
 
+
+# Matrix Population Models
+
+lambda ~ fecundity
+```{r}
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+# XXX et al. XXXX paper
+tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
+
+m1 <- gsub("\\[|\\]", "", tm$Mx[1]) 
+m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+(m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " "))) # split each list element after removing leading whitespace
+(m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE))
+# Mx: Annual transition matrix
+# Tmx: Annual trnasition matrix with transition probabilities, no fecundity
+# Nx: Vector of observed stage structures (counts in each stage); must be at the start
+# Should these all be transposed???
+
+# Transitions without fecundity
+TMx_all <- sapply(1:nrow(tm), function(i){
+  m1 <- gsub("\\[|\\]", "", tm$Tmx[i])
+  m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+  m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " ")) # split each list element after removing leading whitespace
+  m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
+  m4
+}, simplify =FALSE, USE.NAMES = TRUE)
+
+TMx_names <- lapply(1:nrow(tm), function(i){
+  spp <- tm$SPP[i]
+  pop <- tm$POP[i]
+  yr <- tm$YR[i]
+  paste(spp, pop, yr)
+})
+
+names(TMx_all) <- TMx_names
+
+# Transitions and fecundity
+Mx_all <- sapply(1:nrow(tm), function(i){
+  m1 <- gsub("\\[|\\]", "", tm$Mx[i])
+  m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+  m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " ")) # split each list element after removing leading whitespace
+  m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
+  m4
+}, simplify =FALSE, USE.NAMES = TRUE)
+
+Mx_names <- lapply(1:nrow(tm), function(i){
+  spp <- tm$SPP[i]
+  pop <- tm$POP[i]
+  yr <- tm$YR[i]
+  paste(spp, pop, yr)
+})
+
+names(Mx_all) <- Mx_names
+Mx_all[grep("ASSC", names(Mx_all))]
+
+TMx_all[[2]];Mx_all[[2]]
+
+lambdas <- sapply(Mx_all, function(x) lambda(x), simplify = FALSE, USE.NAMES = TRUE)
+```
+
+
+
+
+# Integral projeciton models
 Merow et al 2014 Advancing population ecology   
 ```{r}
+
+# make an S4 class object? 
 params <- data.frame(
   surv.int=NA, # Intercept from logistic regression of survival
   surv.slope=NA, # Slope from logistic regression of survival
@@ -46,7 +113,8 @@ params <- data.frame(
 ```
 
 
-# build vital rate regressions and store coefficients
+# build vital rate regressions and store coefficients  
+# Assume most populaitons will have different responses by site but check. Limitation might be due to sample (populaiton) size leading to lumping or splitting data by population. 
 ```{r}
 # example data frame
 size_scgl
@@ -68,7 +136,15 @@ ggplot(size_scgl, aes(t0, survival, colour = Site))+
 # survival
 surv.reg1 <- glm(survival ~ t0 + Site + as.factor(year0), data = size_scgl, family = binomial()) # survival by size (slope) comparing different intercepts by site and year
 surv.reg2 <- glm(survival ~ t0, data = size_scgl, family = binomial()) # survival by size (slope)
-summary(surv.reg2)
+# Could compare different slope and intercept by site and year but doesn't that overfit??
+
+reg.list <- list(surv.reg1, surv.reg2)
+reg.names <- as.character(unlist(lapply(reg.list, formula)))
+(reg.results <- aictab(reg.list, modnames = reg.names))
+
+summary(surv.reg1)
+
+params$surv.int <- c(rep(coefficients(surv.reg1)[1], length(coefficients(surv.reg1))-2)+coefficients(surv.reg1)[-c(1:2)] )# all the offsets for year and site
 ```
 
 
@@ -213,7 +289,7 @@ IPM_basic <- function(df, bin.num, seedlings_per_seed, surv_seedlings, seeds_per
 }
 ```
 
-
+Not by site but across all data, use site, year, and fecundity as a covariate, predict for high and low values 
 ```{r}
 # ScGl
 # seedlings_per_seed # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
@@ -267,3 +343,66 @@ scgl_IPM_NS_year <- lapply(unique(size_scgl$Region), function(x){
 (lifespan_matrix)
 
 ```
+
+Make a predictive model (as a function only of size in this case) and site, year, and fecundity for each demographic rate: survival, mean growth, variance in growth, prob of reproducing, and how much reproduction if reproducing. The code fits a few alternatives and chooses the best one for each rate, which will be used below. But can't have fecundity in the reproductive ones... ???
+```{r}
+## Vital rates
+# survival
+######## ScGl survival #########################
+# do it my way 
+
+glm1 <- glm(survival ~ t0, family = "binomial", data = size_scgl)
+# glm2 <- glm(survival ~ t0 + t0sq, family = "binomial", data = size_scgl) # don't have a squared term yet, need it?
+glm3 <- glm(survival ~ t0 + Site + t0*Site, family = "binomial", data = size_scgl1) # The slope and the intecept could differ
+glm4 <- glm(survival ~ t0 + as.factor(year0) + t0*year0, family = "binomial", data = size_scgl1)
+glm5 <- glm(survival ~ t0 + as.factor(year0) + t0*as.factor(year0) + Site + t0*Site + as.factor(year0)*Site, family = "binomial", data = size_scgl1)
+
+lm.list <- list(glm1, glm3, glm4, glm5)
+lm.names <- as.character(unlist(lapply(lm.list, formula)))
+(lm.results <- aictab(lm.list, modnames = lm.names))
+# evidence ratio
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+
+summary(glm5)
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  stat_smooth(method="glm", family=binomial, formula = y~x, aes(fill=Site))+
+  facet_grid(cols=vars(year0),
+             rows = vars(Site))+
+  xlab("Size at time t")+
+  ylab("Survival to time t+1")+
+  theme_bw()
+
+```
+
+
+```{r}
+# Growth
+
+# growth: non-linear with linear function of size , quadratic function of size, power function (A+B*(size^C))
+# nlm1 <- nls(t1 ~ a + b*t0, data = size_scgl, start = list(a=1, b=1))
+# nlm2 <- nls(t1 ~ a + b*t0 + c*Site, data=size_scgl, start = (list(a=1, b=1, c=1)))
+# nlm3 <- nls(t1 ~ a + b*t0 + c*year0, data=size_scgl, start=list(a=1, b=1, c=1))
+
+glm1 <- glm(t1 ~ t0, family = poisson, data = size_scgl)
+nlm.list <- list(nlm1, nlm2, nlm3)
+nlm.names <- as.character(unlist(lapply(nlm.list, formula)))
+(nlm.results <- aictab(nlm.list, modnames = nlm.names))
+for(i in 2:length(nlm.list)){
+  print(exp(0.5*nlm.results$Delta_AICc[i]))
+}
+
+# getting residuals of growth
+size$growth_residuals <- NA
+size$growth_residuals[which(!is.na(size$t1) & !is.na(size$t0))] <- summary(bestgrowth)$residuals^2
+
+summary(glm1)
+
+```
+
+
+
+
