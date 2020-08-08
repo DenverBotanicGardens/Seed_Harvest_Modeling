@@ -25,7 +25,7 @@ library(ggplot2)
 setwd("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/")
 load("size_scgl.Rda") # data converted to yearly transition
 load("allsdszs_scgl.Rda") # only individuals that were < 0.5 and considered seedlings
-load("size_scgl1.Rda")
+# load("size_scgl1.Rda")
 
 ```
 
@@ -36,17 +36,36 @@ lambda ~ fecundity
 ```{r}
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
 
-# XXX et al. XXXX paper
+# Ellis et al. 2012 paper
 tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
 
-m1 <- gsub("\\[|\\]", "", tm$Mx[1]) 
+m1 <- gsub("\\[|\\]", "", tm$Mx[100]) 
 m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
 (m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " "))) # split each list element after removing leading whitespace
 (m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE))
 # Mx: Annual transition matrix
 # Tmx: Annual trnasition matrix with transition probabilities, no fecundity
 # Nx: Vector of observed stage structures (counts in each stage); must be at the start
-# Should these all be transposed???
+
+Nx_all <- lapply(1:nrow(tm), function(i){
+  v1 <- gsub("\\[|\\]", "", tm$Nx[i])
+  v2 <- sapply(v1, function(x) strsplit(trimws(x,"l"), " ")) 
+  v3 <- as.numeric(unlist(v2[[1]]))
+  v3
+})
+
+Nx_names <- lapply(1:nrow(tm), function(i){
+  spp <- tm$SPP[i]
+  pop <- tm$POP[i]
+  yr <- tm$YR[i]
+  paste(spp, pop, yr)
+})
+
+names(Nx_all) <- Nx_names
+
+# Validate structure of matrices with an example
+Nx_all[[100]]
+Nx_names[[100]] # Dicerandra fruitescens: short lived (<10 years); fire; recorded quarterly; 6 identified stages: (1) seed bank, seedlings, (3) vegetative, (4) small fl, (5) med fl, (6) large fl.; seedbank from simulation see Menges et al. 2006
 
 # Transitions without fecundity
 TMx_all <- sapply(1:nrow(tm), function(i){
@@ -57,14 +76,7 @@ TMx_all <- sapply(1:nrow(tm), function(i){
   m4
 }, simplify =FALSE, USE.NAMES = TRUE)
 
-TMx_names <- lapply(1:nrow(tm), function(i){
-  spp <- tm$SPP[i]
-  pop <- tm$POP[i]
-  yr <- tm$YR[i]
-  paste(spp, pop, yr)
-})
-
-names(TMx_all) <- TMx_names
+names(TMx_all) <- Nx_names
 
 # Transitions and fecundity
 Mx_all <- sapply(1:nrow(tm), function(i){
@@ -75,19 +87,18 @@ Mx_all <- sapply(1:nrow(tm), function(i){
   m4
 }, simplify =FALSE, USE.NAMES = TRUE)
 
-Mx_names <- lapply(1:nrow(tm), function(i){
-  spp <- tm$SPP[i]
-  pop <- tm$POP[i]
-  yr <- tm$YR[i]
-  paste(spp, pop, yr)
-})
-
-names(Mx_all) <- Mx_names
+names(Mx_all) <- Nx_names
 Mx_all[grep("ASSC", names(Mx_all))]
 
-TMx_all[[2]];Mx_all[[2]]
+TMx_all[[100]];Mx_all[[100]];Nx_all[[100]]
 
+# I think they need to be transposed for the top row to be fecundity
+colSums(t(Mx_all[[1]]));colSums(Mx_all[[1]])
+
+lambdas_transp <- sapply(Mx_all, function(x) lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE)
 lambdas <- sapply(Mx_all, function(x) lambda(x), simplify = FALSE, USE.NAMES = TRUE)
+
+lambs <- data.frame(unlist(lambdas),unlist(lambdas_transp))
 ```
 
 
