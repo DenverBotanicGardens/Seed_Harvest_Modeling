@@ -90,15 +90,56 @@ Mx_all <- sapply(1:nrow(tm), function(i){
 names(Mx_all) <- Nx_names
 Mx_all[grep("ASSC", names(Mx_all))]
 
-TMx_all[[100]];Mx_all[[100]];Nx_all[[100]]
-
-# I think they need to be transposed for the top row to be fecundity
-colSums(t(Mx_all[[1]]));colSums(Mx_all[[1]])
-
-lambdas_transp <- sapply(Mx_all, function(x) lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE)
 lambdas <- sapply(Mx_all, function(x) lambda(x), simplify = FALSE, USE.NAMES = TRUE)
 
-lambs <- data.frame(unlist(lambdas),unlist(lambdas_transp))
+fecundity <- mapply(function(x,y){ 
+  fec <- x-y
+  rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
+  }, Mx_all, TMx_all)
+
+
+# Help! can't figure out errors
+lifespans <- lapply(unique(tm$SPP), function(x){
+  Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
+  nx <- mean(Mx_sp)
+  nclasses <- dim(nx)[1]
+  vec <- c(100, rep(0,(nclasses-1))) # a population of 100 individuals in the smallest size, zero in all others
+  nx[1,] <- 0 # made all the reproductive and survival of reproductive zero
+  jj <- 1
+  while(sum(vec)>1 & !is.na(sum(vec))){
+    vec=nx%*%vec
+    jj<- jj+1 # Lives another year until all the individuals are dead (because we got rid of reproduction)
+    }
+  jj
+  })
+
+# To start with checking DIFR and then build out simulation function by species
+which(unique(tm$SPP) %in% "DIFR")
+
+sp <- unique(tm$SPP)[[5]]
+
+byspecies_sim <- lapply(unique(tm$SPP)[[5]], function(sp){
+  # get transition with fecundity matrices
+  Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
+  # if Lambda is the cutoff for good vs. bad year
+  l_all <- lambdas[grep(sp, unlist(Nx_names))] # All annual transition lambdas by site and year
+  mn_l <- mean(unlist(l_all))
+  above_l <- l_all[l_all >= mn_l]
+  below_l <- l_all[l_all < mn_l]
+  # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
+  mn_f <- mean(fecundity[grep(sp, names(fecundity))]) 
+  above_f <- 
+  below_f
+})
+
+
+TMx_all[[100]];Mx_all[[100]];Nx_all[[100]];Nx_names[[100]];fecundity[[100]]
+lapply(grep("DIFR", unlist(Nx_names)), function(x) lifespan(Mx_all[[x]])) 
+dim(Mx_all[x])
+
+TMx_all[grep("DIFR",unlist(Nx_names))]
+
+
 ```
 
 
