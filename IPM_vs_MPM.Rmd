@@ -213,20 +213,41 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
 which(unique(tm$SPP) %in% "DIFR")
 sp <- unique(tm$SPP)[5]
 
-SeedHarvestSim <- function(Mx_list, GoodBadTm, FreqTm, IntTm){
-  # lapply(unique(tm$SPP)[-2], function(sp){
-  # get transition with fecundity matrices
-  Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
-  # if Lambda is the cutoff for good vs. bad year
-  l_all <- lambdas[grep(sp, unlist(Nx_names))] # All annual transition lambdas by site and year
+# from row to column (differ from MPM)
+GBmatrix <- matrix(c(0.25,0.75,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+Freqmatrix <- matrix(c(0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
+Intmatrix <- matrix(c(0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
+
+SeedHarvestSim <- function(Mx_list, TMx_list, GoodBadTm, FreqTm, IntTm, TotYrs){
+    # if Lambda is the cutoff for good vs. bad year
+  l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
   mn_l <- mean(unlist(l_all))
-  above_l <- Mx_sp[which(l_all >= mn_l)]
-  below_l <- Mx_sp[which(l_all < mn_l)]
+  above_l <- Mx_list[which(l_all >= mn_l)]
+  below_l <- Mx_list[which(l_all < mn_l)]
   # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
-  f_all <- fecundity[grep(sp, unlist(Nx_names))]
+  f_all <- mapply(function(x,y){
+    fec <- x-y
+    rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
+    }, Mx_list, TMx_list)
   mn_f <- mean(unlist(f_all)) 
-  above_f <- Mx_sp[which(f_all >= mn_f)]
-  below_f <- Mx_sp[which(f_all < mn_f)]
+  above_f <- Mx_list[which(f_all >= mn_f)]
+  below_f <- Mx_list[which(f_all < mn_f)]
+  
+  # Seed with good! positive
+  Yr <- "Good"
+  yrs <- 1
+  while(yrs <= TotYrs)
+  # In a good year, you are FreqTm likely to collect seed
+  CollectYN <- rbinom()
+  
+  
+  Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
+    "Good"
+  } else {
+      "Bad"
+    } 
+  Yr
+  
 })
 
 
