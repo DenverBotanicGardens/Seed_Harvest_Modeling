@@ -39,6 +39,8 @@ load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
 # Ellis et al. 2012 paper
 tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
 
+sp_info <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_speciesinfo.csv")
+
 m1 <- gsub("\\[|\\]", "", tm$Mx[100]) 
 m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
 (m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " "))) # split each list element after removing leading whitespace
@@ -97,39 +99,134 @@ fecundity <- mapply(function(x,y){
   rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
   }, Mx_all, TMx_all)
 
+x <- unique(tm$SPP)[3]
+# Help! can't figure out errors with CIPI and why are some crazy long-lived?? ASSC has dormant as stage 1; Starting with all individuals as dormant. The life length calculation doesn't allow for that...
+# unlimited growth! Clearly there must be some density dependency
 
-# Help! can't figure out errors
+# nx <- mean(Mx_all[grep("ASSC", unlist(Nx_names))])
+nx <- Mx_all[grep("ASSC", unlist(Nx_names))]
+nclasses <- dim(nx[[1]])[1]
+vec <- c(0, 100, rep(0,(nclasses-2))) # since the first class is dormant and the second class are the little ones
+nx <- sapply(nx, simplify = FALSE, USE.NAMES = TRUE, function(x){
+  x[1,] <- 0 # made all reproduction zero
+  x
+  })
+jj <- 1
+# Check what is happening
+  # repeat{
+  #   print(vec <- nx%*%vec)
+  #   print(jj <- jj+1)
+  #   if(is.na(sum(vec))) break
+  #   }
+while(sum(vec)>1){
+  nx_r <- nx[[sample(1:length(nx), 1)]] # randomly sample from the matrices instead of a deterministic 
+  vec <- nx_r%*%vec
+  jj <- jj+1
+}
+lifespan_ASSC <- jj
+
+ 
+
+# Silene acaulis could be super long lived, maybe, but it also has seeds in the seed bank that likely stay there a few years so this is following 100 seeds
+nx <- mean(Mx_all[grep("SIAC", unlist(Nx_names))])
+nclasses <- dim(nx)[1]
+vec <- c(0, 100, rep(0,(nclasses-2))) # since the first class is seed bank and the second class are the seedlings
+  nx[1,] <- 0 # made all reproduction zero
+jj <- 1
+while(sum(vec)>1){
+  (vec <- nx%*%vec)
+  jj <- jj+1
+}
+lifespan_ASSC <- jj
+rowSums(nx)
+
+sp_info[sp_info$Unobserved.stages>0,]
+
+x <- unique(tm$SPP)[2]
+
+# stochastic, not deterministic, 
 lifespans <- lapply(unique(tm$SPP), function(x){
-  Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
-  nx <- mean(Mx_sp)
-  nclasses <- dim(nx)[1]
-  vec <- c(100, rep(0,(nclasses-1))) # a population of 100 individuals in the smallest size, zero in all others
-  nx[1,] <- 0 # made all the reproductive and survival of reproductive zero
+  if(x == "CIPI"){
+    Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
+    Mx_sp <- Mx_sp[grep("CIPI_4", names(Mx_sp), invert = TRUE)] # just ignore for now the one site with 6 stages instead of 3
+  } else {
+    Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
+    }
+  nclasses <- dim(Mx_sp[[1]])[1]
+  if(x %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # Ones where the first stage is not seedlings
+    vec <- c(0, 100, rep(0,(nclasses-2))) 
+  } else{
+    vec <- c(100, rep(0,(nclasses-1))) # a population of 100 individuals in the smallest size, zero in all others
+  }
+  Mnx <- sapply(Mx_sp, simplify = FALSE, USE.NAMES = TRUE, function(x){
+    x[1,] <- 0 # made all reproduction zero
+    x
+    }) # made all reproduction zero
   jj <- 1
-  while(sum(vec)>1 & !is.na(sum(vec))){
-    vec=nx%*%vec
+  while(sum(vec)>1){
+    (nx <- Mnx[[sample(1:length(Mnx), 1)]])
+    (vec=nx%*%vec)
     jj<- jj+1 # Lives another year until all the individuals are dead (because we got rid of reproduction)
     }
   jj
   })
 
+names(lifespans) <- unique(tm$SPP)[-2]
+
+```
+
+
+```{r}
+# Is fecundity correlated to lambda
+all_summarydata <- data.frame(SPPSiteYr = names(lambdas), SPP = tm$SPP, lmbd = unlist(lambdas), f = unlist(fecundity))
+all_summarydata <- merge(all_summarydata, sp_info, by = "SPP")
+
+# for which are fecundity and lambda correlated
+lm1 <- lm(lmbd ~ f, data = all_summarydata)
+lm2 <- lm(lmbd ~ f * Genus, data = all_summarydata)
+lm3 <- lm(lmbd ~ f * Number.of.stages, data = all_summarydata)
+
+lm.list <- list(lm1, lm2, lm3)
+lm.names <- as.character(unlist(lapply(lm.list, formula)))
+(lm.results <- aictab(lm.list, modnames = lm.names))
+
+# evidence ratio
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+
+summary(lm2)
+
+# fecundity doesn't vary for some. 
+ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
+  geom_point()+
+  stat_smooth(method = "lm")+
+  theme_bw()+
+  facet_wrap(~Genus, scales="free")+
+  theme(legend.position="none")+
+  ylab("lambda")+
+  xlab("fecundity")
+```
+
+```{r}
 # To start with checking DIFR and then build out simulation function by species
 which(unique(tm$SPP) %in% "DIFR")
+sp <- unique(tm$SPP)[5]
 
-sp <- unique(tm$SPP)[[5]]
-
-byspecies_sim <- lapply(unique(tm$SPP)[[5]], function(sp){
+SeedHarvestSim <- function(Mx_list, GoodBadTm, FreqTm, IntTm){
+  # lapply(unique(tm$SPP)[-2], function(sp){
   # get transition with fecundity matrices
   Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
   # if Lambda is the cutoff for good vs. bad year
   l_all <- lambdas[grep(sp, unlist(Nx_names))] # All annual transition lambdas by site and year
   mn_l <- mean(unlist(l_all))
-  above_l <- l_all[l_all >= mn_l]
-  below_l <- l_all[l_all < mn_l]
+  above_l <- Mx_sp[which(l_all >= mn_l)]
+  below_l <- Mx_sp[which(l_all < mn_l)]
   # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
-  mn_f <- mean(fecundity[grep(sp, names(fecundity))]) 
-  above_f <- 
-  below_f
+  f_all <- fecundity[grep(sp, unlist(Nx_names))]
+  mn_f <- mean(unlist(f_all)) 
+  above_f <- Mx_sp[which(f_all >= mn_f)]
+  below_f <- Mx_sp[which(f_all < mn_f)]
 })
 
 
@@ -141,6 +238,18 @@ TMx_all[grep("DIFR",unlist(Nx_names))]
 
 
 ```
+
+
+multiply out and take the number of years to below a threshold (sum(vec)) of sizes from different starting sizes with different seed harvest
+```{r}
+
+GoodBad <- 
+
+
+
+```
+
+
 
 
 
