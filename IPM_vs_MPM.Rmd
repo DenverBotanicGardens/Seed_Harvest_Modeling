@@ -208,6 +208,7 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
   xlab("fecundity")
 ```
 
+# Make S4 objects later
 ```{r}
 # To start with checking DIFR and then build out simulation function by species
 which(unique(tm$SPP) %in% "DIFR")
@@ -218,8 +219,30 @@ GBmatrix <- matrix(c(0.25,0.75,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list
 Freqmatrix <- matrix(c(0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
 Intmatrix <- matrix(c(0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
 
-SeedHarvestSim <- function(Mx_list, TMx_list, GoodBadTm, FreqTm, IntTm, TotYrs){
-    # if Lambda is the cutoff for good vs. bad year
+### Want to add in increased chance of collecting a few years in a row to mimic a grant or short time project
+
+GoodBadTm <- GBmatrix
+Freq <- c(0.2,0.05)
+Int <- c(0.2,0.5)
+
+StartPopSize <- 300
+sum(floor(Nx_all[[1]]*(100/sum(Nx_all[[1]]))))
+
+## Mx_list list of annual transition matrices
+## TMx_list list of annual transition matrices without fecundity
+## Nx could be the stable state distribution or the starting size distribution (counts of each stage) and will be scaled to desired pop size
+
+SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = "N", seedbank = FALSE){
+  
+  if(rowSums(GoodBadTm)!=2) print("Error: chance of transitioning from a 'good' year to 'good' or 'bad' must sum to 1 (ditto for bad:good or bad)")
+  
+  vec <- floor(Nx*(StartPopSize/sum(Nx)))
+  
+  # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
+  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
+  
+  # if Lambda is the cutoff for good vs. bad year
   l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
   mn_l <- mean(unlist(l_all))
   above_l <- Mx_list[which(l_all >= mn_l)]
@@ -233,22 +256,47 @@ SeedHarvestSim <- function(Mx_list, TMx_list, GoodBadTm, FreqTm, IntTm, TotYrs){
   above_f <- Mx_list[which(f_all >= mn_f)]
   below_f <- Mx_list[which(f_all < mn_f)]
   
-  # Seed with good! positive
+  # Start with good! positive
   Yr <- "Good"
+  GBs <- rep(NA,TotYrs)
+  Freqs <- rep(NA,TotYrs)
+  Intens <- rep(NA,TotYrs)
   yrs <- 1
-  while(yrs <= TotYrs)
-  # In a good year, you are FreqTm likely to collect seed
-  CollectYN <- rbinom()
-  
-  
-  Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
-    "Good"
-  } else {
-      "Bad"
-    } 
-  Yr
-  
-})
+  while(yrs <= TotYrs){
+    if(Yr == "Good"){
+      nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
+    } else {
+      nx <- below_f[[sample(1:length(below_f), 1)]]
+    }
+    # Freq likely to collect seed in good or bad years
+    CollectYN <- rbinom(1,1,Freq_m[Yr,])
+    if(CollectYN == 1){
+      # yes collect, reduce fecuntity by how much?
+      if(seedbank == TRUE){ 
+        nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
+      } else {
+        nx[1,] <- nx[1,]*Inten_m[Yr,]
+      }
+    }
+    
+    # Multiple N_t+1 = M*N_t
+    vec <- nx%*%vec
+    
+    GBs[yrs] <- Yr
+    Freqs[yrs] <- CollectYN
+    Intens[yrs] <- if(CollectYN==1) Inten_m[Yr,]
+    PopSize[yrs] <- sum(vec)
+    # Transition between good and bad years
+    Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
+      "Good"
+    } else {
+        "Bad"
+      } 
+    Yr
+    yrs <- yrs+1
+  }  
+  list(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
+}
 
 
 TMx_all[[100]];Mx_all[[100]];Nx_all[[100]];Nx_names[[100]];fecundity[[100]]
