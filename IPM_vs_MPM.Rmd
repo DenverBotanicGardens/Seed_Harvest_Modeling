@@ -30,6 +30,97 @@ load("allsdszs_scgl.Rda") # only individuals that were < 0.5 and considered seed
 ```
 
 
+functions   
+```{r}
+# Seeds a populaiton with 100 indiviudals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a deterministic matrix
+lifespan <- function(nx){
+  nclasses=dim(nx)[1]
+  vec=c(100,rep(0,(nclasses-1)))
+  nx[1,]=0
+  jj=1
+  while (sum(vec)>1){
+    vec=nx%*%vec
+    jj=jj+1
+    #print(sum(vec))
+  }
+  return(jj)
+}
+
+# Need to add clustered collection (not included yet). Good or Bad years determined by high and low fecundity, Output for further analysis: string of good and bad years, string of years with harvest, rate of harvest in harvested years, population size each year
+SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = "N", seedbank = FALSE){
+  
+  if(rowSums(GoodBadTm)!=2) print("Error: chance of transitioning from a 'good' year to 'good' or 'bad' must sum to 1 (ditto for bad:good or bad)")
+  
+  vec <- floor(Nx*(StartPopSize/sum(Nx)))
+  
+  # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
+  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
+  
+  # if Lambda is the cutoff for good vs. bad year
+  l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
+  mn_l <- mean(unlist(l_all))
+  above_l <- Mx_list[which(l_all >= mn_l)]
+  below_l <- Mx_list[which(l_all < mn_l)]
+  # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
+  f_all <- mapply(function(x,y){
+    fec <- x-y
+    rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
+    }, Mx_list, TMx_list)
+  mn_f <- mean(unlist(f_all)) 
+  above_f <- Mx_list[which(f_all >= mn_f)]
+  below_f <- Mx_list[which(f_all < mn_f)]
+  
+  # Start with good! positive
+  Yr <- "Good"
+  GBs <- rep(NA,TotYrs)
+  Freqs <- rep(NA,TotYrs)
+  Intens <- rep(NA,TotYrs)
+  PopSize <- rep(NA, TotYrs)
+  yrs <- 1
+  while(yrs <= TotYrs){
+    if(Yr == "Good"){
+      nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
+    } else {
+      nx <- below_f[[sample(1:length(below_f), 1)]]
+    }
+    # Freq likely to collect seed in good or bad years
+    CollectYN <- rbinom(1,1,Freq_m[Yr,])
+    if(CollectYN == 1){
+      # yes collect, reduce fecuntity by how much?
+      if(seedbank == TRUE){ 
+        nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
+      } else {
+        nx[1,] <- nx[1,]*Inten_m[Yr,]
+      }
+    }
+    
+    # Multiple N_t+1 = M*N_t
+    vec <- nx%*%vec
+    
+    GBs[yrs] <- Yr
+    Freqs[yrs] <- CollectYN
+    if(CollectYN==1){
+      Intens[yrs] <- Inten_m[Yr,]
+    }
+    PopSize[yrs] <- sum(vec)
+    # Transition between good and bad years
+    Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
+      "Good"
+    } else {
+        "Bad"
+      } 
+    Yr
+    yrs <- yrs+1
+  }  
+  list(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
+}
+
+
+```
+
+
+
 # Matrix Population Models
 
 lambda ~ fecundity
@@ -232,75 +323,6 @@ sum(floor(Nx_all[[1]]*(100/sum(Nx_all[[1]]))))
 ## TMx_list list of annual transition matrices without fecundity
 ## Nx could be the stable state distribution or the starting size distribution (counts of each stage) and will be scaled to desired pop size
 
-SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = "N", seedbank = FALSE){
-  
-  if(rowSums(GoodBadTm)!=2) print("Error: chance of transitioning from a 'good' year to 'good' or 'bad' must sum to 1 (ditto for bad:good or bad)")
-  
-  vec <- floor(Nx*(StartPopSize/sum(Nx)))
-  
-  # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
-  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
-  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
-  
-  # if Lambda is the cutoff for good vs. bad year
-  l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
-  mn_l <- mean(unlist(l_all))
-  above_l <- Mx_list[which(l_all >= mn_l)]
-  below_l <- Mx_list[which(l_all < mn_l)]
-  # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
-  f_all <- mapply(function(x,y){
-    fec <- x-y
-    rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
-    }, Mx_list, TMx_list)
-  mn_f <- mean(unlist(f_all)) 
-  above_f <- Mx_list[which(f_all >= mn_f)]
-  below_f <- Mx_list[which(f_all < mn_f)]
-  
-  # Start with good! positive
-  Yr <- "Good"
-  GBs <- rep(NA,TotYrs)
-  Freqs <- rep(NA,TotYrs)
-  Intens <- rep(NA,TotYrs)
-  PopSize <- rep(NA, TotYrs)
-  yrs <- 1
-  while(yrs <= TotYrs){
-    if(Yr == "Good"){
-      nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
-    } else {
-      nx <- below_f[[sample(1:length(below_f), 1)]]
-    }
-    # Freq likely to collect seed in good or bad years
-    CollectYN <- rbinom(1,1,Freq_m[Yr,])
-    if(CollectYN == 1){
-      # yes collect, reduce fecuntity by how much?
-      if(seedbank == TRUE){ 
-        nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
-      } else {
-        nx[1,] <- nx[1,]*Inten_m[Yr,]
-      }
-    }
-    
-    # Multiple N_t+1 = M*N_t
-    vec <- nx%*%vec
-    
-    GBs[yrs] <- Yr
-    Freqs[yrs] <- CollectYN
-    if(CollectYN==1){
-      Intens[yrs] <- Inten_m[Yr,]
-    }
-    PopSize[yrs] <- sum(vec)
-    # Transition between good and bad years
-    Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
-      "Good"
-    } else {
-        "Bad"
-      } 
-    Yr
-    yrs <- yrs+1
-  }  
-  list(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
-}
-
 
 testfoo <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
                           TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
@@ -328,15 +350,14 @@ lapply(grep("DIFR", unlist(Nx_names)), function(x) lifespan(Mx_all[[x]]))
 dim(Mx_all[x])
 
 TMx_all[grep("DIFR",unlist(Nx_names))]
-
-plot(testfoo$PopulationSize, type="l");plot(testfoo_rand$PopulationSize, type="l")
+plot(testfoo_rand$PopulationSize, type="l")
+lines(testfoo$PopulationSize, col="red")
 ```
 
 
-multiply out and take the number of years to below a threshold (sum(vec)) of sizes from different starting sizes with different seed harvest
 ```{r}
 
-GoodBad <- 
+
 
 
 
@@ -419,22 +440,6 @@ maxsize_scgl <- 12.61 # was Fram, excluded 14.51
 
 ```
 
-####################################################
-```{r}
-lifespan <- function(nx){
-  nclasses=dim(nx)[1]
-  vec=c(100,rep(0,(nclasses-1)))
-  nx[1,]=0
-  jj=1
-  while (sum(vec)>1){
-    vec=nx%*%vec
-    jj=jj+1
-    #print(sum(vec))
-  }
-  return(jj)
-}
-```
-#############################################
 
 Size density estimation for median size estimation - for each kernel, the state of an individual at one time that dictates the state and state of any offspring at the next time step (Merow et al. 2014 "Advancing population ecology with integral projeciton models: a practical guide")
 ```{r}
