@@ -261,6 +261,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   GBs <- rep(NA,TotYrs)
   Freqs <- rep(NA,TotYrs)
   Intens <- rep(NA,TotYrs)
+  PopSize <- rep(NA, TotYrs)
   yrs <- 1
   while(yrs <= TotYrs){
     if(Yr == "Good"){
@@ -284,7 +285,9 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     
     GBs[yrs] <- Yr
     Freqs[yrs] <- CollectYN
-    Intens[yrs] <- if(CollectYN==1) Inten_m[Yr,]
+    if(CollectYN==1){
+      Intens[yrs] <- Inten_m[Yr,]
+    }
     PopSize[yrs] <- sum(vec)
     # Transition between good and bad years
     Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
@@ -299,13 +302,34 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
 }
 
 
+testfoo <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
+                          TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
+                          Nx = stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))])),
+                          StartPopSize = 500,
+                          GoodBadTm = GBmatrix,
+                          # Freq = c(.1,.1), # skip for now, just project with high or low fecundity
+                          Int = c(0.1,0.5),  # Skip for now but project with higher intensity in bad years to make reasonable sized collections
+                          TotYrs = 100,
+                          # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
+                          seedbank = TRUE) # If there is a seedbank class, it needs to be skipped in reducing fecundity of the first row (skip that first column)
+
+testfoo_rand <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
+                          TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
+                          Nx = stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))])),
+                          StartPopSize = 15000,
+                          GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                          TotYrs = 100,
+                          # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
+                          seedbank = TRUE)
+
+
 TMx_all[[100]];Mx_all[[100]];Nx_all[[100]];Nx_names[[100]];fecundity[[100]]
 lapply(grep("DIFR", unlist(Nx_names)), function(x) lifespan(Mx_all[[x]])) 
 dim(Mx_all[x])
 
 TMx_all[grep("DIFR",unlist(Nx_names))]
 
-
+plot(testfoo$PopulationSize, type="l");plot(testfoo_rand$PopulationSize, type="l")
 ```
 
 
