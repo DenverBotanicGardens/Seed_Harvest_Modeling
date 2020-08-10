@@ -47,6 +47,7 @@ lifespan <- function(nx){
 }
 
 # Need to add clustered collection (not included yet). Good or Bad years determined by high and low fecundity, Output for further analysis: string of good and bad years, string of years with harvest, rate of harvest in harvested years, population size each year
+# Add density dependence - how to determine k (ceiling of growth)
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = "N", seedbank = FALSE){
   
   if(rowSums(GoodBadTm)!=2) print("Error: chance of transitioning from a 'good' year to 'good' or 'bad' must sum to 1 (ditto for bad:good or bad)")
@@ -76,7 +77,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   GBs <- rep(NA,TotYrs)
   Freqs <- rep(NA,TotYrs)
   Intens <- rep(NA,TotYrs)
-  PopSize <- rep(NA, TotYrs)
+  PopSize <- c(sum(vec),rep(NA, TotYrs))
   yrs <- 1
   while(yrs <= TotYrs){
     if(Yr == "Good"){
@@ -103,7 +104,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     if(CollectYN==1){
       Intens[yrs] <- Inten_m[Yr,]
     }
-    PopSize[yrs] <- sum(vec)
+    PopSize[(yrs+1)] <- sum(vec)
     # Transition between good and bad years
     Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
       "Good"
@@ -191,8 +192,8 @@ fecundity <- mapply(function(x,y){
   }, Mx_all, TMx_all)
 
 x <- unique(tm$SPP)[3]
-# Help! can't figure out errors with CIPI and why are some crazy long-lived?? ASSC has dormant as stage 1; Starting with all individuals as dormant. The life length calculation doesn't allow for that...
-# unlimited growth! Clearly there must be some density dependency
+# Help! errors with CIPI becuase one population had 6 stages while three others have 3 stages. Why are some crazy long-lived?? ASSC has dormant as stage 1; Starting with all individuals as dormant. The life length calculation doesn't allow for that...
+# unlimited growth! Clearly there must be some density dependency and that needs to be entered for life length
 
 # nx <- mean(Mx_all[grep("ASSC", unlist(Nx_names))])
 nx <- Mx_all[grep("ASSC", unlist(Nx_names))]
@@ -299,7 +300,7 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
   xlab("fecundity")
 ```
 
-# Make S4 objects later
+##### Make S4 objects later as output of simulation
 ```{r}
 # To start with checking DIFR and then build out simulation function by species
 which(unique(tm$SPP) %in% "DIFR")
@@ -307,8 +308,6 @@ sp <- unique(tm$SPP)[5]
 
 # from row to column (differ from MPM)
 GBmatrix <- matrix(c(0.25,0.75,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-Freqmatrix <- matrix(c(0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
-Intmatrix <- matrix(c(0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
 
 ### Want to add in increased chance of collecting a few years in a row to mimic a grant or short time project
 
@@ -319,10 +318,7 @@ Int <- c(0.2,0.5)
 StartPopSize <- 300
 sum(floor(Nx_all[[1]]*(100/sum(Nx_all[[1]]))))
 
-## Mx_list list of annual transition matrices
-## TMx_list list of annual transition matrices without fecundity
 ## Nx could be the stable state distribution or the starting size distribution (counts of each stage) and will be scaled to desired pop size
-
 
 testfoo <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
                           TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
@@ -354,8 +350,30 @@ plot(testfoo_rand$PopulationSize, type="l")
 lines(testfoo$PopulationSize, col="red")
 ```
 
-
+No seed harvest to seed harvest across starting population sizes
 ```{r}
+
+sizes_tenpercent <- lapply(c(10, 50, 100, 500, 1000), function(popsz){
+  lapply(unique(tm$SPP)[1], function(sp){
+    if(sp %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # first stage not seedlings
+      sb <- "TRUE"
+    } else {
+        sb <- "FALSE"
+      }
+    out <- SeedHarvestSim(Mx_all[grep(sp, unlist(Nx_names))],
+                          TMx_all[grep(sp, unlist(Nx_names))],
+                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                          StartPopSize = popsz,
+                          GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, 
+                                             dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                          TotYrs = 100,
+                          # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
+                          seedbank = sb)
+    })
+  out
+  })
+
+
 
 
 
