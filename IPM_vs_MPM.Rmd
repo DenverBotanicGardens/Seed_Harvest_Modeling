@@ -5,8 +5,6 @@ date: "7/26/2020"
 output: html_document
 ---
 
-Example data for Sclerocactus glaucus where size measurements are the width at widest point for these ball cacti
-'t0' and 't1' are the widths (cm) and survival is for the tagged cactus from year t to t+1. 'reproyesno' is for 't0'. 'flowers0' is a Poisson distribution based on a linear model of number of flowers by size on the one year we took that data. 'minis0' and 'minis1' are the number of seedlings (cacti with < 0.5 cm in width) in year t and t+1
 ```{r}
 
 rm(list=ls())
@@ -48,11 +46,14 @@ lifespan <- function(nx){
 
 # Need to add clustered collection (not included yet). Good or Bad years determined by high and low fecundity, Output for further analysis: string of good and bad years, string of years with harvest, rate of harvest in harvested years, population size each year
 # Add density dependence - how to determine k (ceiling of growth)
+# What is different if pre- or post-reproductive census 
+# Can we get this from COMPADRE (just MPM)?? It would be better to translate 
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = "N", seedbank = FALSE){
   
-  if(rowSums(GoodBadTm)!=2) print("Error: chance of transitioning from a 'good' year to 'good' or 'bad' must sum to 1 (ditto for bad:good or bad)")
-  
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
+  
+  # Set a maximum population size of 4*StartPopSize or set flexible as function input??? Or 10 times, wishfull thinking??
+  dendep <- 10*StartPopSize
   
   # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
   Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
@@ -97,8 +98,8 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     }
     
     # Multiple N_t+1 = M*N_t
-    vec <- nx%*%vec
-    
+    if(sum(nx%*%vec) < dendep) vec <- nx%*%vec
+ 
     GBs[yrs] <- Yr
     Freqs[yrs] <- CollectYN
     if(CollectYN==1){
@@ -106,7 +107,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     }
     PopSize[(yrs+1)] <- sum(vec)
     # Transition between good and bad years
-    Yr <- if(rbinom(1,1,GBmatrix[Yr,1])==1){
+    Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
       "Good"
     } else {
         "Bad"
@@ -265,6 +266,13 @@ lifespans <- lapply(unique(tm$SPP), function(x){
 
 names(lifespans) <- unique(tm$SPP)[-2]
 
+
+# save(Nx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Nx_all.Rda")
+# 
+# save(TMx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/TMx_all.Rda")
+# 
+# save(Mx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Mx_all.Rda")
+
 ```
 
 
@@ -354,37 +362,64 @@ No seed harvest to seed harvest across starting population sizes
 ```{r}
 
 sizes_tenpercent <- lapply(c(10, 50, 100, 500, 1000), function(popsz){
-  lapply(unique(tm$SPP)[1], function(sp){
+  out <- lapply(unique(tm$SPP)[1], function(sp){
     if(sp %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # first stage not seedlings
       sb <- "TRUE"
     } else {
         sb <- "FALSE"
       }
-    out <- SeedHarvestSim(Mx_all[grep(sp, unlist(Nx_names))],
-                          TMx_all[grep(sp, unlist(Nx_names))],
-                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
-                          StartPopSize = popsz,
-                          GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, 
-                                             dimnames = list(c("Good","Bad"), c("Good","Bad"))),
-                          TotYrs = 100,
-                          # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
-                          seedbank = sb)
+    replicates <- lapply(1:100, function(x){
+            SeedHarvestSim(Mx_all[grep(sp, unlist(Nx_names))],
+                         TMx_all[grep(sp, unlist(Nx_names))],
+                         Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                         StartPopSize = popsz,
+                         GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, 
+                                            dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                         TotYrs = 100,
+                         seedbank = sb)
+    })
+    replicates
     })
   out
   })
 
+plot(sizes_tenpercent[[1]][[1]][[1]]$PopulationSize, type="l", main="start pop size 10",
+     xlab = "Year", ylab = "Population size")
+for(i in 2:100){
+  lines(sizes_tenpercent[[1]][[1]][[i]]$PopulationSize)
+}
+
+plot(sizes_tenpercent[[2]][[1]][[1]]$PopulationSize, type="l", main="start pop size 50",
+     xlab = "Year", ylab = "Population size")
+for(i in 2:100){
+  lines(sizes_tenpercent[[2]][[1]][[i]]$PopulationSize)
+}
+
+plot(sizes_tenpercent[[3]][[1]][[1]]$PopulationSize, type="l", main="start pop size 100",
+     xlab = "Year", ylab = "Population size")
+for(i in 2:100){
+  lines(sizes_tenpercent[[3]][[1]][[i]]$PopulationSize)
+}
 
 
+plot(sizes_tenpercent[[4]][[1]][[1]]$PopulationSize, type="l", main="start pop size 500",
+     xlab = "Year", ylab = "Population size")
+for(i in 2:100){
+  lines(sizes_tenpercent[[4]][[1]][[i]]$PopulationSize)
+}
 
-
-
-
+plot(sizes_tenpercent[[5]][[1]][[1]]$PopulationSize, type="l", main="start pop size 1000",
+     xlab = "Year", ylab = "Population size")
+for(i in 2:100){
+  lines(sizes_tenpercent[[5]][[1]][[i]]$PopulationSize)
+}
 ```
 
 
 
 
-
+Example data for Sclerocactus glaucus where size measurements are the width at widest point for these ball cacti
+'t0' and 't1' are the widths (cm) and survival is for the tagged cactus from year t to t+1. 'reproyesno' is for 't0'. 'flowers0' is a Poisson distribution based on a linear model of number of flowers by size on the one year we took that data. 'minis0' and 'minis1' are the number of seedlings (cacti with < 0.5 cm in width) in year t and t+1
 
 # Integral projeciton models
 Merow et al 2014 Advancing population ecology   
