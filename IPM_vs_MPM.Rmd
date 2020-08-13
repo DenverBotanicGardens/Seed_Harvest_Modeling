@@ -276,6 +276,59 @@ names(lifespans) <- unique(tm$SPP)[-2]
 ```
 
 
+Can we detect density dependance from the matrices? 
+```{r}
+# positive density dependence == Allee-effect, can't get pollinated if too few individuals so growth rates slow vs. negative density dependence when resource is sparce
+# Follow a population from starting size, multiply each matrix, plot the "linear regression of pop. growth" - RAMAS.. what would that be?
+
+# log(sum(vec_t+1)/sum(vec_t)) is the change over time
+# sqrt(t+1 - t) the amount of time between censuses
+
+dd <- lapply(unique(tm$POP), function(POP){
+  vec <- Nx_all[grep(POP,names(Nx_all))]   # POP <- "ARFE_Charleys"
+  counts <- sapply(vec, function(x) sum(x))
+  yrs <- tm$YR[tm$POP == POP]
+  yrs_change <- sqrt(diff(yrs))
+  #lag counts is the previous year count
+  counts_change <- log(counts/lag(counts))/yrs_change
+  lm.df <- data.frame(deltcount = counts_change[-1], year = yrs_change)
+  lm1 <- lm(deltcount ~ -1 + year, data=lm.df)
+  mu <- predict(lm1, level=0.95, interval="confidence", se.fit=T)
+  
+  plot(counts[-length(counts)],counts_change[-1])
+  abline(lm1)
+})
+
+counts;lag(counts)
+log(counts/lag(counts))/yrs_change; log(exp(diff(log(counts))-1))/yrs_change
+
+
+# ?????
+
+# Ryu et al 2016.
+# divide abundance by average and model survival and fecundity (t to t+1) as function of relative density in year t
+dd <- lapply(unique(tm$POP), function(POP){
+  vec <- Nx_all[grep(POP,names(Nx_all))]   # POP <- "ARFE_Charleys"
+  counts <- sapply(vec, function(x) sum(x))
+  avg_count <- mean(counts)
+  relative.density <- counts/avg_count
+  # how to get survival alone from MPM???
+  # lambda instead?
+  l_pop <- lambdas[grep(POP, names(lambdas))]
+  lm.df <- data.frame(lambda = unlist(l_pop), rel.den = relative.density)
+  lm.df
+  })
+
+
+head(dd)
+
+# Looks like density dependence to me. 
+plot(dd[[1]]$rel.den, dd[[1]]$lambda, xlab="lambda", ylab="relative density", main = unique(tm$SPP)[1])
+
+```
+
+
+
 ```{r}
 # Is fecundity correlated to lambda
 all_summarydata <- data.frame(SPPSiteYr = names(lambdas), SPP = tm$SPP, lmbd = unlist(lambdas), f = unlist(fecundity))
