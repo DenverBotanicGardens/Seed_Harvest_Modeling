@@ -1,0 +1,51 @@
+---
+title: "SimulateSeedHarvest"
+author: "Michelle DePrenger-Levin"
+date: 2020-08-14
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SimulateSeedHarvest}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+# Getting started with the Seed Harvest Modeling simulation     
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+Install the package and type the following
+```{r setup}
+# library(SeedHarvestModeling)
+library(devtools)
+install_github("DenverBotanicGardens/SeedHarvestModeling")
+```
+
+This will load the following example data and functions needed to run a simulation on your demographic data.    
+```{r}
+
+
+```
+
+
+### (1) Gather the data you'll need to simulate harvest
+$$
+\left(\begin{array}{cc} 
+good->good & good->bad\\
+bad->good & bad->bad
+\end{array}\right)
+$$ 
+
+Specified as a matrix for the Simulation function     
+```{r}
+# from row to column (swapped from MPM)
+(GBmatrix <- matrix(c(0.25,0.75,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))))
+
+
+```
+

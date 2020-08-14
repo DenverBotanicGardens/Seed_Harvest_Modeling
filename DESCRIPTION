@@ -1,0 +1,27 @@
+Package: SeedHarvestModeling
+Type: Package
+Title: Matrix Population and Integral Projection model simulations for climate and seed harvest of rare plants
+Version: 0.0.1
+Authors@R: c(
+  MDL = person("Michelle", "DePrenger-Levin", email = "deprengm@botanicgardens.org", role = c("aut","cre"), 
+               comment = c(ORCID = "0000-0001-7566-1012"))
+               )
+URL: https://github.com/DenverBotanicGardens/Seed_Harvest_Modeling
+BugReports: https://github.com/DenverBotanicGardens/Seed_Harvest_Modeling/issues
+Description: SeedHarvestModeling is a group of functions to create Matrix Population or Integral projection models from rare plant data to simulate the impact of future climate response and response to seed harvest to detect levels that increase time to extinction or extinction risk
+LazyLoad: Yes
+LazyData: true
+Depends:
+    R (>= 3.2.0),
+    popbio
+Imports:
+    popbio
+Suggests:
+    knitr,
+    rmarkdown
+Collate:
+    lifespan.R
+    SeedHarvestSim.R
+BuildVignettes: TRUE
+VignetteBuilder: knitr
+RoxygenNote: 7.1.1
