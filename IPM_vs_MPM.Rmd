@@ -18,6 +18,7 @@ library(prism)
 library(raster)
 library(lme4)
 library(ggplot2)
+# install.packages("roxygen2")
 
 # download the Rdata files into your working directory, set your working directory and load them
 setwd("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/")
@@ -25,6 +26,21 @@ load("size_scgl.Rda") # data converted to yearly transition
 load("allsdszs_scgl.Rda") # only individuals that were < 0.5 and considered seedlings
 # load("size_scgl1.Rda")
 
+nrow(size_scgl)
+names(size_scgl)
+```
+
+Store in an R package
+```{r}
+# I already have a project and a repository
+# devtools::create("SeedHarvestModeling")
+
+library(usethis)
+
+# Add R functions
+# In project folder, make an integrate.R script to integerate all the functions
+usethis::use_vignette("SimulateSeedHarvest")
+devtools::document() # to make namespace for each function
 ```
 
 
@@ -128,6 +144,12 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
 lambda ~ fecundity
 ```{r}
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+compadre[[1]][grep("annual", compadre[[1]]$OrganismType),]
+
+```
+
+```{r}
 
 # Ellis et al. 2012 paper
 tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
@@ -325,6 +347,62 @@ head(dd)
 # Looks like density dependence to me. 
 plot(dd[[1]]$rel.den, dd[[1]]$lambda, xlab="lambda", ylab="relative density", main = unique(tm$SPP)[1])
 
+```
+
+## Or Langton 2002 Estimation of Density Dependence   
+x_t - x_t-1 + a + bn_t + e_t   
+x_t is log(abundance)    
+n_t abundance at time t    
+e_t random error
+where Pollard et al. 1987 used stochastic Gompertz model      
+x_t - x_t-1 + a + bx_t-1 + e_t   
+
+better to write as the proportional change   
+d_t = x_t - x_t-1   
+d_t = b(x_t-1 - x_e) + e_t     
+x_e is equilibrium size on log-scale
+
+```{r}
+
+# This isn't the equilibrium size...
+ststage <- lapply(Mx_all, function(x) stable.stage(x))
+
+# Regression estimator among sites per species 
+
+# SPP <- unique(tm$SPP)[20]
+dd.site <- lapply(unique(tm$SPP), function(SPP){
+  # POP <- unique(tm$POP[tm$SPP==SPP])[1]
+  lm.df <- do.call(rbind,lapply(unique(tm$POP[tm$SPP==SPP]), function(POP){
+    vec <- Nx_all[grep(POP,names(Nx_all))]   # POP <- "ARFE_Charleys"
+    counts <- sapply(vec, function(x) sum(x, na.rm = TRUE))
+    dt1 <- log(counts[-1]) - log(counts[-length(counts)])
+    x_t0 <- log(counts[-length(counts)])
+    l_pop <- lambdas[grep(POP, names(lambdas))]
+    lm.df <- data.frame(dt1, x_t0, lmbd = unlist(l_pop[-length(l_pop)]), Site = POP, Species = SPP)
+    lm.df
+    }))
+  lm.df
+  })
+
+dd.all <- do.call(rbind,dd.site)
+
+ggplot(dd.all, aes(x_t0, dt1, colour = Site))+
+  stat_smooth(method = "lm", show.legend = FALSE, alpha = 0.5)+
+  facet_wrap(~Species, scales="free")+
+  theme_bw()+
+  geom_point(show.legend=FALSE)+
+  ylab(expression('log change in abundance'['t to t+1']))+
+  xlab(expression('log abundance'[t]))
+  
+
+ggplot(dd.all, aes(x_t0, lmbd, colour = Site))+
+  stat_smooth(method = "lm", show.legend = FALSE, alpha = 0.5)+
+  facet_wrap(~Species, scales="free")+
+  theme_bw()+
+  geom_point(show.legend=FALSE)+
+  ylab(expression(lambda))+
+  xlab(expression('log abundance'[t]))
+  
 ```
 
 

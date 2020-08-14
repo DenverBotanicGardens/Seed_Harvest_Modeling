@@ -7,13 +7,16 @@
 
 lifespan <- function(nx, seedbank = FALSE){
   nclasses=dim(nx)[1]
-  vec=c(100,rep(0,(nclasses-1)))
+  if(seedbank){
+    vec <- c(0, 100, rep(0,(nclasses-2))) # so that 'life' starts at germination 
+  } else {
+    vec=c(100,rep(0,(nclasses-1)))
+  }
   nx[1,]=0
   jj=1
   while (sum(vec)>1){
     vec=nx%*%vec
     jj=jj+1
-    #print(sum(vec))
   }
   return(jj)
 }
