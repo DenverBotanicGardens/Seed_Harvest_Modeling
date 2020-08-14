@@ -14,3 +14,12 @@ Empirical data:
   
   * Determine typical life-history traits
   * Develop estimates of parameters from categories of plant types including correlations among growth and reproductive paramenters. Mimic the estimates and variability of real examples. 
+
+
+To download from github use devtools    
+
+    library(devtools)
+    install_github("DenverBotanicGardens/SeedHarvestModeling")
+
+  
+
