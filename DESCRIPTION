@@ -22,6 +22,7 @@ Suggests:
 Collate:
     lifespan.R
     SeedHarvestSim.R
+    data.R
 BuildVignettes: TRUE
 VignetteBuilder: knitr
 RoxygenNote: 7.1.1
