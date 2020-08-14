@@ -30,7 +30,10 @@ library(SeedHarvestModeling)
 This will load the following example data and functions needed to run a simulation on your demographic data.    
 ```{r}
 # I don't know how... You'll have to navigate to the github repository and save them somewhere yourself. 
+data(package="SeedHarvestModeling") # nothing 
 
+?SeedHarvestModeling::SeedHarvestSim
+?SeedHarvestModeling::lifespan
 ```
 
 
