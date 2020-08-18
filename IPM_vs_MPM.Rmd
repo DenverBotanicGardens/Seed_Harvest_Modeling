@@ -149,7 +149,9 @@ lambda ~ fecundity
 ```{r}
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
 
-compadre[[1]][grep("per", compadre[[1]]$OrganismType),]
+annuals <- compadre[[1]][grep("Annual", compadre[[1]]$OrganismType),]
+write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
+
 ```
 
 ```{r}
@@ -300,8 +302,10 @@ names(lifespans) <- unique(tm$SPP)[-2]
 
 ```
 
-
-Can we detect density dependance from the matrices? 
+# Density Dependence 
+Can we detect density dependence from the matrices?   
+No, and we don't have to. We might want to test for evidence across species/life lengths for relationship of fecundity_t ~ recruitment_t+1 and fecundity_t ~ survival of seedlings_t+1 to test for evidence of excess seed. Looking for reasons why variable percent harvest in a good or bad year would potentally have a long-term impact.   
+Vital rates, elasticities, life-cycle parameters: see Silvertown et al. 1993   
 ```{r}
 # positive density dependence == Allee-effect, can't get pollinated if too few individuals so growth rates slow vs. negative density dependence when resource is sparce
 # Follow a population from starting size, multiply each matrix, plot the "linear regression of pop. growth" - RAMAS.. what would that be?
