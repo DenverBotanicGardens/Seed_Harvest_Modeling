@@ -44,12 +44,16 @@ devtools::document() # to make namespace for each function
 ```
 
 
-functions   
+# Functions     
+lifespan to estimate how long lived   
+Starts a population of 100 individuals in the seedling or smallest bin; do not start a population in a dormant or seed bank bin  
+If you have a matrix where fecundity is measured as seeds entering the seedbank (row 1) and/or seeds germinating (row 2), indicate which rows result in a measure of fecundity 
 ```{r}
 # Seeds a populaiton with 100 indiviudals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a deterministic matrix
-lifespan <- function(nx){
+lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
   nclasses=dim(nx)[1]
-  vec=c(100,rep(0,(nclasses-1)))
+  vec <- rep(0, nclasses)
+  vec[seedlingBin] <- 100
   nx[1,]=0
   jj=1
   while (sum(vec)>1){
@@ -145,8 +149,7 @@ lambda ~ fecundity
 ```{r}
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
 
-compadre[[1]][grep("annual", compadre[[1]]$OrganismType),]
-
+compadre[[1]][grep("per", compadre[[1]]$OrganismType),]
 ```
 
 ```{r}
@@ -243,16 +246,16 @@ lifespan_ASSC <- jj
  
 
 # Silene acaulis could be super long lived, maybe, but it also has seeds in the seed bank that likely stay there a few years so this is following 100 seeds
-nx <- mean(Mx_all[grep("SIAC", unlist(Nx_names))])
+nx <- mean(Mx_all[grep("SIAC", unlist(Nx_names))]) # some straight to seedbank, some straight to seedlings
 nclasses <- dim(nx)[1]
 vec <- c(0, 100, rep(0,(nclasses-2))) # since the first class is seed bank and the second class are the seedlings
-  nx[1,] <- 0 # made all reproduction zero
+  nx[1:2,] <- 0 # made all reproduction zero
 jj <- 1
 while(sum(vec)>1){
   (vec <- nx%*%vec)
   jj <- jj+1
 }
-lifespan_ASSC <- jj
+lifespan_SIAC <- jj
 rowSums(nx)
 
 sp_info[sp_info$Unobserved.stages>0,]
