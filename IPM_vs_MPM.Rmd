@@ -73,7 +73,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
   
   # Set a maximum population size of 4*StartPopSize or set flexible as function input??? Or 10 times, wishfull thinking??
-  dendep <- 10*StartPopSize
+  # dendep <- 10*StartPopSize
   
   # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
   Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
@@ -117,8 +117,9 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
       }
     }
     
-    # Multiple N_t+1 = M*N_t
-    if(sum(nx%*%vec) < dendep) vec <- nx%*%vec
+    # Multiply N_t+1 = M*N_t
+    # if(sum(nx%*%vec) < dendep) 
+    vec <- nx%*%vec
  
     GBs[yrs] <- Yr
     Freqs[yrs] <- CollectYN
@@ -135,7 +136,8 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     Yr
     yrs <- yrs+1
   }  
-  list(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
+  SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize[-1])
+  list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
 }
 
 
@@ -412,7 +414,8 @@ ggplot(dd.all, aes(x_t0, lmbd, colour = Site))+
   
 ```
 
-
+# Fecundity     
+Defining a good and bad year as higher than or lower than average fecundity means what for overall growth rate, other life-cycle parameters?     
 
 ```{r}
 # Is fecundity correlated to lambda
@@ -446,7 +449,45 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
   xlab("fecundity")
 ```
 
-##### Make S4 objects later as output of simulation
+# Simulations
+## Test output for one species - one starting population size, 1000 replicates, no harvest to equal harvest good vs. bad to larger percentage in good to larger in bad, equal frequency 
+```{r}
+# If good year, 45% chance staying good, 55% chance switch to bad, if bad year then 35% chance next will be good, 65% chance another bad
+GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+Freq <- c(0.2,0.05) # 20% chance of collecting in a good year, 5% in a bad year 
+Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+
+compare_DIFR <- do.call(rbind, lapply(1:100, function(x){
+  DIFR_rep <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
+                          TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
+                          Nx = stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))])),
+                          StartPopSize = 500,
+                          GoodBadTm = GBmatrix,
+                          Freq = Freq,
+                          Int = Int,
+                          TotYrs = 100,
+                          # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
+                          seedbank = TRUE) # If there is a seedbank class, it needs to be skipped in reducing fecundity of the first row (skip that first column)
+  DIFR_rep[[1]]$Replicate <- x
+  DIFR_rep[[1]]
+}))
+
+
+compare_DIFR$Year <- 1:100
+ggplot(compare_DIFR, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position="none")+
+  geom_rug(colour = as.numeric(compare_DIFR$GB_yrs), sides="b")
+
+time2extinct <- sapply(split(compare_DIFR, compare_DIFR$Replicate), function(x){
+  which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+})
+
+hist(time2extinct)
+
+```
+
+##### Make S4 objects later as output of simulation - optional
 ```{r}
 # To start with checking DIFR and then build out simulation function by species
 which(unique(tm$SPP) %in% "DIFR")
@@ -454,6 +495,9 @@ sp <- unique(tm$SPP)[5]
 
 # from row to column (differ from MPM)
 GBmatrix <- matrix(c(0.25,0.75,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+
+GBmatrix["Good",1]
+c(GBmatrix)
 
 ### Want to add in increased chance of collecting a few years in a row to mimic a grant or short time project
 
@@ -472,10 +516,12 @@ testfoo <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))],
                           StartPopSize = 500,
                           GoodBadTm = GBmatrix,
                           # Freq = c(.1,.1), # skip for now, just project with high or low fecundity
-                          Int = c(0.1,0.5),  # Skip for now but project with higher intensity in bad years to make reasonable sized collections
+                          # Int = c(0.1,0.5),  # Skip for now but project with higher intensity in bad years to make reasonable sized collections
                           TotYrs = 100,
                           # ClusteredColl = "Y", # Skip for now, need to work into the function that if a collection is made, how many consecutive years after are there collections despite or with regard to good/bad
                           seedbank = TRUE) # If there is a seedbank class, it needs to be skipped in reducing fecundity of the first row (skip that first column)
+
+plot(testfoo[[1]]$PopulationSize, col=testfoo[[1]]$GB_yrs)
 
 testfoo_rand <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
                           TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
@@ -552,6 +598,16 @@ for(i in 2:100){
   lines(sizes_tenpercent[[5]][[1]][[i]]$PopulationSize)
 }
 ```
+
+
+
+
+
+
+
+
+
+
 
 
 
