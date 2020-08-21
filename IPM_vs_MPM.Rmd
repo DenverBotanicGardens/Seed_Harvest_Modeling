@@ -59,22 +59,25 @@ lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
   while (sum(vec)>1){
     vec=nx%*%vec
     jj=jj+1
-    #print(sum(vec))
   }
   return(jj)
 }
 
 # to test
-GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-Freq <- c(0.2,0.05) # 20% chance of collecting in a good year, 5% in a bad year 
-Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
-Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
-TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
-Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
-StartPopSize <- 500
-TotYrs <- 20
-ClusteredColl <- 4
-seedbank <- TRUE
+# GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Freq <- c(0.1,0.3) 
+# Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+# Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
+# TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
+# Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
+# StartPopSize <- 500
+# TotYrs <- 100
+# ClusteredColl <- 4
+# seedbank <- TRUE
+
+# When clustered collection, then scale Frequency (Freq) to collect X% of the time given collections for ClusteredColl consecutive years
+# TotYrs/ClusteredColl # need to collect 
+# I divide the percent chance by the cluster
 
 # Need to add clustered collection (not included yet). Good or Bad years determined by high and low fecundity, Output for further analysis: string of good and bad years, string of years with harvest, rate of harvest in harvested years, population size each year
 # Add density dependence - how to determine k (ceiling of growth)
@@ -83,19 +86,16 @@ seedbank <- TRUE
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1, seedbank = FALSE){
   
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
-  
-  # Set a maximum population size of 4*StartPopSize or set flexible as function input??? Or 10 times, wishfull thinking??
-  # dendep <- 10*StartPopSize
-  
+
   # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
-  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))/ClusteredColl
   Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
   
   # if Lambda is the cutoff for good vs. bad year
-  l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
-  mn_l <- mean(unlist(l_all))
-  above_l <- Mx_list[which(l_all >= mn_l)]
-  below_l <- Mx_list[which(l_all < mn_l)]
+  # l_all <- sapply(Mx_list, function(x)  lambda(t(x)), simplify = FALSE, USE.NAMES = TRUE) 
+  # mn_l <- mean(unlist(l_all))
+  # above_l <- Mx_list[which(l_all >= mn_l)]
+  # below_l <- Mx_list[which(l_all < mn_l)]
   # If fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
   f_all <- mapply(function(x,y){
     fec <- x-y
@@ -119,16 +119,11 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
       nx <- below_f[[sample(1:length(below_f), 1)]]
     }
     
-    # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
-    clust <- 0 # start the consecutive years of clustered collecting
-    
         # When clust is >= ClusteredColl then proceed with random seleciton of years to harvest by defined frequencies
         # Freq[] is the likelihood to collect seed in good or bad years
       CollectYN <- rbinom(1,1,Freq_m[Yr,])
         
-        if(CollectYN == 1){
-          #################### Needs to be a function ####################
-          # yes collect, reduce fecuntity by how much?
+        if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
           if(seedbank == TRUE){ 
             nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
             } else {
@@ -156,46 +151,49 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         ######################
         
     if(Freqs[yrs-1] == 1){
+      # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
+      clust <- 1 # start the consecutive years of clustered collecting
       while(clust < ClusteredColl){
-        clust <- clust+1
-        if(Yr == "Good"){
-          nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
-        } else {
-          nx <- below_f[[sample(1:length(below_f), 1)]]
-        }
-        
-        if(seedbank == TRUE){ 
-            nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
-            } else {
-              nx[1,] <- nx[1,]*Inten_m[Yr,]
-            }
-        
-        # Multiply N_t+1 = M*N_t
-        # if(sum(nx%*%vec) < dendep) 
-        vec <- nx%*%vec
-     
-        GBs[yrs] <- Yr
-        Freqs[yrs] <- CollectYN
-        if(CollectYN==1){
-          Intens[yrs] <- Inten_m[Yr,]
-        }
-        PopSize[yrs] <- floor(sum(vec))
-        # Transition between good and bad years
-        Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
-          "Good"
-        } else {
-            "Bad"
-          } 
-        yrs <- yrs+1
+          clust <- clust+1
+          if(Yr == "Good"){
+            nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
+          } else {
+            nx <- below_f[[sample(1:length(below_f), 1)]]
+          }
+          
+          if(seedbank == TRUE){ 
+              nx[1,-1] <- nx[1,-1]*Inten_m[Yr,] 
+              } else {
+                nx[1,] <- nx[1,]*Inten_m[Yr,]
+              }
+          
+          # Multiply N_t+1 = M*N_t
+          # if(sum(nx%*%vec) < dendep) 
+          vec <- nx%*%vec
+       
+          GBs[yrs] <- Yr
+          Freqs[yrs] <- CollectYN
+          if(CollectYN==1){
+            Intens[yrs] <- Inten_m[Yr,]
+          }
+          PopSize[yrs] <- floor(sum(vec))
+          # Transition between good and bad years
+          Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+            "Good"
+          } else {
+              "Bad"
+            } 
+          yrs <- yrs+1
       } # end while in a clustered collection cycle
-        
       }
   }
   SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs[-1], Intensity = Intens, PopulationSize = PopSize)
   list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
 }
 
-
+# table(Freqs,GBs)
+# 14/41
+# 10/36
 ```
 
 
@@ -207,7 +205,7 @@ lambda ~ fecundity
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
 
 annuals <- compadre[[1]][grep("Annual", compadre[[1]]$OrganismType),]
-write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
+# write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
 
 ```
 
@@ -317,27 +315,35 @@ while(sum(vec)>1){
 lifespan_SIAC <- jj
 rowSums(nx)
 
+# Check which have either seedbank or dormant 
 sp_info[sp_info$Unobserved.stages>0,]
 
-x <- unique(tm$SPP)[2]
 
 # stochastic, not deterministic, 
-lifespans <- lapply(unique(tm$SPP), function(x){
-  if(x == "CIPI"){
-    Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
+# For some the first two rows are reproduction (to seedbank and to seedling, need both to be zero)
+lifespans <- lapply(unique(tm$SPP), function(sp){
+  print(sp)
+  if(sp == "CIPI"){
+    Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
     Mx_sp <- Mx_sp[grep("CIPI_4", names(Mx_sp), invert = TRUE)] # just ignore for now the one site with 6 stages instead of 3
   } else {
-    Mx_sp <- Mx_all[grep(x, unlist(Nx_names))]
+    Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
     }
   nclasses <- dim(Mx_sp[[1]])[1]
-  if(x %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # Ones where the first stage is not seedlings
+  if(sp %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # Ones where the first stage is not seedlings
     vec <- c(0, 100, rep(0,(nclasses-2))) 
   } else{
     vec <- c(100, rep(0,(nclasses-1))) # a population of 100 individuals in the smallest size, zero in all others
   }
+  print(vec)
   Mnx <- sapply(Mx_sp, simplify = FALSE, USE.NAMES = TRUE, function(x){
-    x[1,] <- 0 # made all reproduction zero
-    x
+      if(sp %in% c("ASSC","DIFR","ERCU","HYCU","LAVE","NEMA","PHEM","PHIN","SIAC")){ # Ones where the first stage is not seedlings
+        x[c(1:2),] <- 0
+        x
+      } else {
+        x[1,] <- 0 # made all reproduction zero
+        x
+      }
     }) # made all reproduction zero
   jj <- 1
   while(sum(vec)>1){
@@ -348,7 +354,7 @@ lifespans <- lapply(unique(tm$SPP), function(x){
   jj
   })
 
-names(lifespans) <- unique(tm$SPP)[-2]
+names(lifespans) <- unique(tm$SPP)
 
 
 # save(Nx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Nx_all.Rda")
