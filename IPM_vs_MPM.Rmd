@@ -65,7 +65,7 @@ lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
 
 # to test
 # GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-# Freq <- c(0.1,0.3) 
+# Freq <- c(0.1,0.3)
 # Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
 # Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
 # TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
@@ -74,20 +74,44 @@ lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
 # TotYrs <- 100
 # ClusteredColl <- 4
 # seedbank <- TRUE
+# fecundityRows <- c(1)
+
+# rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(seedbank); rm(fecundityRows)
 
 # When clustered collection, then scale Frequency (Freq) to collect X% of the time given collections for ClusteredColl consecutive years
-# TotYrs/ClusteredColl # need to collect 
-# I divide the percent chance by the cluster
+# TotYrs/ClusteredColl # need to collect; I divide the percent chance by the cluster
+# What is different if pre- or post-reproductive census??
+# Nx should be stable stage distribution;
 
-# Need to add clustered collection (not included yet). Good or Bad years determined by high and low fecundity, Output for further analysis: string of good and bad years, string of years with harvest, rate of harvest in harvested years, population size each year
-# Add density dependence - how to determine k (ceiling of growth)
-# What is different if pre- or post-reproductive census 
-# Can we get this from COMPADRE (just MPM)?? It would be better to translate 
+#Takes all objects from the SeedHarvestSim environment
+AnnualTransition <-function(){
+  if(Yr == "Good"){
+    nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
+  } else {
+    nx <- below_f[[sample(1:length(below_f), 1)]]
+  }
+  # Freq[] is the likelihood to collect seed in good or bad years
+  CollectYN <- rbinom(1,1,Freq_m[Yr,])
+  if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
+    if(seedbank == TRUE){
+      nx[fecundityRows,-1] <- nx[fecundityRows,-1] - nx[fecundityRows,-1]*Inten_m[Yr,] 
+      } else {
+        nx[fecundityRows,] <- nx[fecundityRows,-1] - nx[fecundityRows,]*Inten_m[Yr,] 
+      }
+    }
+  # Multiply N_t+1 = Matrix*N_t
+  vec <- nx%*%vec
+  list(vec = vec,CollectYN = CollectYN)
+}
+
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1, fecundityRows = c(1), seedbank = FALSE){
   
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
 
   # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
+  #     Freq
+  #Good X
+  #Bad  Y
   Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))/ClusteredColl
   Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
 
@@ -100,80 +124,46 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   above_f <- Mx_list[which(f_all >= mn_f)]
   below_f <- Mx_list[which(f_all < mn_f)]
   
-  # Start with good! positive; create vectors to hold distribution of good or bad years, the freequency at which a year is harvested (CollectYN), the intensity or percentage fecundity is reduced selected from the good or bad rates (depending on which it is); and the population size which I add in the inital size but discard when making a dataframe for the output (the first of the list of outputs from the function)
+  # Start with good; fill vectors to hold distribution of good or bad years, the freequency at which a year is harvested (CollectYN), the intensity or percentage fecundity is reduced selected from the good or bad rates (depending on which it is); and the population size which is saved in list 
   Yr <- "Good"
   GBs <- rep(NA,TotYrs)
   Freqs <- rep(NA,TotYrs)
   Intens <- rep(NA,TotYrs)
   PopSize <- rep(NA, TotYrs)
   yrs <- 1
+  
   while(yrs < TotYrs){
-    if(Yr == "Good"){
-      nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
-    } else {
-      nx <- below_f[[sample(1:length(below_f), 1)]]
+    #Annual transition function returns a list of ["vec"] [[1]] the t+1 vector (number of individuals by class or bin) and ["CollectYN"] [[2]] 1/0 for CollectYN
+    onetransition <- AnnualTransition()
+    GBs[yrs] <- Yr
+    (CollectYN <- onetransition["CollectYN"][[1]])
+    Freqs[yrs] <- CollectYN
+    if(CollectYN==1){
+      Intens[yrs] <- Inten_m[Yr,]
     }
-    
-        # When clust is >= ClusteredColl then proceed with random seleciton of years to harvest by defined frequencies
-        # Freq[] is the likelihood to collect seed in good or bad years
-      CollectYN <- rbinom(1,1,Freq_m[Yr,])
-        
-        if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
-          if(seedbank == TRUE){ 
-            nx[fecundityRows,-1] <- nx[fecundityRows,-1]*Inten_m[Yr,] 
-            } else {
-              nx[fecundityRows,] <- nx[fecundityRows,]*Inten_m[Yr,]
-            }
-          }
-        
-        # Multiply N_t+1 = M*N_t
-        vec <- nx%*%vec
-     
-        GBs[yrs] <- Yr
-        Freqs[yrs] <- CollectYN
-        if(CollectYN==1){
-          Intens[yrs] <- Inten_m[Yr,]
-        }
-        PopSize[yrs] <- floor(sum(vec))
-        # Transition between good and bad years
-        Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
-          "Good"
-        } else {
-            "Bad"
-          } 
-        yrs <- yrs+1
-        print(paste("not a cluster",yrs))
-        # can't start a cluster if already at the end
-        if(yrs > TotYrs) break
+    vec <- onetransition["vec"][[1]]
+    PopSize[yrs] <- floor(sum(onetransition["vec"][[1]]))
+    # Transition between good and bad years
+    Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+      "Good"
+    } else {
+        "Bad"
+      } 
+    yrs <- yrs+1
+    if(yrs > TotYrs) break  # can't start a cluster if already at the end
         
     if(Freqs[yrs-1] == 1){
       # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
       clust <- 1 # start the consecutive years of clustered collecting
       while(clust < ClusteredColl){
           if(yrs > TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
-          clust <- clust+1 # This is the second year of a cluster
-          if(Yr == "Good"){
-            nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
-          } else {
-            nx <- below_f[[sample(1:length(below_f), 1)]]
-          }
-          
-          if(seedbank == TRUE){ 
-            nx[fecundityRows,-1] <- nx[fecundityRows,-1]*Inten_m[Yr,] 
-            } else {
-              nx[fecundityRows,] <- nx[fecundityRows,]*Inten_m[Yr,]
-            }
-          
-          # Multiply N_t+1 = M*N_t
-          # if(sum(nx%*%vec) < dendep) 
-          vec <- nx%*%vec
-       
+          clust <- clust+1 
+          onetransitionCluster <- AnnualTransition()
           GBs[yrs] <- Yr
-          Freqs[yrs] <- CollectYN
-          if(CollectYN==1){
-            Intens[yrs] <- Inten_m[Yr,]
-          }
-          PopSize[yrs] <- floor(sum(vec))
+          Freqs[yrs] <- 1 # Must collect for consecutive years of a cluster
+          Intens[yrs] <- Inten_m[Yr,] # the intensity depends on if it's a "good" or "bad" year
+          vec <- onetransitionCluster["vec"][[1]]
+          PopSize[yrs] <- floor(sum(onetransitionCluster["vec"][[1]]))
           # Transition between good and bad years
           Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
             "Good"
@@ -181,18 +171,14 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
               "Bad"
             } 
           yrs <- yrs+1
-          
-        print(paste("cluster",yrs))
       } # end while in a clustered collection cycle
-      }
-  }
+    }
+    }
   SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
   list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
-}
+  }
 
-# table(Freqs,GBs)
-# 14/41
-# 10/36
+
 ```
 
 
