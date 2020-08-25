@@ -104,7 +104,7 @@ AnnualTransition <-function(){
   list(vec = vec,CollectYN = CollectYN)
 }
 
-SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1, fecundityRows = c(1), seedbank = FALSE){
+SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1){
   
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
 
@@ -116,11 +116,8 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
 
     # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
-  f_all <- mapply(function(x,y){
-    fec <- x-y
-    rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
-    }, Mx_list, TMx_list)
-  mn_f <- mean(unlist(f_all)) 
+  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum) # subtracting the matrices with fecundity from the matrices with all transitions leaves only the fecundity transitions
+  mn_f <- mean(f_all) 
   above_f <- Mx_list[which(f_all >= mn_f)]
   below_f <- Mx_list[which(f_all < mn_f)]
   
@@ -303,7 +300,50 @@ rowSums(nx)
 # Check which have either seedbank or dormant 
 sp_info[sp_info$Unobserved.stages>0,]
 
+rm(nx); rm(nclasses); rm(jj); rm(vec)
+```
 
+Examples from Ellis et al. 2012    
+Arabis fecunda: "Entries in the fecundity matrix were calculated by dividing the number of recruits in a particular stage class by the number of flowering plants the previous year."   Lesica and Shelly 1995 "Demography of Arabis fecunda"
+    1. Matrices are labeled 1987 to 1992
+    2. Matrix ARFE_Charleys 1987 was measured in 1987 = t and 1988 =t+1 while '1988' is 1988 = t and 1989 = t+1 until 1993 
+    3. They estimated seed per fruit for each population each year except 1992
+    4. transition probabilities were N_t per class (i) that moved to class (j) over one year N_t+1 divided by the number of plants in class (i) N_t
+    5. Reproductive plants can transition among all size classes and seperately can reproduce, these are added in the transition matrix
+    6. Recruitment rate = (new recruits in t+1)/(survivors from t); recruits can appear in one or more classes and in any class including reproductive
+    7. Number of seed/fruit varied 30.9, 32.4, 34 for Charles Gulch, Lime Gulch, and Vipond Park. Number of fruit per plant varied by year and site
+
+```{r}
+
+sp <- unique(tm$SPP)[18]
+
+# Transitions, fecundity not included 
+Tx_sp <- TMx_all[grep(sp, unlist(Nx_names))]
+Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
+(fecundity_sp <- mapply(function(x,y)x-y, Mx_sp, Tx_sp, SIMPLIFY = FALSE))
+
+  (f_all <- apply(mapply(function(x,y) x-y, Mx_sp, Tx_sp), 2, sum))
+
+rm(Tx_sp); rm(Mx_sp); rm(fecundity_sp); rm(sp)
+```
+
+Fecundity alone and then find the number of new recruits? No, can't get that from transition, it is summarized as #new recruits_t+1 / #survivors 
+```{r}
+TMx_fecundity <- lapply(unique(tm$SPP), function(sp){
+  Tx_sp <- TMx_all[grep(sp, unlist(Nx_names))]
+  Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
+  fecundity_sp <- mapply(function(x,y)x-y, Mx_sp, Tx_sp, SIMPLIFY = FALSE)
+  fecundity_sp
+})
+
+
+TMx_fecundity[[5]]
+
+
+```
+
+
+```{r}
 # stochastic, not deterministic, 
 # For some the first two rows are reproduction (to seedbank and to seedling, need both to be zero)
 lifespans <- lapply(unique(tm$SPP), function(sp){
