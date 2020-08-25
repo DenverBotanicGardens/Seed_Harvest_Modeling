@@ -64,19 +64,20 @@ lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
 }
 
 # to test
-# GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-# Freq <- c(0.1,0.3)
-# Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
-# Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
-# TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
-# Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
-# StartPopSize <- 500
-# TotYrs <- 100
-# ClusteredColl <- 4
+GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+Freq <- c(0.1,0.3)
+Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+Mx_list <- Mx_all[grep("PHEM", unlist(Nx_names))]
+TMx_list <- TMx_all[grep("PHEM", unlist(Nx_names))]
+Nx <- stable.stage(mean(Mx_all[grep("PHEM", unlist(Nx_names))]))
+StartPopSize <- 500
+TotYrs <- 100
+ClusteredColl <- 4
 # seedbank <- TRUE
 # fecundityRows <- c(1)
 
-# rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(seedbank); rm(fecundityRows)
+rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl)
+# ; rm(seedbank); rm(fecundityRows)
 
 # When clustered collection, then scale Frequency (Freq) to collect X% of the time given collections for ClusteredColl consecutive years
 # TotYrs/ClusteredColl # need to collect; I divide the percent chance by the cluster
@@ -85,20 +86,22 @@ lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
 
 #Takes all objects from the SeedHarvestSim environment
 AnnualTransition <-function(){
+  # above_f <- Mx_list[which(f_all >= mn_f)]
+  # below_f <- Mx_list[which(f_all < mn_f)]
   if(Yr == "Good"){
-    nx <- above_f[[sample(1:length(above_f), 1)]] # randomly sample from the high fecundty transition matrices
+    Mx_i <- sample(above_f, 1) # randomly sample from the high fecundity transition matrices
   } else {
-    nx <- below_f[[sample(1:length(below_f), 1)]]
+    Mx_i <- sample(below_f, 1)
   }
+  
   # Freq[] is the likelihood to collect seed in good or bad years
   CollectYN <- rbinom(1,1,Freq_m[Yr,])
   if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
-    if(seedbank == TRUE){
-      nx[fecundityRows,-1] <- nx[fecundityRows,-1] - nx[fecundityRows,-1]*Inten_m[Yr,] 
-      } else {
-        nx[fecundityRows,] <- nx[fecundityRows,-1] - nx[fecundityRows,]*Inten_m[Yr,] 
-      }
+    fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix by the matrix without fecundity rate to get only fecundity rate
+    fecundMx <- fecundMx - fecundMx*Inten_m[Yr,] # Reduce all fecundity rates by intensity of harvest
+    nx <- fecundMx + TMx_list[[Mx_i]] # add the reduced fecundity rates to the transition matrix that lacks the fecundity rate to get new transition matrix
     }
+  
   # Multiply N_t+1 = Matrix*N_t
   vec <- nx%*%vec
   list(vec = vec,CollectYN = CollectYN)
@@ -118,8 +121,9 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
   f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum) # subtracting the matrices with fecundity from the matrices with all transitions leaves only the fecundity transitions
   mn_f <- mean(f_all) 
-  above_f <- Mx_list[which(f_all >= mn_f)]
-  below_f <- Mx_list[which(f_all < mn_f)]
+  #The index of above/equal and below average
+  above_f <- which(f_all >= mn_f)
+  below_f <- which(f_all < mn_f)
   
   # Start with good; fill vectors to hold distribution of good or bad years, the freequency at which a year is harvested (CollectYN), the intensity or percentage fecundity is reduced selected from the good or bad rates (depending on which it is); and the population size which is saved in list 
   Yr <- "Good"
@@ -439,32 +443,30 @@ GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list
 # Discrete rates
 Intensityrates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)),combn(seq(0,1,by=0.1),2))
 FreqRates <- combn(c(0,0.1,0.2,0.5,0.75,1),2)
-
+sp <- unique(tm$SPP)[1]
 
 # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
-compare_DIFR <- do.call(rbind, apply(Intensityrates, 2, function(i){
+compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
   outf <- do.call(rbind, apply(FreqRates, 2, function(f){
-    compare_DIFR <- do.call(rbind, lapply(1:100, function(x){
-      DIFR_rep <- SeedHarvestSim(Mx_list = Mx_all[grep("DIFR", unlist(Nx_names))], 
-                                 TMx_list = TMx_all[grep("DIFR", unlist(Nx_names))],
-                              Nx = stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))])),
+    compare_out <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                 TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                              Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
                               StartPopSize = 500,
                               GoodBadTm = GBmatrix,
                               Freq = f,
                               Int = i,
                               TotYrs = 100,
-                              ClusteredColl = 3, 
-                              fecundityRows = c(1:2),
-                              seedbank = TRUE) # If there is a seedbank class, it needs to be skipped in reducing fecundity of the first row (skip that first column)
-      DIFR_rep[[1]]$Replicate <- x
-      DIFR_rep[[1]]$Year <- 1:100
-      DIFR_rep[[1]]$GoodFreq <- f[1]
-      DIFR_rep[[1]]$BadFreq <- f[2]
-      DIFR_rep[[1]]$GoodInt <- i[1]
-      DIFR_rep[[1]]$BadInt <- i[2]
-      DIFR_rep[[1]]
+                              ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- f[1]
+      out_rep[[1]]$BadFreq <- f[2]
+      out_rep[[1]]$GoodInt <- i[1]
+      out_rep[[1]]$BadInt <- i[2]
+      out_rep[[1]]
       }))
-    compare_DIFR
+    compare_out
     }))
   outf
   }))
