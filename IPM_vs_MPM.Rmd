@@ -50,10 +50,13 @@ Starts a population of 100 individuals in the seedling or smallest bin; do not s
 If you have a matrix where fecundity is measured as seeds entering the seedbank (row 1) and/or seeds germinating (row 2), indicate which rows result in a measure of fecundity 
 ```{r}
 # Seeds a populaiton with 100 indiviudals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a deterministic matrix
-lifespan <- function(nx, seedlingBin = 1, fecundityRow = c(1)){
-  nclasses=dim(nx)[1]
+lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
+  nclasses=dim(Mx)[1]
+  # add 100 individuals to the smallest non-seedbank category
   vec <- rep(0, nclasses)
   vec[seedlingBin] <- 100
+  # remove all fecundity
+  nx <- Mx - (Mx-TMx)
   nx[fecundityRow,]=0
   jj=1
   while (sum(vec)>1){
@@ -445,7 +448,7 @@ GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list
 # Discrete rates
 Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
 FreqRates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)),combn(c(0,0.1,0.2,0.5,0.75,1),2))
-sp <- unique(tm$SPP)[1]
+sp <- unique(tm$SPP)[5]
 
 # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
 compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
@@ -481,11 +484,11 @@ ggplot(splitXgoodFreq[[1]][splitXgoodFreq[[1]]$BadFreq == 0.1,], aes(Year, Popul
   theme(legend.position="none")+
   facet_wrap(~as.factor(GoodInt))
  
-ggplot(compare_sp[compare_sp$GoodFreq == 0.9 & compare_sp$BadFreq == 0.9 & compare_sp$GoodInt == 0.9,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+ggplot(compare_sp[compare_sp$GoodFreq == 1 & compare_sp$BadFreq == 1 & compare_sp$GoodInt == 1 & compare_sp$BadInt == 1 &
+                    compare_sp$Replicate < 11,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
   geom_line()+
   theme(legend.position="none")+
-  # geom_rug(colour = as.numeric(compare_sp$GB_yrs[compare_sp$GoodFreq == 0.1 & compare_sp$BadFreq == 0.1]), sides="b")+
-  facet_wrap(~as.factor(BadInt))
+  facet_wrap(~as.factor(Replicate))
 
 time2extinct <- sapply(split(compare_DIFR, compare_DIFR$Replicate), function(x){
   which.max(x$PopulationSize<1) # To get the first year the population falls below 1
