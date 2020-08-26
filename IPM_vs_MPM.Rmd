@@ -120,6 +120,10 @@ AnnualTransition <-function(){
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1){
   
   vec <- floor(Nx*(StartPopSize/sum(Nx)))
+  # To get these into the function environment for the AnnualTransition function
+  # Mx_list <<- Mx_list
+  # TMx_list <<- TMx_list
+  environment(AnnualTransition) <- environment() 
 
   # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
   #     Freq
@@ -440,6 +444,8 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
 ## Test output for one species - Dicerandra frutescens (Ellis et al. 2012). Lamiaceae, short lived <10 years (lifespan function estimated 10 years),
 iteroparous perennial. Post-fire population had positive growth, 6+ years since fire declining
 ```{r}
+
+#TEST SIM
 # If good year, 45% chance staying good, 55% chance switch to bad, if bad year then 35% chance next will be good, 65% chance another bad
 GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
 # Discrete rates
