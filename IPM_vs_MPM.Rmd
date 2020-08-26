@@ -48,19 +48,32 @@ devtools::document() # to make namespace for each function
 lifespan to estimate how long lived   
 Starts a population of 100 individuals in the seedling or smallest bin; do not start a population in a dormant or seed bank bin  
 If you have a matrix where fecundity is measured as seeds entering the seedbank (row 1) and/or seeds germinating (row 2), indicate which rows result in a measure of fecundity 
+
 ```{r}
-# Seeds a populaiton with 100 indiviudals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a deterministic matrix
-lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
-  nclasses=dim(Mx)[1]
-  # add 100 individuals to the smallest non-seedbank category
-  vec <- rep(0, nclasses)
-  vec[seedlingBin] <- 100
-  # remove all fecundity
-  nx <- Mx - (Mx-TMx)
-  nx[fecundityRow,]=0
+lifespan <- function(nx){
+  nclasses=dim(nx)[1]
+  vec=c(100,rep(0,(nclasses-1)))
+  nx[1,]=0
   jj=1
   while (sum(vec)>1){
     vec=nx%*%vec
+    jj=jj+1
+    #print(sum(vec))
+  }
+  return(jj)
+}
+
+# Seeds a populaiton with 100 indiviudals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a list of transition matrices (with fecundity rate: Mx, and without fecudnity rate included: TMx)
+lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
+  nclasses=dim(Mx[[1]])[1]
+  # add 100 individuals to the smallest non-seedbank category
+  vec <- rep(0, nclasses)
+  vec[seedlingBin] <- 100
+  # remove all fecundity from matrices
+  nx <- mapply(function(x,y) x - (x-y), Mx, TMx, SIMPLIFY = FALSE) # keep output as matrices
+  jj=1
+  while (sum(vec)>1){
+    vec=nx[[sample(1:length(Mx),1)]]%*%vec # randomly sample from the list of matrices with fecundity rate removed
     jj=jj+1
   }
   return(jj)
@@ -197,6 +210,68 @@ load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
 
 annuals <- compadre[[1]][grep("Annual", compadre[[1]]$OrganismType),]
 # write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
+
+```
+
+
+[1] ARFE CIPI ASSC CYFA DIFR    
+[6] ERCU HYCU ASTY HARA HOCO    
+[11]LOCO LAVE LISC NEMA GEPN    
+[16]SIAC SISP PHIN PHEM TRGR    
+Levels: ARFE ASSC ASTY CIPI CYFA DIFR ERCU GEPN HARA HOCO HYCU LAVE LISC LOCO NEMA PHEM PHIN SIAC SISP TRGR    
+    
+ARFE 1    
+CIPI 1    
+ASSC 2 (stage 1 is dormant)  
+CYFA 1    
+DIFR 2 fire kills and post-fire recruitment from soil seed bank   
+
+ERCU 2    
+HYCU 2   
+ASTY 1    
+HARA 1
+HOCO 1   
+
+LOCO 1     
+LAVE 2    
+LISC 1    
+NEMA 1     
+GEPN 1
+
+SIAC 2       
+SISP 1 dormancy is hopefully the 4th stage    
+PHIN 2      
+PHEM 2      
+TRGR 1    
+
+```{r}
+seedlingbins <- data.frame(SPP = unique(tm$SPP), seedlingBin = c(1,1,2,1,2,
+                                                                 2,2,1,1,1,
+                                                                 1,2,1,1,1,
+                                                                 2,1,2,2,1))
+
+bySites <- sapply(Nx_names, function(x) strsplit(x, " ")[[1]][2])
+unique(tm$POP)
+
+# p<-unique(tm$POP)[1];rm(p)
+
+lifelengthsXmatrix <- lapply(unique(tm$POP), function(p){
+  ind <- which(p == bySites)
+  print(p)
+  seedlingbin_sp <- seedlingbins$seedlingBin[strsplit(as.character(p), "_")[[1]][1] == seedlingbins$SPP]
+  lifespan_out <-lifespanMPM(Mx_all[ind], TMx_all[ind], seedlingbin_sp)
+  lifespan_out
+  })
+
+names(lifelengthsXmatrix) <- unique(tm$POP)
+
+# To test lifespanMPM function
+# p<-unique(tm$POP)[1]
+# ind <- which(p == bySites)
+# Mx <- Mx_all[ind]
+# TMx <- TMx_all[ind]
+# seedlingBin <- seedlingbins$seedlingBin[strsplit(Nx_names[ind][[1]]," ")[[1]][1] == seedlingbins$SPP]
+# rm(Mx);rm(TMx);rm(seedlingBin);rm(nclasses);rm(jj);rm(vec)
 
 ```
 
