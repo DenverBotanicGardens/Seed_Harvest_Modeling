@@ -100,6 +100,8 @@ AnnualTransition <-function(){
     fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix by the matrix without fecundity rate to get only fecundity rate
     fecundMx <- fecundMx - fecundMx*Inten_m[Yr,] # Reduce all fecundity rates by intensity of harvest
     nx <- fecundMx + TMx_list[[Mx_i]] # add the reduced fecundity rates to the transition matrix that lacks the fecundity rate to get new transition matrix
+  } else {
+      nx <- Mx_list[[Mx_i]]
     }
   
   # Multiply N_t+1 = Matrix*N_t
@@ -441,8 +443,8 @@ GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list
 # either through a beta distribution; rbeta: two non-negative shape parameters where mean = a/(a+b) and variance is ab/((a+b)^2 *(a+b+1)) or a linear regression defining the slope
 
 # Discrete rates
-Intensityrates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)),combn(seq(0,1,by=0.1),2))
-FreqRates <- combn(c(0,0.1,0.2,0.5,0.75,1),2)
+Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+FreqRates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)),combn(c(0,0.1,0.2,0.5,0.75,1),2))
 sp <- unique(tm$SPP)[1]
 
 # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
@@ -472,11 +474,18 @@ compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
   }))
 
 
+splitXgoodFreq <- split(compare_sp, as.factor(compare_sp$GoodFreq))
 
-ggplot(compare_DIFR, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+ggplot(splitXgoodFreq[[1]][splitXgoodFreq[[1]]$BadFreq == 0.1,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
   geom_line()+
   theme(legend.position="none")+
-  geom_rug(colour = as.numeric(compare_DIFR$GB_yrs), sides="b")
+  facet_wrap(~as.factor(GoodInt))
+ 
+ggplot(compare_sp[compare_sp$GoodFreq == 0.9 & compare_sp$BadFreq == 0.9 & compare_sp$GoodInt == 0.9,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position="none")+
+  # geom_rug(colour = as.numeric(compare_sp$GB_yrs[compare_sp$GoodFreq == 0.1 & compare_sp$BadFreq == 0.1]), sides="b")+
+  facet_wrap(~as.factor(BadInt))
 
 time2extinct <- sapply(split(compare_DIFR, compare_DIFR$Replicate), function(x){
   which.max(x$PopulationSize<1) # To get the first year the population falls below 1
