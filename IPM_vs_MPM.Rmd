@@ -58,7 +58,6 @@ lifespan <- function(nx){
   while (sum(vec)>1){
     vec=nx%*%vec
     jj=jj+1
-    #print(sum(vec))
   }
   return(jj)
 }
@@ -166,12 +165,9 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         "Bad"
       } 
     yrs <- yrs+1
-        (Freqs)
-    (yrs)
     if(yrs > TotYrs) break  # can't start a cluster if already at the end
 
-    
-    ########## Cluster ###########    
+        ########## Cluster ###########    
     if(Freqs[yrs-1] == 1){
       # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
       clust <- 1 # start the consecutive years of clustered collecting
@@ -189,8 +185,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         } else {
             "Bad"
         } 
-        print(yrs)
-        print(PopSize)
+
         yrs <- yrs+1
         if(yrs > TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
         } # end while in a clustered collection cycle
@@ -463,7 +458,224 @@ SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
                               TotYrs = 100,
                               ClusteredColl = 3)
 
+
 ```
+
+Constrain
+```{r}
+GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+#What if all the same, no difference between good and bad
+Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+FreqRates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)))
+sp <- unique(tm$SPP)[5]
+
+f <- c(0,0)
+i <- c(0,0)
+
+# Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+# compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+    noharvest <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                StartPopSize = 500,
+                                GoodBadTm = GBmatrix,
+                                Freq = c(0,0),
+                                Int = c(0,0),
+                                TotYrs = 100,
+                                ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- f[1]
+      out_rep[[1]]$BadFreq <- f[2]
+      out_rep[[1]]$GoodInt <- i[1]
+      out_rep[[1]]$BadInt <- i[2]
+      out_rep[[1]]
+      }))
+
+    
+time2extinct.noharvest <- sapply(split(noharvest, noharvest$Replicate), function(x){
+  which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+})    
+
+ggplot(noharvest, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position="none")
+
+harvestfreq.int <- do.call(rbind, apply(Intensityrates, 2, function(i){
+    nowharvest <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                StartPopSize = 500,
+                                GoodBadTm = GBmatrix,
+                                Freq = c(0.1,0.1),
+                                Int = i,
+                                TotYrs = 100,
+                                ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- 0.1
+      out_rep[[1]]$BadFreq <- 0.1
+      out_rep[[1]]$GoodInt <- i[1]
+      out_rep[[1]]$BadInt <- i[2]
+      out_rep[[1]]
+      }))
+    nowharvest
+}))
+   
+
+# ggplot(harvestfreq.int, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+#   geom_line()+
+#   theme(legend.position = "none")+
+#   facet_wrap(~GoodInt + BadInt)
+
+time2extinct <- sapply(split(harvestfreq.int, harvestfreq.int$GoodInt), function(x){
+  out.good <- lapply(split(x, x$BadInt), function(x1){
+    out.bad <- do.call(rbind,lapply(split(x1, x1$Replicate), function(x2){
+      Time2Exc <- which.max(x2$PopulationSize<1) # To get the first year the population falls below 1
+      # which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+      GoodInt <- unique(x2$GoodInt)
+      BadInt <- unique(x2$BadInt)
+      GoodFreq <- unique(x2$GoodFreq)
+      BadFreq <- unique(x2$BadFreq)
+      Replicate <- unique(x2$Replicate)
+      out <- c(Time2Exc, GoodInt, BadInt, GoodFreq, BadFreq, Replicate)
+      out
+    }))
+    out.bad
+  })
+  out.good
+})
+
+length(time2extinct) # 10 for each of the intensities 
+
+colors.10 = c(rgb(0,0,0,1), rgb(1,1,0,.25), rgb(1,0,1,.25), rgb(.1,0,0.5,.25), rgb(.1,0,0.50,.25),
+              rgb(1,0.5,0,.25), rgb(0,0.75,0,.25), rgb(1,0,0,.25), rgb(0,1,0,.25), rgb(1,1,1,.25))
+
+
+time2ext.df <- as.data.frame(do.call(rbind,time2extinct))
+names(time2ext.df) <- c("Years", "GoodInt", "BadInt", "GoodFreq", "BadFreq", "Replicate")
+time2ext.df.noharvest <- data.frame(Years = time2extinct.noharvest, GoodInt = rep(0,100), BadInt = rep(0,100), 
+                                          GoodFreq = rep(0,100), BadFreq = rep(0,100), Replicate = as.numeric(names(time2extinct.noharvest)))
+time2ext.df <-rbind(time2ext.df.noharvest, time2ext.df)
+
+
+# plot(density(time2extinct.noharvest), col = "red", xlim = c(0,70), ylim = c(0,.075))
+# polygon(density(time2extinct.noharvest), col = "red")
+# for(x in 1:10){
+#   polygon(density(time2extinct[[x]][,1]), col = colors.10[x])
+# }
+# polygon(density(time2extinct.noharvest), col = rgb(1,0,0,0.75))
+
+boxplot(time2extinct.noharvest, horizontal = TRUE, main = "Time to extinction")
+boxplot(time2extinct[[1]][,1], col = colors.10[1], add=TRUE)
+
+```
+
+Constrain
+freq 0.2, 0.2
+```{r}
+GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+#What if all the same, no difference between good and bad
+Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+FreqRates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)))
+sp <- unique(tm$SPP)[5]
+
+# Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+# compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+    noharvest <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                StartPopSize = 500,
+                                GoodBadTm = GBmatrix,
+                                Freq = c(0,0),
+                                Int = c(0,0),
+                                TotYrs = 100,
+                                ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- 0
+      out_rep[[1]]$BadFreq <- 0
+      out_rep[[1]]$GoodInt <- 0
+      out_rep[[1]]$BadInt <- 0
+      out_rep[[1]]
+      }))
+
+    
+time2extinct.noharvest <- sapply(split(noharvest, noharvest$Replicate), function(x){
+  which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+})    
+
+# ggplot(noharvest, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+#   geom_line()+
+#   theme(legend.position="none")
+
+harvestfreq.int <- do.call(rbind, apply(Intensityrates, 2, function(i){
+    nowharvest <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                StartPopSize = 500,
+                                GoodBadTm = GBmatrix,
+                                Freq = c(0.2,0.2),
+                                Int = i,
+                                TotYrs = 100,
+                                ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- 0.2
+      out_rep[[1]]$BadFreq <- 0.2
+      out_rep[[1]]$GoodInt <- i[1]
+      out_rep[[1]]$BadInt <- i[2]
+      out_rep[[1]]
+      }))
+    nowharvest
+}))
+   
+
+
+ggplot(harvestfreq.int, aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position = "none")+
+  facet_wrap(~GoodInt + BadInt)
+
+time2extinct <- sapply(split(harvestfreq.int, harvestfreq.int$GoodInt), function(x){
+  out.good <- lapply(split(x, x$BadInt), function(x1){
+    out.bad <- do.call(rbind,lapply(split(x1, x1$Replicate), function(x2){
+      Time2Exc <- which.max(x2$PopulationSize<1) # To get the first year the population falls below 1
+      # which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+      GoodInt <- unique(x2$GoodInt)
+      BadInt <- unique(x2$BadInt)
+      GoodFreq <- unique(x2$GoodFreq)
+      BadFreq <- unique(x2$BadFreq)
+      Replicate <- unique(x2$Replicate)
+      out <- c(Time2Exc, GoodInt, BadInt, GoodFreq, BadFreq, Replicate)
+      out
+    }))
+    out.bad
+  })
+  out.good
+})
+
+length(time2extinct) # 10 for each of the intensities 
+
+colors.10 = c(rgb(0,0,0,1), rgb(1,1,0,.25), rgb(1,0,1,.25), rgb(.1,0,0.5,.25), rgb(.1,0,0.50,.25),
+              rgb(1,0.5,0,.25), rgb(0,0.75,0,.25), rgb(1,0,0,.25), rgb(0,1,0,.25), rgb(1,1,1,.25))
+
+
+plot(density(time2extinct.noharvest), col = "red", xlim = c(0,70), ylim = c(0,.075))
+polygon(density(time2extinct.noharvest), col = "red")
+for(x in 1:10){
+  polygon(density(time2extinct[[x]][,1]), col = colors.10[x])
+}
+polygon(density(time2extinct.noharvest), col = rgb(1,0,0,0.75))
+
+```
+
 
 Cycle through combinations of 0 to 100% of the frequency and intensities from no harvest, through equal rates regardless of good or bad, and all combinations.     
 If I set this up as a continuous relationship (suggested by Anna) there would be fewer needed replicates and parameters, could vary the slope of the relationship instead of descrete percentages by good vs. bad.        
