@@ -627,10 +627,10 @@ Continuous intensity keeping frequency consistent and cluster consistent; scale 
 ```{r}
 #ARFE gets so big and starts to be NaN for pop size. Exponential growth
 
-for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different number of stages
+for(sp in unique(tm$SPP)[-2]){ # [-2]CIPI has one population with different number of stages
   # for(GB in 1:4){
-    for(popsz in 1:1){
-      for(csz in 1:1){ # clustered collection number of years
+    for(popsz in 1:3){
+      for(csz in 1:3){ # clustered collection number of years
           # GoodBad <- c("random","mostlybad","mildclustered","mostlygood")
           # GBmatrix <- list(matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # random
                            # matrix(c(0.25,0.75,0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # extreme drought
@@ -639,11 +639,10 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
         
           # FreqRates <- cbind(rbind(c(.1,.5,1),c(.1,.5,1)))
           FreqRates <- cbind(rbind(.1,.1))
-          i <- c(.1,.1)
+          i <- c(.1,.1) # Change to cbind of more later, and add random selection later
           totyr <- 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])) # make it 100*lifespan
-          startpop <- c(100,1000)
+          startpop <- c(100,500,1500)
           clucol <- c(1,3,5)
-          # clucol <- 1
           
                     ##### TEST #######
           # sp <- unique(tm$SPP)[1]
@@ -651,12 +650,14 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
           # csz <- 1
           # rm(csz);rm(sp);rm(popsz)
           
-          noANDharvest <- do.call(rbind,lapply(1:100, function(gbreps){# Replicates of different good bad transitions
+          noANDharvest <- do.call(rbind,lapply(1:10, function(gbreps){# Replicates of different good bad transitions
             gbtrG2G <- round(runif(1, min = 0, max = 1),2); gbtrB2G <- round(runif(1, min = 0, max = 1),2)
             gbRANDOM <- matrix(c(gbtrG2G,(1-gbtrG2G),gbtrB2G,(1-gbtrB2G)), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
             gbNOCOR <- c(0.5,0.5,0.5,0.5)
             difffromNOCOR <- dist(rbind(as.vector(gbRANDOM), gbNOCOR)) # Euclidean distance 
                 
+            # Check progress
+            print(paste("Replicate",gbreps,"for species:",sp))
           # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
           # compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
 
@@ -679,7 +680,9 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
                     DiffGB_mat = difffromNOCOR[1], Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
                     # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
                     Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
-                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
                 out_n
                 }))
 
@@ -700,13 +703,15 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
                                             ClusteredColl = clucol[csz])
   
                 out_n <- data.frame(EndPopSz = out_rep[[1]]$PopulationSize[nrow(out_rep[[1]])],  # End population size
-                    Replicate = x,GoodFreq = 0,BadFreq = 0,GoodInt = 0, BadInt = 0, 
-                    Harvest = paste(0, 0, 0, 0, sep=":"),
+                    Replicate = x,GoodFreq = f[1],BadFreq = f[2],GoodInt = i[1], BadInt = i[2], 
+                    Harvest = paste(f[1], f[2], i[1], i[2], sep=":"),
                     GB_mat = paste(as.vector(gbRANDOM), collapse = ":"),
                     DiffGB_mat = difffromNOCOR[1], Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
                     # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
                     Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
-                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
                 out_n
                   }))
                 Intout
@@ -723,30 +728,38 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
           # together are noANDharvest
 
           harvestlevels <- levels(factor(noANDharvest$Harvest))
-          if(!is.na(any(noANDharvest$Yr2Ext))){ # Does the population evenutally go to extinction?
+          if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest == "0:0:0:0"]))){ # Does the population evenutally go to extinction?
             diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
               diff.freq <- do.call(rbind,lapply(1:1000, function(x){
                 # eventually check across levels of harvest, now is levels of good to bad
                 noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext),]
+                if(nrow(noharvest)==0) break
+    print(paste("Number of no harvest years to extinction", nrow(noharvest)))
                 harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext),]
-                har_idx <- sample(1:nrow(harvest), size = 1)
+                if(nrow(harvest)==0) break
+    print(paste("Number of harvest years to extinction", nrow(harvest)))
+                har_idx <- sample(1:(nrow(harvest)), size = 1)
                 out <- data.frame(DiffTime2Ext = (sample(noharvest$Yr2Ext, size = 1)-(harvest$Yr2Ext[har_idx])), 
                                   GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
-                                  Harvest = harv)
+                                  Harvest = harv, lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
                 out
                 }))
               diff.freq
             })) # all in list of different frequency rates
-          } else {  # if(is.na(any(noharvest$Yr2Ext))){ # Some populations do not go extinct
+          }
+          
+          if(any(is.na(noANDharvest$Yr2Ext))){ # Some populations do not go extinct
             diff.endpopsz <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
               diff.freq <- do.call(rbind,lapply(1:1000, function(x){
                 # eventually check across levels of harvest, now is levels of good to bad
                 noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$EndPopSz),]
+                if(nrow(noharvest)==0) break
                 harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$EndPopSz),]
+                if(nrow(harvest)==0) break
                 har_idx <- sample(1:nrow(harvest), size = 1)
                 out <- data.frame(DiffEndPopSz = (log(sample(noharvest$EndPopSz, size = 1))-(log(harvest$EndPopSz[har_idx]))), 
                                   GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
-                                  Harvest = harv)
+                                  Harvest = harv, lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
                 out
                 }))
               diff.freq
@@ -755,33 +768,38 @@ for(sp in unique(tm$SPP)[3]){ # [-2]CIPI has one population with different numbe
             
 for(harvlev in harvestlevels[harvestlevels!="0:0:0:0"]){
   #GoodBad[GB], take out when it's random, not discrete
-          ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","_StartPopSz_",startpop[popsz],"clustersz",clucol[csz],"_",sp,"_diffEndPopSzXperiodicity.jpg",sep=""),
-                 ggplot(diff.time2ext[diff.time2ext$Harvest == harvlev,], aes(DistGB, DiffTime2Ext))+
-                   geom_point()+
-                   theme(legend.position="none",
-                         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-                         panel.background = element_rect(fill = "white", colour = "grey75"))+
-                   geom_smooth(method = "lm")+
-                   labs(title = paste(sp,"Time to extinction at harvest level:",harvlev),
-                        x = "Distance of year transition matrix from random",
-                        y = "Difference from no harvest"),
-            width=300, height=300,units='mm', dpi=300)
-
-          # difference from 100% being no harvest; #,GoodBad[GB]
-          ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","_StartPopSz_",startpop[popsz],"clustersz",clucol[csz],"_",sp,"_difftime2extXperiodicity.jpg",sep=""),
-                 ggplot(diff.endpopsz[diff.endpopsz$Harvest==harvlev,], aes(DistGB, DiffEndPopSz))+
-                   geom_point()+
-                   theme(legend.position="none",
-                         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-                         panel.background = element_rect(fill = "white", colour = "grey75"))+
-                   geom_smooth(method = "lm")+
-                   labs(title = paste(sp,"Change in (log) population size at harvest level:",harvlev),
-                        x = "Distance of year transition matrix from random",
-                        y = "Difference from no harvest"),
-                 width=300, height=300,units='mm', dpi=300)
-      } # Harvest levels
+  if(exists("diff.time2ext")){
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","_StartPopSz_",startpop[popsz],"clustersz",clucol[csz],"_",sp,"_diffEndPopSzXperiodicity.jpg",sep=""),
+           ggplot(diff.time2ext[diff.time2ext$Harvest == harvlev,], aes(DistGB, DiffTime2Ext))+
+             geom_point()+
+             theme(legend.position="none",
+                   axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                   panel.background = element_rect(fill = "white", colour = "grey75"))+
+             geom_smooth(method = "lm")+
+             labs(title = paste(sp,"Time to extinction at harvest level:",harvlev),
+                  x = "Distance of Good:Bad matrix to random",
+                  y = "Difference from no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+  }
+  if(exists("diff.endpopsz")){
+    # difference from 100% being no harvest; #,GoodBad[GB]
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","_StartPopSz_",startpop[popsz],"clustersz",clucol[csz],"_",sp,"_difftime2extXperiodicity.jpg",sep=""),
+           ggplot(diff.endpopsz[diff.endpopsz$Harvest==harvlev,], aes(DistGB, DiffEndPopSz))+
+             geom_point()+
+             theme(legend.position="none",
+                   axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                   panel.background = element_rect(fill = "white", colour = "grey75"))+
+             geom_smooth(method = "lm")+
+             labs(title = paste(sp,"Change in (log) population size at harvest level:",harvlev),
+                  x = "Distance of Good:Bad matrix to random",
+                  y = "Difference from no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+    }
           
-      } # loop for ??
+      rm(diff.time2ext);rm(diff.endpopsz)
+      } # Harvest levels
+
+      } # loop for how many years of collections
     } # loop for population starting sizes
   # } # when for loop of discrete GB good bad matrices
 } # loop for all species
