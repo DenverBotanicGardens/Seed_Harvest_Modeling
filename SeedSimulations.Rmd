@@ -1,0 +1,1554 @@
+---
+title: "SeedHarvestSimulations"
+author: "Michelle DePrenger-Levin"
+date: "9/8/2020"
+output: html_document
+---
+
+Ran too many print(df) and it busted RStudio
+---
+title: "Seed Harvest IPM and MPM"
+author: "Michelle DePrenger-Levin"
+date: "7/26/2020"
+output: html_document
+---
+
+```{r}
+
+rm(list=ls())
+library(dplyr)
+library(popbio)
+library(MuMIn)
+library(binr)
+library(matrixStats)
+require(AICcmodavg)
+library(prism)
+library(raster)
+library(lme4)
+library(ggplot2)
+# install.packages("roxygen2")
+
+
+library(parallel); library(doParallel); library(foreach)
+
+# download the Rdata files into your working directory, set your working directory and load them
+setwd("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/")
+load("size_scgl.Rda") # data converted to yearly transition
+load("allsdszs_scgl.Rda") # only individuals that were < 0.5 and considered seedlings
+# load("size_scgl1.Rda")
+
+nrow(size_scgl)
+names(size_scgl)
+```
+
+Store in an R package
+```{r}
+# I already have a project and a repository
+# devtools::create("SeedHarvestModeling")
+
+library(usethis)
+
+# Add R functions
+# In project folder, make an integrate.R script to integerate all the functions
+usethis::use_vignette("SimulateSeedHarvest")
+devtools::document() # to make namespace for each function
+```
+
+
+# Functions     
+lifespan to estimate how long lived   
+Starts a population of 100 individuals in the seedling or smallest bin; do not start a population in a dormant or seed bank bin  
+If you have a matrix where fecundity is measured as seeds entering the seedbank (row 1) and/or seeds germinating (row 2), indicate which rows result in a measure of fecundity 
+
+```{r}
+lifespan <- function(nx){
+  nclasses=dim(nx)[1]
+  vec=c(100,rep(0,(nclasses-1)))
+  nx[1,]=0
+  jj=1
+  while (sum(vec)>1){
+    vec=nx%*%vec
+    jj=jj+1
+  }
+  return(jj)
+}
+
+# Seeds a population with 100 individuals in the smallest size class, removes the top row (so no more reproduction), and follows the population until all have died. Based on a list of transition matrices (with fecundity rate: Mx, and without fecundity rate included: TMx)
+lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
+  nclasses=dim(Mx[[1]])[1]
+  # add 100 individuals to the smallest non-seedbank category
+  vec <- rep(0, nclasses)
+  vec[seedlingBin] <- 100
+  # remove all fecundity from matrices
+  nx <- mapply(function(x,y) x - (x-y), Mx, TMx, SIMPLIFY = FALSE) # keep output as matrices
+  jj=1
+  while (sum(vec)>1){
+    vec=nx[[sample(1:length(Mx),1)]]%*%vec # randomly sample from the list of matrices with fecundity rate removed
+    jj=jj+1
+  }
+  return(jj)
+}
+
+# to test
+# GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Freq <- c(0.1,0.3)
+# Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+# Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
+# TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
+# Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
+# StartPopSize <- 500
+# TotYrs <- 100
+# ClusteredColl <- 4
+# 
+# rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(vec); rm(nx); rm(fecundMx)
+# # ; rm(seedbank); rm(fecundityRows)
+
+AnnualTransition <-function(){
+  # above_f <- Mx_list[which(f_all >= mn_f)]  from the SeedHarvestSim function
+  # below_f <- Mx_list[which(f_all < mn_f)]   from the SeedHarvestSim function
+  if(Yr == "Good"){
+    Mx_i <- sample(above_f, 1) # randomly sample from the high fecundity transition matrices
+  } else {
+    Mx_i <- sample(below_f, 1)
+  }
+  
+  # Freq[] is the likelihood to collect seed in good or bad years
+  CollectYN <- rbinom(1,1,Freq_m[Yr,])
+  if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
+    fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix by the matrix without fecundity rate to get only fecundity rate
+    fecundMx <- fecundMx - fecundMx*Inten_m[Yr,] # Reduce all fecundity rates by intensity of harvest
+    nx <- fecundMx + TMx_list[[Mx_i]] # add the reduced fecundity rates to the transition matrix that lacks the fecundity rate to get new transition matrix
+  } else {
+      nx <- Mx_list[[Mx_i]]
+    }
+  
+  # Multiply N_t+1 = Matrix*N_t; vec comes from the SeedHarvestSim function
+  vec <- nx%*%vec
+  list(vec = vec,CollectYN = CollectYN)
+}
+
+SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1){
+  
+  vec <- floor(Nx*(StartPopSize/sum(Nx)))
+  # To get these into the function environment for the AnnualTransition function
+  # Mx_list <<- Mx_list
+  # TMx_list <<- TMx_list
+  environment(AnnualTransition) <- environment() 
+
+  # Seed Harvest Rates, frequency, probability of harvest in a given year and intensity or percent of seed harvested
+  #     Freq
+  #Good X
+  #Bad  Y
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))/ClusteredColl
+  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
+
+    # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of seed production to recruitment
+  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum) # subtracting the matrices with fecundity from the matrices with all transitions leaves only the fecundity transitions
+  mn_f <- mean(f_all) 
+  #The index of above/equal and below average
+  above_f <- which(f_all >= mn_f)
+  below_f <- which(f_all < mn_f)
+  
+  # Start with good; fill vectors to hold distribution of good or bad years, the freequency at which a year is harvested (CollectYN), the intensity or percentage fecundity is reduced selected from the good or bad rates (depending on which it is); and the population size which is saved in list 
+  Yr <- "Good"
+  GBs <- rep(NA,TotYrs)
+  Freqs <- rep(NA,TotYrs)
+  Intens <- rep(NA,TotYrs)
+  PopSize <- rep(NA, TotYrs)
+  yrs <- 1
+  
+  ######################## Annual Transitions with clusters ######################
+  while(yrs <= TotYrs){
+    #Annual transition function returns a list of ["vec"] [[1]] the t+1 vector (number of individuals by class or bin) and ["CollectYN"] [[2]] 1/0 for CollectYN
+    onetransition <- AnnualTransition()
+    GBs[yrs] <- Yr
+    CollectYN <- onetransition["CollectYN"][[1]]
+    Freqs[yrs] <- CollectYN
+    if(CollectYN==1){
+      Intens[yrs] <- Inten_m[Yr,]
+    }
+    vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector 
+    PopSize[yrs] <- floor(sum(vec))
+    # Transition between good and bad years
+    Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+      "Good"
+    } else {
+        "Bad"
+      } 
+    yrs <- yrs+1
+    if(yrs > TotYrs) break  # can't start a cluster if already at the end
+
+        ########## Cluster ###########    
+    if(Freqs[yrs-1] == 1){
+      # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
+      clust <- 1 # start the consecutive years of clustered collecting
+      while(clust < ClusteredColl){
+        clust <- clust+1 
+        onetransitionCluster <- AnnualTransition()
+        GBs[yrs] <- Yr
+        Freqs[yrs] <- 1 # Must collect for consecutive years of a cluster
+        Intens[yrs] <- Inten_m[Yr,] # the intensity depends on if it's a "good" or "bad" year
+        vec <- onetransitionCluster["vec"][[1]][,1]
+        PopSize[yrs] <- floor(sum(vec))
+        # Transition between good and bad years
+        Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+          "Good"
+        } else {
+            "Bad"
+        } 
+
+        yrs <- yrs+1
+        if(yrs > TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
+        } # end while in a clustered collection cycle
+    } ########## Cluster ###########
+    }
+  SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize)
+  list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
+  }
+
+
+```
+
+
+
+# Matrix Population Models
+
+lambda ~ fecundity
+```{r}
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+annuals <- compadre[[1]][grep("Annual", compadre[[1]]$OrganismType),]
+# write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
+
+```
+
+
+
+```{r}
+
+# Ellis et al. 2012 paper
+tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
+
+sp_info <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_speciesinfo.csv")
+
+m1 <- gsub("\\[|\\]", "", tm$Mx[100]) 
+m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+(m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " "))) # split each list element after removing leading whitespace
+(m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE))
+# Mx: Annual transition matrix
+# Tmx: Annual trnasition matrix with transition probabilities, no fecundity
+# Nx: Vector of observed stage structures (counts in each stage); must be at the start
+
+Nx_all <- lapply(1:nrow(tm), function(i){
+  v1 <- gsub("\\[|\\]", "", tm$Nx[i])
+  v2 <- sapply(v1, function(x) strsplit(trimws(x,"l"), " ")) 
+  v3 <- as.numeric(unlist(v2[[1]]))
+  v3
+})
+
+Nx_names <- lapply(1:nrow(tm), function(i){
+  spp <- tm$SPP[i]
+  pop <- tm$POP[i]
+  yr <- tm$YR[i]
+  paste(spp, pop, yr)
+})
+
+names(Nx_all) <- Nx_names
+
+# Validate structure of matrices with an example
+# Nx_all[[100]]
+# Nx_names[[100]] # Dicerandra fruitescens: short lived (<10 years); fire; recorded quarterly; 6 identified stages: (1) seed bank, seedlings, (3) vegetative, (4) small fl, (5) med fl, (6) large fl.; seedbank from simulation see Menges et al. 2006
+
+# Transitions without fecundity
+TMx_all <- sapply(1:nrow(tm), function(i){
+  m1 <- gsub("\\[|\\]", "", tm$Tmx[i])
+  m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+  m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " ")) # split each list element after removing leading whitespace
+  m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
+  m4
+}, simplify =FALSE, USE.NAMES = TRUE)
+
+names(TMx_all) <- Nx_names
+
+# Transitions and fecundity
+Mx_all <- sapply(1:nrow(tm), function(i){
+  m1 <- gsub("\\[|\\]", "", tm$Mx[i])
+  m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
+  m3 <- lapply(m2, function(x) strsplit(trimws(x,"l"), " ")) # split each list element after removing leading whitespace
+  m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
+  m4
+}, simplify =FALSE, USE.NAMES = TRUE)
+
+names(Mx_all) <- Nx_names
+Mx_all[grep("ASSC", names(Mx_all))]
+
+lambdas <- sapply(Mx_all, function(x) lambda(x), simplify = FALSE, USE.NAMES = TRUE)
+
+fecundity <- mapply(function(x,y){ 
+  fec <- x-y
+  rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
+  }, Mx_all, TMx_all)
+
+x <- unique(tm$SPP)[3]
+
+```
+
+[1] ARFE CIPI ASSC CYFA DIFR    
+[6] ERCU HYCU ASTY HARA HOCO    
+[11]LOCO LAVE LISC NEMA GEPN    
+[16]SIAC SISP PHIN PHEM TRGR    
+Levels: ARFE ASSC ASTY CIPI CYFA DIFR ERCU GEPN HARA HOCO HYCU LAVE LISC LOCO NEMA PHEM PHIN SIAC SISP TRGR    
+    
+ARFE 1    
+CIPI 1    
+ASSC 2 (stage 1 is dormant)  
+CYFA 1    
+DIFR 2 fire kills and post-fire recruitment from soil seed bank   
+
+ERCU 2    
+HYCU 2   
+ASTY 1    
+HARA 1
+HOCO 1   
+
+LOCO 1     
+LAVE 2    
+LISC 1    
+NEMA 1     
+GEPN 1
+
+SIAC 2       
+SISP 1 dormancy is hopefully the 4th stage    
+PHIN 2      
+PHEM 2      
+TRGR 1    
+
+```{r}
+seedlingbins <- data.frame(SPP = unique(tm$SPP), seedlingBin = c(1,1,2,1,2,
+                                                                 2,2,1,1,1,
+                                                                 1,2,1,1,1,
+                                                                 2,1,2,2,1))
+
+bySites <- sapply(Nx_names, function(x) strsplit(x, " ")[[1]][2])
+# unique(tm$POP)
+
+# p<-unique(tm$POP)[1];rm(p)
+
+lifelengthsXmatrix <- lapply(unique(tm$POP), function(p){
+  ind <- which(p == bySites)
+  # print(p)
+  seedlingbin_sp <- seedlingbins$seedlingBin[strsplit(as.character(p), "_")[[1]][1] == seedlingbins$SPP]
+  lifespan_out <-lifespanMPM(Mx_all[ind], TMx_all[ind], seedlingbin_sp)
+  lifespan_out
+  })
+
+names(lifelengthsXmatrix) <- unique(tm$POP)
+
+lifelengthsXspecies <- data.frame(Site = unique(tm$POP), lifespan = unlist(lifelengthsXmatrix), 
+                                  SPP = sapply(unique(tm$POP), function(x) strsplit(as.character(x),"_")[[1]][1])) 
+
+
+avg.lifespan.sp <- aggregate(lifespan~SPP,data = lifelengthsXspecies, mean)
+sd.lifespan.sp <- aggregate(lifespan~SPP,data = lifelengthsXspecies, sd)
+
+lifespan.sp <- cbind(avg.lifespan.sp, SDlifespan = sd.lifespan.sp[,2])
+
+# To test lifespanMPM function
+# p<-unique(tm$POP)[1]
+# ind <- which(p == bySites)
+# Mx <- Mx_all[ind]
+# TMx <- TMx_all[ind]
+# seedlingBin <- seedlingbins$seedlingBin[strsplit(Nx_names[ind][[1]]," ")[[1]][1] == seedlingbins$SPP]
+# rm(Mx);rm(TMx);rm(seedlingBin);rm(nclasses);rm(jj);rm(vec)
+
+```
+
+
+Examples from Ellis et al. 2012    
+Arabis fecunda: "Entries in the fecundity matrix were calculated by dividing the number of recruits in a particular stage class by the number of flowering plants the previous year."   Lesica and Shelly 1995 "Demography of Arabis fecunda"
+    1. Matrices are labeled 1987 to 1992
+    2. Matrix ARFE_Charleys 1987 was measured in 1987 = t and 1988 =t+1 while '1988' is 1988 = t and 1989 = t+1 until 1993 
+    3. They estimated seed per fruit for each population each year except 1992
+    4. transition probabilities were N_t per class (i) that moved to class (j) over one year N_t+1 divided by the number of plants in class (i) N_t
+    5. Reproductive plants can transition among all size classes and seperately can reproduce, these are added in the transition matrix
+    6. Recruitment rate = (new recruits in t+1)/(survivors from t); recruits can appear in one or more classes and in any class including reproductive
+    7. Number of seed/fruit varied 30.9, 32.4, 34 for Charles Gulch, Lime Gulch, and Vipond Park. Number of fruit per plant varied by year and site
+
+```{r}
+
+sp <- unique(tm$SPP)[18]
+
+# Transitions, fecundity not included 
+Tx_sp <- TMx_all[grep(sp, unlist(Nx_names))]
+Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
+(fecundity_sp <- mapply(function(x,y)x-y, Mx_sp, Tx_sp, SIMPLIFY = FALSE))
+
+  (f_all <- apply(mapply(function(x,y) x-y, Mx_sp, Tx_sp), 2, sum))
+
+rm(Tx_sp); rm(Mx_sp); rm(fecundity_sp); rm(sp)
+```
+
+Fecundity alone and then find the number of new recruits? No, can't get that from transition, it is summarized as #new recruits_t+1 / #survivors 
+```{r}
+TMx_fecundity <- lapply(unique(tm$SPP), function(sp){
+  Tx_sp <- TMx_all[grep(sp, unlist(Nx_names))]
+  Mx_sp <- Mx_all[grep(sp, unlist(Nx_names))]
+  fecundity_sp <- mapply(function(x,y)x-y, Mx_sp, Tx_sp, SIMPLIFY = FALSE)
+  fecundity_sp
+})
+
+
+TMx_fecundity[[5]]
+
+
+```
+
+# save lists to share with CPC group and possible as examples in R package
+```{r}
+# save(Nx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Nx_all.Rda")
+# 
+# save(TMx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/TMx_all.Rda")
+# 
+# save(Mx_all, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Mx_all.Rda")
+
+```
+
+
+# Fecundity     
+Defining a good and bad year as higher than or lower than average fecundity means what for overall growth rate, other life-cycle parameters?     
+
+```{r}
+# Is fecundity correlated to lambda
+all_summarydata <- data.frame(SPPSiteYr = names(lambdas), SPP = tm$SPP, lmbd = unlist(lambdas), f = unlist(fecundity))
+all_summarydata <- merge(all_summarydata, sp_info, by = "SPP")
+
+# for which are fecundity and lambda correlated
+lm1 <- lm(lmbd ~ f, data = all_summarydata)
+lm2 <- lm(lmbd ~ f * Genus, data = all_summarydata)
+lm3 <- lm(lmbd ~ f * Number.of.stages, data = all_summarydata)
+
+lm.list <- list(lm1, lm2, lm3)
+lm.names <- as.character(unlist(lapply(lm.list, formula)))
+(lm.results <- aictab(lm.list, modnames = lm.names))
+
+# evidence ratio
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+
+summary(lm2)
+
+# fecundity doesn't vary for some. 
+ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
+  geom_point()+
+  stat_smooth(method = "lm")+
+  theme_bw()+
+  facet_wrap(~Genus, scales="free")+
+  theme(legend.position="none")+
+  ylab("lambda")+
+  xlab("fecundity")
+```
+
+# Simulations
+## Test output for one species - Dicerandra frutescens (Ellis et al. 2012). Lamiaceae, short lived <10 years (lifespan function estimated 10 years),
+iteroparous perennial. Post-fire population had positive growth, 6+ years since fire declining
+```{r}
+
+#TEST SIM
+# If good year, 45% chance staying good, 55% chance switch to bad, if bad year then 35% chance next will be good, 65% chance another bad
+GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Discrete rates
+Intensityrates <- c(0.1,0.1)
+FreqRates <- c(0.1,0.1)
+sp <- unique(tm$SPP)[5]
+
+SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                 TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                              Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                              StartPopSize = 3500,
+                              GoodBadTm = GBmatrix,
+                              Freq = FreqRates,
+                              Int = Intensityrates,
+                              TotYrs = 100,
+                              ClusteredColl = 3)
+
+
+```
+
+Constrain
+Only populations that tend towards extinction    
+Time to extinction
+```{r, eval=FALSE}
+for(sp in unique(tm$SPP)[-2]){ # CIPI has one population with different number of stages
+  for(GB in 1:4){
+    for(popsz in 1:4){
+      GoodBad <- c("radnom","mostlybad","mildclustered","mostlygood")
+      GBmatrix <- list(matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # random
+                       matrix(c(0.25,0.75,0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # extreme drought
+                       matrix(c(0.55,0.45,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # mild clustered
+                       matrix(c(0.75,0.25,0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))) # mostly good
+      # Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+      Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+      # FreqRates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+      FreqRates <- cbind(rbind(c(.1,.5,1),c(.1,.5,1)))
+      # sp <- unique(tm$SPP)[5]
+      totyr <- 100
+      startpop <- c(100,500,1000,10000)
+      
+      # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+      # compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+          noharvest <- do.call(rbind, lapply(1:100, function(x){
+            out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                      TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                      Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                      StartPopSize = startpop[popsz],
+                                      GoodBadTm = GBmatrix[[GB]],
+                                      Freq = c(0,0),
+                                      Int = c(0,0),
+                                      TotYrs = totyr,
+                                      ClusteredColl = 3)
+            out_rep[[1]]$Replicate <- x
+            out_rep[[1]]$Year <- 1:totyr
+            out_rep[[1]]$GoodFreq <- 0
+            out_rep[[1]]$BadFreq <- 0
+            out_rep[[1]]$GoodInt <- 0
+            out_rep[[1]]$BadInt <- 0
+            out_rep[[1]]
+            }))
+      
+      time2extinct.noharvest <- sapply(split(noharvest, noharvest$Replicate), function(x){
+        which(x$PopulationSize<1)[1] # To get the first year the population falls below 1
+      })    
+      
+      # n.cores <- detectCores()-1
+      harvestfreq.int <- do.call(rbind, apply(FreqRates, 2, function(f){
+            Intout <- do.call(rbind, apply(Intensityrates, 2, function(i){
+                # clust <- makeCluster(n.cores)
+              # cl <- makeCluster(mc <- getOption("cl.cores", 3))
+              #   clusterExport(cl, varlist=c("x","f","i","SeedHarvestSim","stable.stage","Mx_all","Nx_names",
+              #                                  "GBmatrix","TMx_all","sp","AnnualTransition"), envir = environment()) # can also import packages , envir = environment()
+              # nowharvest <- do.call(rbind, parLapply(cl, 1:100, function(x){ # with parallel
+              nowharvest <- do.call(rbind, lapply(1:100, function(x){ # without parallel
+                out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                          TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                          StartPopSize = startpop[popsz],
+                                          GoodBadTm = GBmatrix[[GB]],
+                                          Freq = c(f[1],f[2]),
+                                          Int = c(i[1],i[2]),
+                                          TotYrs = totyr,
+                                          ClusteredColl = 3)
+                out_rep[[1]]$Replicate <- x
+                out_rep[[1]]$Year <- 1:totyr
+                out_rep[[1]]$GoodFreq <- f[1]
+                out_rep[[1]]$BadFreq <- f[2]
+                out_rep[[1]]$GoodInt <- i[1]
+                out_rep[[1]]$BadInt <- i[2]
+                out_rep[[1]]
+                }))
+              nowharvest
+              }))
+            # stopCluster(clust)
+            Intout
+            }))
+      
+      time2extinct <- as.data.frame(do.call(rbind,lapply(split(harvestfreq.int, harvestfreq.int$GoodFreq), function(y){
+        out.freq <- do.call(rbind,lapply(split(y, y$GoodInt), function(x){
+          out.good <- do.call(rbind,lapply(split(x, x$BadInt), function(x1){
+       out.bad <- do.call(rbind,lapply(split(x1, x1$Replicate), function(x2){
+              Time2Exc <- which(x2$PopulationSize<1)[1] # To get the first year the population falls below 1
+              GoodInt <- unique(x2$GoodInt)
+              BadInt <- unique(x2$BadInt)
+              GoodFreq <- unique(x2$GoodFreq)
+              BadFreq <- unique(x2$BadFreq)
+              Replicate <- unique(x2$Replicate)
+              out <- c(Time2Exc, GoodInt, BadInt, GoodFreq, BadFreq, Replicate)
+              out
+            }))
+            out.bad
+          }))
+          out.good
+      }))
+        out.freq
+      })))
+      
+      names(time2extinct) <- c("Years", "GoodInt", "BadInt", "GoodFreq", "BadFreq", "Replicate")
+      
+      time2ext.df.noharvest <- data.frame(Years = time2extinct.noharvest, GoodInt = rep(0,100), BadInt = rep(0,100), 
+                                                GoodFreq = rep(0,100), BadFreq = rep(0,100), Replicate = as.numeric(names(time2extinct.noharvest)))
+      
+      time2ext.df <-rbind(time2ext.df.noharvest, time2extinct)
+      time2ext.df$Harvest <- paste(time2ext.df$GoodFreq, time2ext.df$BadFreq, time2ext.df$GoodInt, time2ext.df$BadInt, sep=":")
+      HarLev <- c("0:0:0:0",levels(factor(time2ext.df$Harvest))[c(1:20,22:31)])
+      time2ext.df$Harvest <- factor(time2ext.df$Harvest, levels = HarLev)
+
+      ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/",GoodBad[GB],"_StartPopSz_",startpop[popsz],"_",sp,"_time2ext.jpg",sep=""),
+             ggplot(time2ext.df, aes(Harvest, Years, colour = Harvest, fill = GoodInt))+
+               geom_boxplot()+
+               theme(legend.position="none",
+                     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                     panel.background = element_rect(fill = "white", colour = "grey75"))+
+               geom_jitter(colour = "grey25", size = 0.25, alpha=0.5),
+        width=300, height=300,units='mm', dpi=300)
+      
+      
+      diff.time2ext <- do.call(rbind,lapply(levels(time2ext.df$Harvest)[-1], function(x){
+        noharvest <- sample(time2ext.df$Years[time2ext.df$Harvest=="0:0:0:0"], size = 1000, replace = TRUE)
+        harvest <- sample(time2ext.df$Years[time2ext.df$Harvest==x], size = 1000, replace = TRUE)
+        out <- data.frame(DiffTime2Ext = noharvest-harvest, Harvest = x)
+        out
+        }))
+      
+      
+      # difference from 100% being no harvest
+      ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/",GoodBad[GB],"_StartPopSz_",startpop[popsz],"_",sp,"_difftime2ext.jpg",sep=""),
+             ggplot(diff.time2ext, aes(Harvest, DiffTime2Ext, colour = Harvest))+
+               geom_boxplot()+
+               theme(legend.position="none",
+               axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+               panel.background = element_rect(fill = "white", colour = "grey75"))+
+               geom_jitter(colour = "grey25", size = 0.25, alpha=0.5),
+             width=300, height=300,units='mm', dpi=300)
+      }
+  }
+}
+
+
+
+```
+
+
+####################################################################
+# Periodicity
+Continuous intensity keeping frequency consistent and cluster consistent; scale years for simulation by lifespan    
+1. Does having different good to bad change the resulting time to extinction or end size (all else 10%)     
+          if yes:   
+             2. Does having collections in consecutive years instead of randomly over time change results?
+                 if yes: 
+                    3. Does allowing intensity between good and bad years to vary change outcomes?
+```{r}
+#ARFE gets so big and starts to be NaN for pop size. Exponential growth
+
+allsims <- do.call(rbind, lapply(unique(tm$SPP)[-2], function(sp){ # [-2]CIPI has one population with different number of stages
+  # for(GB in 1:4){
+    startszout <- do.call(rbind, lapply(1:1, function(popsz){
+      clusterout <- do.call(rbind, lapply(1:3, function(csz){ # clustered collection number of years
+          # GoodBad <- c("random","mostlybad","mildclustered","mostlygood")
+          # GBmatrix <- list(matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # random
+                           # matrix(c(0.25,0.75,0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # extreme drought
+                           # matrix(c(0.55,0.45,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # mild clustered
+                           # matrix(c(0.75,0.25,0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))) # mostly good
+        
+          # FreqRates <- cbind(rbind(c(.1,.5,1),c(.1,.5,1)))
+          FreqRates <- cbind(rbind(.1,.1))
+          i <- c(.1,.1) # Change to cbind of more later, and add random selection later
+          totyr <- 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])) # make it 100*lifespan
+          startpop <- c(100,500,1500)
+          clucol <- c(1,3,5)
+          rep_gb <- 100
+
+          
+          noANDharvest <- do.call(rbind,lapply(1:rep_gb, function(gbreps){# Replicates of different good bad transitions
+            gbtrG2G <- round(runif(1, min = 0, max = 1),2); gbtrB2G <- round(runif(1, min = 0, max = 1),2)
+            gbRANDOM <- matrix(c(gbtrG2G,(1-gbtrG2G),gbtrB2G,(1-gbtrB2G)), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+            # gbNOCOR <- c(0.5,0.5,0.5,0.5)
+            # difffromNOCOR <- dist(rbind(as.vector(gbRANDOM), gbNOCOR)) # Euclidean distance 
+            clusterGB <- gbRANDOM[1,1]-gbRANDOM[2,2]
+            # Check progress
+            print(paste("Replicate",gbreps,"for species:",sp))
+          # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+          # compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+
+              noharvest <- do.call(rbind, lapply(1:100, function(x){ # replicates
+                out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                          TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                          StartPopSize = startpop[popsz],
+                                          # GoodBadTm = GBmatrix[[GB]], # When cycling over distinct rates if found to make a difference
+                                          GoodBadTm = gbRANDOM,
+                                          Freq = c(0,0),
+                                          Int = c(0,0),
+                                          TotYrs = totyr,
+                                          ClusteredColl = clucol[csz])
+  
+                out_n <- data.frame(SPP = sp, EndPopSz = out_rep[[1]]$PopulationSize[nrow(out_rep[[1]])],  # End population size
+                    Replicate = x,GoodFreq = 0,BadFreq = 0,GoodInt = 0, BadInt = 0, 
+                    Harvest = paste(0, 0, 0, 0, sep=":"),
+                    GB_mat = paste(as.vector(gbRANDOM), collapse = ":"),
+                    DiffGB_mat = clusterGB, Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
+                    # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
+                    Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
+                out_n
+                })) # end no harvest
+              harvestfreq.int <- do.call(rbind,apply(FreqRates, 2, function(f){
+              nowharvest <- do.call(rbind,lapply(1:1, function(x){ # without parallel; replicates of frequency
+                Intout <- do.call(rbind,lapply(1:100, function(irep){ # make 1:1000 after it works, selecting new intensities
+                  # i <- c(runif(1, min = 0, max = 1),runif(1, min = 0, max = 1)) # 1000 replicates of random selection of a good and bad intensity
+                  # i1 <- runif(1, min = 0, max = 1)
+                  # i <- c(i1,i1)
+                  out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
+                                            TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                            Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                            StartPopSize = startpop[popsz],
+                                            GoodBadTm =gbRANDOM,
+                                            Freq = c(f[1],f[2]),
+                                            Int = c(i[1],i[2]),
+                                            TotYrs = totyr,
+                                            ClusteredColl = clucol[csz])
+  
+                out_n <- data.frame(SPP = sp, EndPopSz = out_rep[[1]]$PopulationSize[nrow(out_rep[[1]])],  # End population size
+                    Replicate = x,GoodFreq = f[1],BadFreq = f[2],GoodInt = i[1], BadInt = i[2], 
+                    Harvest = paste(f[1], f[2], i[1], i[2], sep=":"),
+                    GB_mat = paste(as.vector(gbRANDOM), collapse = ":"),
+                    DiffGB_mat = clusterGB, Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
+                    # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
+                    Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
+                out_n
+                  }))
+                Intout
+                }))
+              nowharvest
+              })) # end harvestfreq.int apply and rbind
+              ynharvest <- rbind(noharvest, harvestfreq.int)
+              ynharvest
+              })) # loop for different GB matrices
+
+          save(noANDharvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/noANDharvest",sp,"popsz",startpop[popsz],"clustersz",clucol[csz],"reps",rep_gb,".Rdata",sep=""))
+          harvestlevels <- levels(factor(noANDharvest$Harvest))
+          if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest == "0:0:0:0"])) & 
+             any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest != "0:0:0:0"]))){ # Does the population evenutally go to extinction?
+            diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
+              diff.freq <- do.call(rbind,lapply(1:1000, function(x){
+                # eventually check across levels of harvest, now is levels of good to bad
+                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext),]
+                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext),]
+                har_idx <- sample(1:(nrow(harvest)), size = 1)
+                noharv <-sample(noharvest$Yr2Ext, size = 1)
+                out <- data.frame(DiffTime2Ext = (noharv-(harvest$Yr2Ext[har_idx]))/noharv, 
+                                  GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
+                                  Harvest = harv, lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
+                out
+                }))
+              diff.freq
+            })) # all in list of different frequency rates
+          }
+          
+          if(any(is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest == "0:0:0:0"])) & 
+             any(is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest != "0:0:0:0"]))){ # Some populations do not go extinct
+            diff.endpopsz <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
+              diff.freq <- do.call(rbind,lapply(1:1000, function(x){
+                # eventually check across levels of harvest, now is levels of good to bad
+                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$EndPopSz),]
+                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$EndPopSz),]
+                har_idx <- sample(1:nrow(harvest), size = 1)
+                noharv <- sample(noharvest$EndPopSz, size = 1)
+                out <- data.frame(DiffEndPopSz = ((log(noharv)-(log(harvest$EndPopSz[har_idx]))))/(log(noharv)), 
+                                  GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
+                                  Harvest = harv, lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]))
+                out
+                }))
+              diff.freq
+            })) # all in list of different frequency rates
+          }
+            
+for(harvlev in harvestlevels[harvestlevels!="0:0:0:0"]){
+  #GoodBad[GB], take out when it's random, not discrete
+  if(exists("diff.time2ext")){
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","StartPopSz",startpop[popsz],"yrColl",clucol[csz],"_",sp,"_diffEndPopSzXGB.jpg",sep=""),
+           ggplot(diff.time2ext[diff.time2ext$Harvest == harvlev,], aes(DistGB, DiffTime2Ext))+
+             geom_point()+
+             theme(legend.position="none",
+                   axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                   panel.background = element_rect(fill = "white", colour = "grey75"))+
+             geom_smooth(method = "lm")+
+             labs(title = paste(sp,"Time to extinction at harvest level:",harvlev),
+                  x = "Periodicity",
+                  y = "Percent of no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+  } # Only run if comparison exists
+  if(exists("diff.endpopsz")){
+    # difference from 100% being no harvest; #,GoodBad[GB]
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","StartPopSz",startpop[popsz],"clustersz",clucol[csz],"_",sp,"_difftime2extXGB.jpg",sep=""),
+           ggplot(diff.endpopsz[diff.endpopsz$Harvest==harvlev,], aes(DistGB, DiffEndPopSz))+
+             geom_point()+
+             theme(legend.position="none",
+                   axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                   panel.background = element_rect(fill = "white", colour = "grey75"))+
+             geom_smooth(method = "lm")+
+             labs(title = paste(sp,"Change in (log) population size at harvest level:",harvlev),
+                  x = "Periodicity",
+                  y = "Percent of no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+    } # Only run if exists
+  
+  } # Harvest levels
+          noANDharvest
+          })) # lapply for how many years of collections
+      clusterout
+      })) # loop for population starting sizes
+startszout
+# } # when for loop of discrete GB good bad matrices
+})) # loop for all species
+
+
+
+```
+
+
+
+
+Read in saved individual simulations, make figures
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/"
+
+
+# test
+# s <- startpop[1]
+# cl <- clucol[1]
+# x <- resultpath[2] 
+# harv <- harvestlevels[2]
+# GB <- unique(noANDharvest$GB_mat)[1]
+# rm(s);rm(cl);rm(x);rm(harv);rm(GB)
+
+harvestsims <- lapply(startpop, function(s){
+  clusters <- lapply(clucol, function(cl){
+    resultpath <- list.files(path = pathstart, 
+                             pattern = paste("popsz",s,"clustersz",cl,"reps100",sep=""), 
+                             full.names=TRUE)
+    dfs <- do.call(rbind,lapply(resultpath[-1], function(x){
+      load(x) # loads a noANDharvest simulation for a species/clustersize/popsize/variableGBs
+      
+      harvestlevels <- levels(factor(noANDharvest$Harvest))
+      diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
+          
+          diff.GBmats <- do.call(rbind, lapply(unique(noANDharvest$GB_mat), function(GB){
+            if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0" & noANDharvest$GB_mat == GB]))){ # Does the population evenutally go to extinction at this GB matrix?
+              diff.Yr2Ex <- do.call(rbind,lapply(1:100, function(reps){
+                # eventually check across levels of harvest, now is levels of good to bad
+                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext) & noANDharvest$GB_mat == GB,] 
+                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext) & noANDharvest$GB_mat == GB,]
+                print("No harvest df")
+                print(head(noharvest))
+                print("Harvest df")
+                print(head(harvest))
+                har_idx <- sample(1:nrow(harvest), size = 1)
+                out <- data.frame(DiffTime2Ext = harvest$Yr2Ext[har_idx]/sample(noharvest$Yr2Ext, size = 1), #(sample(noharvest$Yr2Ext, size = 1)-(harvest$Yr2Ext[har_idx])), 
+                                  GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
+                                  Harvest = harv, lifespan = unique(noANDharvest$lifespan), SPP = unique(noANDharvest$SPP),
+                                  StartPopSz = s, CollClu = cl)
+                out
+              }))
+              diff.Yr2Ex
+              } # end if statement
+            })) # all in list of different frequency rates
+          diff.GBmats
+          })) # end GB levels
+        diff.time2ext
+      }))
+    dfs
+    }) # clusters
+  clusters
+  }) # pop sizes
+
+
+table(harvestsims[[1]][[2]]$StartPopSz,harvestsims[[1]][[1]]$CollClu)
+
+library(stringr)
+
+# get error for very large numbers with EndPopSz
+i <- 1 # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
+j <- 3 # each sub-list has three, 1, 3, and 5 consecutive years of collections
+ggplot(harvestsims[[i]][[j]], aes(DistGB, DiffTime2Ext, colour = as.factor(lifespan)))+
+  # geom_point(size=0.25, alpha=0.25)+
+  stat_smooth(method = "lm")+
+  theme_bw()+
+  scale_color_discrete(name="Lifespan")+             
+  labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims[[i]][[j]]$Harvest), 
+                              ", starting population size ",unique(harvestsims[[i]][[j]]$StartPopSz), 
+                              ", and clusters of ", unique(harvestsims[[i]][[j]]$CollClu), 
+                              " consecutive years of collection.", sep=""), width = 70),
+       x = "Periodicity",
+       y = "Time to exctinction as a percent of no harvest")
+
+```
+
+
+```{r}
+### Ooops! not right
+harvestsims_endpop <- lapply(startpop, function(s){
+  clusters <- lapply(clucol, function(cl){
+    resultpath <- list.files(path = pathstart, 
+                             pattern = paste("popsz",s,"clustersz",cl,"reps100",sep=""), 
+                             full.names=TRUE)
+    dfs <- do.call(rbind,lapply(resultpath[-1], function(x){
+      load(x)
+      harvestlevels <- levels(factor(noANDharvest$Harvest))
+      if(is.na(any(noANDharvest$Yr2Ext))){ # Some populations do not go extinct
+          diff.EndPop <- do.call(rbind,lapply(1:1000, function(x){
+            # eventually check across levels of harvest, now is levels of good to bad
+            noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$EndPopSz),]
+            harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$EndPopSz),]
+            har_idx <- sample(1:nrow(harvest), size = 1)
+            out <- data.frame(DiffEndPopSz = log(harvest$EndPopSz[har_idx])/log(sample(noharvest$EndPopSz, size = 1)), # (log(sample(noharvest$EndPopSz, size = 1))-(log(harvest$EndPopSz[har_idx]))), 
+                              GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
+                              Harvest = harv, lifespan = unique(noANDharvest$lifespan), SPP = unique(noANDharvest$SPP),
+                              StartPopSz = s, CollClu = cl)
+            out
+            }))
+          diff.EndPop
+      } #End if
+      })) # all in list of different frequency rates
+    dfs
+    }) # clusters
+  clusters
+  }) # pop sizes
+
+table(harvestsims_endpop[[1]][[2]]$StartPopSz,harvestsims_endpop[[1]][[1]]$CollClu)
+
+# get error for very large numbers with EndPopSz
+i <- 1 # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
+j <- 3 # each sub-list has three, 1, 3, and 5 consecutive years of collections
+ggplot(harvestsims[[i]][[j]], aes(DistGB, DiffTime2Ext, colour = as.factor(lifespan)))+
+  # geom_point(size=0.25, alpha=0.25)+
+  stat_smooth(method = "lm")+
+  theme_bw()+
+  scale_color_discrete(name="Lifespan")+             
+  labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims[[i]][[j]]$Harvest), 
+                              ", starting population size ",unique(harvestsims[[i]][[j]]$StartPopSz), 
+                              ", and clusters of ", unique(harvestsims[[i]][[j]]$CollClu), 
+                              " consecutive years of collection.", sep=""), width = 70),
+       x = "Periodicity",
+       y = "Time to exctinction as a percent of no harvest")
+  
+
+```
+
+
+
+#Simulate various levels of harvest changing one factor at a time. Copy of changing the good-bad but it's a little different  
+
+```{r}
+#ARFE gets so big and starts to be NaN for pop size. Exponential growth
+
+allsims <- lapply(unique(tm$SPP)[-2], function(sp){ # [-2]CIPI has one population with different number of stages
+  for(GB in 1:3){
+    startszout <- lapply(1:4, function(popsz){
+      clusterout <- lapply(1:3, function(csz){ # clustered collection number of years
+          # GoodBad <- c("random","mostlybad","mildclustered","mostlygood")
+          GBmatrix <- list(matrix(c(0.15,0.85,0.15,0.85), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # random
+                           matrix(c(0.45,0.55,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # extreme drought
+                           matrix(c(0.55,0.45,0.55,0.45), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # mild clustered
+                           matrix(c(0.85,0.15,0.85,0.15), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))) # mostly good
+        
+          # FreqRates <- cbind(rbind(c(.1,.5,1),c(.1,.5,1)))
+          FreqRates <- cbind(rbind(.1,.1))
+          i <- c(.1,.1) # Change to cbind of more later, and add random selection later
+          totyr <- 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])) # make it 100*lifespan
+          startpop <- c(10,100,500,1500)
+          clucol <- c(1,3,5)
+          # rep_gb <- 100
+          rep_freqint <- 100
+
+          
+          noANDharvest <- do.call(rbind,lapply(1:rep_freqint, function(gbreps){# Replicates of different good bad transitions
+            # gbtrG2G <- round(runif(1, min = 0, max = 1),2); gbtrB2G <- round(runif(1, min = 0, max = 1),2)
+            # gbRANDOM <- matrix(c(gbtrG2G,(1-gbtrG2G),gbtrB2G,(1-gbtrB2G)), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+            # gbNOCOR <- c(0.5,0.5,0.5,0.5)
+            # difffromNOCOR <- dist(rbind(as.vector(gbRANDOM), gbNOCOR)) # Euclidean distance 
+            # clusterGB <- gbRANDOM[1,1]-gbRANDOM[2,2]
+            goodintensity <- runif(1, min = 0, max = 1)
+            # Check progress
+            print(paste("Replicate",gbreps,"for species:",sp))
+          # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+          # compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+
+              noharvest <- do.call(rbind, lapply(1:100, function(x){ # replicates
+                out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                          TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                          StartPopSize = startpop[popsz],
+                                          # GoodBadTm = GBmatrix[[GB]], # When cycling over distinct rates if found to make a difference
+                                          GoodBadTm = gbRANDOM,
+                                          Freq = c(0,0),
+                                          Int = c(goodintensity,0),
+                                          TotYrs = totyr,
+                                          ClusteredColl = clucol[csz])
+  
+                out_n <- data.frame(SPP = sp, EndPopSz = out_rep[[1]]$PopulationSize[nrow(out_rep[[1]])],  # End population size
+                    Replicate = x,GoodFreq = 0,BadFreq = 0,GoodInt = 0, BadInt = 0, 
+                    Harvest = paste(0, 0, 0, 0, sep=":"),
+                    GB_mat = paste(as.vector(gbRANDOM), collapse = ":"),
+                    DiffGB_mat = clusterGB, Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
+                    # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
+                    Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
+                out_n
+                })) # end no harvest
+              harvestfreq.int <- do.call(rbind,apply(FreqRates, 2, function(f){
+              nowharvest <- do.call(rbind,lapply(1:1, function(x){ # without parallel; replicates of frequency
+                Intout <- do.call(rbind,lapply(1:100, function(irep){ # make 1:1000 after it works, selecting new intensities
+                  # i <- c(runif(1, min = 0, max = 1),runif(1, min = 0, max = 1)) # 1000 replicates of random selection of a good and bad intensity
+                  # i1 <- runif(1, min = 0, max = 1)
+                  # i <- c(i1,i1)
+                  out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
+                                            TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                            Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                            StartPopSize = startpop[popsz],
+                                            GoodBadTm =gbRANDOM,
+                                            Freq = c(f[1],f[2]),
+                                            Int = c(i[1],i[2]),
+                                            TotYrs = totyr,
+                                            ClusteredColl = clucol[csz])
+  
+                out_n <- data.frame(SPP = sp, EndPopSz = out_rep[[1]]$PopulationSize[nrow(out_rep[[1]])],  # End population size
+                    Replicate = x,GoodFreq = f[1],BadFreq = f[2],GoodInt = i[1], BadInt = i[2], 
+                    Harvest = paste(f[1], f[2], i[1], i[2], sep=":"),
+                    GB_mat = paste(as.vector(gbRANDOM), collapse = ":"),
+                    DiffGB_mat = clusterGB, Lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]), 
+                    # Time to extinction: the first year the population falls below 1; when never met which.max returns 1
+                    Yr2Ext = which(out_rep[[1]]$PopulationSize<1)[1], 
+                    lifespan = floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp]),
+                    CollectionYrs <- clucol[csz],
+                    StartPopSize = startpop[popsz])
+                out_n
+                  }))
+                Intout
+                }))
+              nowharvest
+              })) # end harvestfreq.int apply and rbind
+              ynharvest <- rbind(noharvest, harvestfreq.int)
+              ynharvest
+              })) # loop for different GB matrices
+
+          save(noANDharvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/GoodIntensity",sp,"popsz",startpop[popsz],"clustersz",clucol[csz],"reps",rep_gb,".Rdata",sep=""))
+          noANDharvest
+          }) # lapply for how many years of collections
+      clusterout
+      }) # loop for population starting sizes
+startszout
+# } # when for loop of discrete GB good bad matrices
+}) # loop for all species
+
+
+
+
+```
+
+
+
+
+
+
+######################################
+Visualize difference between no harvest and each rate:freq per climate periodicity projection
+
+
+Constrain      
+End population size
+```{r}
+for(sp in c("CYFA","DIFR","ERCU","HYCU","HARA","PHEM")){
+  for(GB in 1:4){
+    for(popsz in 1:4){
+      GoodBad <- c("radnom","mostlybad","mildclustered","mostlygood")
+      GBmatrix <- list(matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # random
+                       matrix(c(0.25,0.75,0.25,0.75), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # extreme drought
+                       matrix(c(0.55,0.45,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))), # mild clustered
+                       matrix(c(0.75,0.25,0.75,0.25), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))) # mostly good
+      # Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+      Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+      # FreqRates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)))
+      FreqRates <- cbind(rbind(c(.1,.5,1),c(.1,.5,1)))
+      # sp <- unique(tm$SPP)[5]
+      totyr <- 100
+      startpop <- c(100,500,1000,10000)
+      
+      # Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+      # compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+          noharvest <- do.call(rbind, lapply(1:100, function(x){
+            out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                      TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                      Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                      StartPopSize = startpop[popsz],
+                                      GoodBadTm = GBmatrix[[GB]],
+                                      Freq = c(0,0),
+                                      Int = c(0,0),
+                                      TotYrs = totyr,
+                                      ClusteredColl = 3)
+            out_rep[[1]]$Replicate <- x
+            out_rep[[1]]$Year <- 1:totyr
+            out_rep[[1]]$GoodFreq <- 0
+            out_rep[[1]]$BadFreq <- 0
+            out_rep[[1]]$GoodInt <- 0
+            out_rep[[1]]$BadInt <- 0
+            out_rep[[1]]
+            }))
+    
+      # Pop size at end of simulation      
+      endpopsize.noharvest <- do.call(rbind,lapply(split(noharvest, noharvest$Replicate), function(x){
+        x[x$Year == totyr,]
+      }))    
+      
+      # n.cores <- detectCores()-1
+      harvestfreq.int <- do.call(rbind, apply(FreqRates, 2, function(f){
+            Intout <- do.call(rbind, apply(Intensityrates, 2, function(i){
+                # clust <- makeCluster(n.cores)
+              # cl <- makeCluster(mc <- getOption("cl.cores", 3))
+              #   clusterExport(cl, varlist=c("x","f","i","SeedHarvestSim","stable.stage","Mx_all","Nx_names",
+              #                                  "GBmatrix","TMx_all","sp","AnnualTransition"), envir = environment()) # can also import packages , envir = environment()
+              # nowharvest <- do.call(rbind, parLapply(cl, 1:100, function(x){ # with parallel
+              nowharvest <- do.call(rbind, lapply(1:100, function(x){ # without parallel
+                out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                          TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                          Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                          StartPopSize = startpop[popsz],
+                                          GoodBadTm = GBmatrix[[GB]],
+                                          Freq = c(f[1],f[2]),
+                                          Int = c(i[1],i[2]),
+                                          TotYrs = totyr,
+                                          ClusteredColl = 3)
+                out_rep[[1]]$Replicate <- x
+                out_rep[[1]]$Year <- 1:totyr
+                out_rep[[1]]$GoodFreq <- f[1]
+                out_rep[[1]]$BadFreq <- f[2]
+                out_rep[[1]]$GoodInt <- i[1]
+                out_rep[[1]]$BadInt <- i[2]
+                out_rep[[1]]
+                }))
+              nowharvest
+              }))
+            # stopCluster(clust)
+            Intout
+            }))
+      
+      time2extinct <- as.data.frame(do.call(rbind,lapply(split(harvestfreq.int, harvestfreq.int$GoodFreq), function(y){
+        out.freq <- do.call(rbind,lapply(split(y, y$GoodInt), function(x){
+          out.good <- do.call(rbind,lapply(split(x, x$BadInt), function(x1){
+       out.bad <- do.call(rbind,lapply(split(x1, x1$Replicate), function(x2){
+              Time2Exc <- which(x2$PopulationSize<1)[1] # To get the first year the population falls below 1
+              GoodInt <- unique(x2$GoodInt)
+              BadInt <- unique(x2$BadInt)
+              GoodFreq <- unique(x2$GoodFreq)
+              BadFreq <- unique(x2$BadFreq)
+              Replicate <- unique(x2$Replicate)
+              out <- c(Time2Exc, GoodInt, BadInt, GoodFreq, BadFreq, Replicate)
+              out
+            }))
+            out.bad
+          }))
+          out.good
+      }))
+        out.freq
+      })))
+      
+      names(time2extinct) <- c("Years", "GoodInt", "BadInt", "GoodFreq", "BadFreq", "Replicate")
+      
+      time2ext.df.noharvest <- data.frame(Years = time2extinct.noharvest, GoodInt = rep(0,100), BadInt = rep(0,100), 
+                                                GoodFreq = rep(0,100), BadFreq = rep(0,100), Replicate = as.numeric(names(time2extinct.noharvest)))
+      
+      time2ext.df <-rbind(time2ext.df.noharvest, time2extinct)
+      time2ext.df$Harvest <- paste(time2ext.df$GoodFreq, time2ext.df$BadFreq, time2ext.df$GoodInt, time2ext.df$BadInt, sep=":")
+      HarLev <- c("0:0:0:0",levels(factor(time2ext.df$Harvest))[c(1:20,22:31)])
+      time2ext.df$Harvest <- factor(time2ext.df$Harvest, levels = HarLev)
+
+      ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/",GoodBad[GB],"_StartPopSz_",startpop[popsz],"_",sp,"_time2ext.jpg",sep=""),
+             ggplot(time2ext.df, aes(Harvest, Years, colour = Harvest))+
+               geom_boxplot()+
+               theme(legend.position="none",
+                     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+                     panel.background = element_rect(fill = "white", colour = "grey75"))+
+               geom_jitter(),
+        width=300, height=300,units='mm', dpi=300)
+    }
+  }
+}
+
+
+
+```
+
+
+Cycle through combinations of 0 to 100% of the frequency and intensities from no harvest, through equal rates regardless of good or bad, and all combinations.     
+If I set this up as a continuous relationship (suggested by Anna) there would be fewer needed replicates and parameters, could vary the slope of the relationship instead of descrete percentages by good vs. bad.        
+Either through a beta distribution; rbeta: two non-negative shape parameters where mean = a/(a+b) and variance is ab/((a+b)^2 *(a+b+1)) or a linear regression defining the slope     
+```{r}
+
+# Discrete rates
+GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+Intensityrates <- cbind(rbind(seq(0.1,1,by=0.1),seq(0.1,1,by=0.1)),combn(seq(0,1,by=0.1),2))
+FreqRates <- cbind(rbind(seq(0,1,by=0.1),seq(0,1,by=0.1)),combn(c(0,0.1,0.2,0.5,0.75,1),2))
+sp <- unique(tm$SPP)[5]
+
+
+# Keeping total years of the simulation and the good to bad year transition matrix constanst, compare time to exticntion for no harvest
+compare_sp <- do.call(rbind, apply(Intensityrates, 2, function(i){
+  outf <- do.call(rbind, apply(FreqRates, 2, function(f){
+    compare_out <- do.call(rbind, lapply(1:100, function(x){
+      out_rep <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                 TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                              Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                              StartPopSize = 500,
+                              GoodBadTm = GBmatrix,
+                              Freq = f,
+                              Int = i,
+                              TotYrs = 100,
+                              ClusteredColl = 3)
+      out_rep[[1]]$Replicate <- x
+      out_rep[[1]]$Year <- 1:100
+      out_rep[[1]]$GoodFreq <- f[1]
+      out_rep[[1]]$BadFreq <- f[2]
+      out_rep[[1]]$GoodInt <- i[1]
+      out_rep[[1]]$BadInt <- i[2]
+      out_rep[[1]]
+      }))
+    compare_out
+    }))
+  outf
+  }))
+
+
+splitXgoodFreq <- split(compare_sp, as.factor(compare_sp$GoodFreq))
+
+ggplot(splitXgoodFreq[[1]][splitXgoodFreq[[1]]$BadFreq == 0.1,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position="none")+
+  facet_wrap(~as.factor(GoodInt))
+ 
+ggplot(compare_sp[compare_sp$GoodFreq == 1 & compare_sp$BadFreq == 1 & compare_sp$GoodInt == 1 & compare_sp$BadInt == 1 &
+                    compare_sp$Replicate < 11,], aes(Year, PopulationSize, colour = as.factor(Replicate)))+
+  geom_line()+
+  theme(legend.position="none")+
+  facet_wrap(~as.factor(Replicate))
+
+time2extinct <- sapply(split(compare_DIFR, compare_DIFR$Replicate), function(x){
+  which.max(x$PopulationSize<1) # To get the first year the population falls below 1
+})
+
+hist(time2extinct)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Example data for Sclerocactus glaucus where size measurements are the width at widest point for these ball cacti
+'t0' and 't1' are the widths (cm) and survival is for the tagged cactus from year t to t+1. 'reproyesno' is for 't0'. 'flowers0' is a Poisson distribution based on a linear model of number of flowers by size on the one year we took that data. 'minis0' and 'minis1' are the number of seedlings (cacti with < 0.5 cm in width) in year t and t+1
+
+# Integral projeciton models
+Merow et al 2014 Advancing population ecology   
+```{r}
+
+# make an S4 class object? 
+params <- data.frame(
+  surv.int=NA, # Intercept from logistic regression of survival
+  surv.slope=NA, # Slope from logistic regression of survival
+  growth.int=NA, # Intercept from linear regression of growth
+  growth.slope=NA, # Slope from linear regression of growth
+  growth.sd=NA, # Residual sd from the linear regression of growth
+  seed.int=NA, # Intercept from Poisson regression of seed number
+  seed.slope=NA, # Slope from Poisson regression of seed number
+  recruit.size.mean=NA, # Mean recruit size
+  recruit.size.sd=NA, # Standard deviation of recruit size
+  establishment.prob=NA # Probability of establishment
+)
+```
+
+
+# build vital rate regressions and store coefficients  
+# Assume most populaitons will have different responses by site but check. Limitation might be due to sample (populaiton) size leading to lumping or splitting data by population. 
+```{r}
+# example data frame
+size_scgl
+
+# Test if there are differences in vital rates among sites and years
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  theme_bw()+
+  geom_jitter(height = 0.1, width = 0)+
+  facet_wrap(~Site)
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  theme_bw()+
+  geom_jitter(height = 0.1, width = 0)+
+  facet_wrap(~year0)
+
+# survival
+surv.reg1 <- glm(survival ~ t0 + Site + as.factor(year0), data = size_scgl, family = binomial()) # survival by size (slope) comparing different intercepts by site and year
+surv.reg2 <- glm(survival ~ t0, data = size_scgl, family = binomial()) # survival by size (slope)
+# Could compare different slope and intercept by site and year but doesn't that overfit??
+
+reg.list <- list(surv.reg1, surv.reg2)
+reg.names <- as.character(unlist(lapply(reg.list, formula)))
+(reg.results <- aictab(reg.list, modnames = reg.names))
+
+summary(surv.reg1)
+
+params$surv.int <- c(rep(coefficients(surv.reg1)[1], length(coefficients(surv.reg1))-2)+coefficients(surv.reg1)[-c(1:2)] )# all the offsets for year and site
+```
+
+
+
+# Code adapted from Dan Doak for an IPM
+
+```{r}
+
+# Unknown, test correlation of t-1, t-2 ... reproductive output on seedlings to see if there's an indication of a persistent seed bank
+seedlings_per_seed_sg <- 10/500 # 0.000001 # the rate that a seed germinates I'm making a wild estimate
+
+# Changed our methods from measuring all individuals to only measuring individuals >= 0.5 cm width in 2012. 
+surv_minis <- 0.69 # this is an average of two estimates, should test both 0.59 and 0.78
+
+# set the minimum size and maximum size
+minsize_scgl <- 0.01
+maxsize_scgl <- 12.61 # was Fram, excluded 14.51
+
+```
+
+
+Size density estimation for median size estimation - for each kernel, the state of an individual at one time that dictates the state and state of any offspring at the next time step (Merow et al. 2014 "Advancing population ecology with integral projeciton models: a practical guide")
+```{r}
+
+pdfsz_scgl <- density(size_scgl$t0, n=1024, cut=0, na.rm = TRUE)
+pdfsz2_scgl <- cbind(pdfsz_scgl$x,pdfsz_scgl$y)
+plot(pdfsz2_scgl, type="l")
+
+```
+
+### Matrix Model 
+  Estimate vital rates, populate matrix, for models with different numbers of classes/ bins    
+
+```{r ScGl matrix}
+# testing
+# seedlings_per_seed <- seedlings_per_seed_sg # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
+# testbins <- c(4,5,6,7,8,10,15,19) # I don't have enough individuals to get estimates if I break this into too many bins
+# df <- size_scgl
+# minsize <- minsize_scgl
+# maxsize <- maxsize_scgl
+# bin.num <- testbins
+# allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
+# surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+# bin.num <-  c(4,5,6,7,8)
+# i <- 3
+# seeds_per_flower <- 150
+# rm(bin.num); rm(i); rm(df);rm(seedlings_per_seed);rm(minsize); rm(maxsize); rm(allsdszs); rm(surv_seedlings); rm(seeds_per_flower)
+
+IPM_basic <- function(df, bin.num, seedlings_per_seed, surv_seedlings, seeds_per_flower, seedling_size){
+    # Empty list items
+    lambdas_matrix <- rep(NA, length(bin.num))
+    dampratio_matrix = rep(NA, length(bin.num))
+    lifespan_matrix=rep(NA, length(bin.num))
+    mincounts=NULL
+    minsize <- min(c(df$t0, df$t1), na.rm=TRUE) -0.01
+    maxsize <- max(c(df$t0, df$t1), na.rm=TRUE) +0.01
+    allsdszs <- df$t0[df$t0 < seedling_size]
+    # test each number of bins, break by size 
+    for(i in 1:length(bin.num)){
+      ss=as.numeric(df$t0)
+      vec.bin = c(minsize, minsize+1:bin.num[i]*(maxsize-minsize)*(1/bin.num[i])) # the upper and lower size limits to make the designated number of bins
+      nums=hist(ss,breaks=vec.bin, plot=FALSE)$counts  # the number of individuals that fall in each group
+      mincounts=c(mincounts,min(nums))
+      
+      if (min(nums)>2) {  
+        ## Initialize storage
+        n.bin <- length(vec.bin)-1            # this is a workaround
+        n <- rep(NA, n.bin)                   # count of indvs per bin
+        medians <- rep(NA, n.bin)             # median size per bin for F
+        surv <- rep(NA, n.bin)                # survivorship for each class
+        grow <- matrix(NA, n.bin, n.bin)      # store growth probabilites for each class
+        reproduction <- rep(NA, n.bin)        # store reproduction probabilites for each class
+        
+        totnums = 0 # this is just monitoring for errors, start at zero before next loop per size subset
+        # bin, survival, growth
+         for(j in 1:(length(vec.bin)-1)){
+          # set limits for size subset according to bin breaks
+          bounds <- c(vec.bin[j], vec.bin[j+1])
+          # subset data according to bounds
+          subset <- df[df$t0 > bounds[1] & df$t0 <= bounds[2],]
+          # store number of inviduals in this bin for future reference
+          n[j] <- length(subset$t0)
+          medians[j] <- median(subset$t0)
+          # calculate survivorship for this class
+          surv[j] <- sum(subset$survival) / length(subset$t0) # of those alive in year 1, how many survived by bin/size class
+          # store histo as object, to access counts per bin
+          histo <- hist(subset$t1, breaks = vec.bin, plot = FALSE)
+          # $counts returns the number of individuals of a certain size class
+          grow[,j] <- histo$counts/length(subset$t0[subset$survival==1]) 
+          reproduction[j] <- mean(subset$flowers0*seeds_per_flower, na.rm = TRUE) # seedlings produced per plant in start yr
+          
+          totnums = totnums + sum(histo$counts)
+        }
+        
+        # make a vector of the prob of seedling sizes: 
+        sdlggrow <- hist(allsdszs, breaks = vec.bin, plot = FALSE)$counts/length(allsdszs)
+        reproduction[is.nan(reproduction)] <- 0
+        
+        M1 <- matrix(NA, n.bin, n.bin)   # initiate projection matrix
+        M <- matrix(0, (n.bin+1), (n.bin+1))
+        # populate projection matrix
+      
+        for(j in 1:length(surv)){
+          M1[,j] <- surv[j] * grow[,j]
+          M1[,j] <- (surv[j] * grow[,j])
+        }
+          
+          # add lines for the creation of bulblings and thier transition to first size class
+          M[2:(n.bin+1), 2:(n.bin+1)] = M1
+          M[2:(n.bin+1),1] = surv_seedlings*sdlggrow 
+          M[1,2:(n.bin+1)] = reproduction*seedlings_per_seed  
+        
+        
+        lambdas_matrix[i] <- lambda(M) # calls popbio f'n 'lambda'
+        dampratio_matrix[i]=damping.ratio(M)
+        lifespan_matrix[i] =lifespan(M)
+        
+        print(c(i,totnums)) 
+      } else {
+        lambdas_matrix[i]=NA
+        dampratio_matrix[i] = NA
+        lifespan_matrix[i] = NA
+      }
+    }
+    list(lambdas_matrix, dampratio_matrix, lifespan_matrix)
+}
+```
+
+
+
+
+
+
+Not by site but across all data, use site, year, and fecundity as a covariate, predict for high and low values 
+```{r}
+# ScGl
+# seedlings_per_seed # not sure if this should be the chance a seed turns into a seedling or something else or how to pick the value
+testbins <- c(4,5,6,10,30,50,100) # I don't have enough individuals to get estimates if I break this into too many bins
+# df <- size_scgl
+# minsize <- minsize_scgl
+# maxsize <- maxsize_scgl
+# bin.num <- testbins
+# allsdszs <- allsdszs_scgl # the distribution of sizes you classify as a seedling
+# surv_seedlings <- surv_minis # calculated from using the size class defined as seedlings in time t and the annual surival to t+1; seedling size vs. the smallest bin size which might include more than survival of seedlings
+
+scgl_IPM_all <- IPM_basic(df = size_scgl, seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150, seedling_size = 0.5)
+
+scgl_IPM_all
+
+
+scgl_IPM_NS <- lapply(unique(size_scgl$Region), function(x){
+  IPM_basic(df = size_scgl[size_scgl$Region == x,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150,  seedling_size = 0.5)
+  })
+
+sites <- c("Atwell Gulch","Picnic Site","Powerline","Pyramid Rock","T-Junction")
+ #unique(size_scgl$Site)
+scgl_IPM_sites <- lapply(c("Atwell Gulch","Escalante Canyon","Picnic Site","Pyramid Rock"), function(x){
+  print(x)
+  IPM_basic(df = size_scgl[size_scgl$Site == x,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins,  seedling_size = 0.5, surv_seedlings = surv_minis, seeds_per_flower = 150)
+})
+
+# Errors -Inf
+scgl_IPM_Site_year <- lapply(c("Atwell Gulch","Escalante Canyon","Picnic Site","Pyramid Rock"), function(x){
+  lapply(unique(size_scgl$year0[size_scgl$Site == x]), function(y){
+    print(x);print(y)
+  IPM_basic(df = size_scgl[size_scgl$Region == x & size_scgl$year0 == y,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150,  seedling_size = 0.5)
+  })
+})
+
+
+scgl_IPM_NS_year <- lapply(unique(size_scgl$Region), function(x){
+  lapply(unique(size_scgl$year0[size_scgl$Region == x]), function(y){
+    print(x);print(y)
+  IPM_basic(df = size_scgl[size_scgl$Region == x & size_scgl$year0 == y,], seedlings_per_seed = seedlings_per_seed_sg, bin.num = testbins, surv_seedlings = surv_minis, seeds_per_flower = 150,  seedling_size = 0.5)
+  })
+})
+
+
+```
+
+
+```{r}
+(lambdas_matrix)
+(dampratio_matrix)
+(lifespan_matrix)
+
+```
+
+Make a predictive model (as a function only of size in this case) and site, year, and fecundity for each demographic rate: survival, mean growth, variance in growth, prob of reproducing, and how much reproduction if reproducing. The code fits a few alternatives and chooses the best one for each rate, which will be used below. But can't have fecundity in the reproductive ones... ???
+```{r}
+## Vital rates
+# survival
+######## ScGl survival #########################
+# do it my way 
+
+glm1 <- glm(survival ~ t0, family = "binomial", data = size_scgl)
+# glm2 <- glm(survival ~ t0 + t0sq, family = "binomial", data = size_scgl) # don't have a squared term yet, need it?
+glm3 <- glm(survival ~ t0 + Site + t0*Site, family = "binomial", data = size_scgl1) # The slope and the intecept could differ
+glm4 <- glm(survival ~ t0 + as.factor(year0) + t0*year0, family = "binomial", data = size_scgl1)
+glm5 <- glm(survival ~ t0 + as.factor(year0) + t0*as.factor(year0) + Site + t0*Site + as.factor(year0)*Site, family = "binomial", data = size_scgl1)
+
+lm.list <- list(glm1, glm3, glm4, glm5)
+lm.names <- as.character(unlist(lapply(lm.list, formula)))
+(lm.results <- aictab(lm.list, modnames = lm.names))
+# evidence ratio
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+
+summary(glm5)
+
+ggplot(size_scgl, aes(t0, survival, colour = Site))+
+  geom_point()+
+  stat_smooth(method="glm", family=binomial, formula = y~x, aes(fill=Site))+
+  facet_grid(cols=vars(year0),
+             rows = vars(Site))+
+  xlab("Size at time t")+
+  ylab("Survival to time t+1")+
+  theme_bw()
+
+```
+
+
+```{r}
+# Growth
+
+# growth: non-linear with linear function of size , quadratic function of size, power function (A+B*(size^C))
+# nlm1 <- nls(t1 ~ a + b*t0, data = size_scgl, start = list(a=1, b=1))
+# nlm2 <- nls(t1 ~ a + b*t0 + c*Site, data=size_scgl, start = (list(a=1, b=1, c=1)))
+# nlm3 <- nls(t1 ~ a + b*t0 + c*year0, data=size_scgl, start=list(a=1, b=1, c=1))
+
+glm1 <- glm(t1 ~ t0, family = poisson, data = size_scgl)
+nlm.list <- list(nlm1, nlm2, nlm3)
+nlm.names <- as.character(unlist(lapply(nlm.list, formula)))
+(nlm.results <- aictab(nlm.list, modnames = nlm.names))
+for(i in 2:length(nlm.list)){
+  print(exp(0.5*nlm.results$Delta_AICc[i]))
+}
+
+# getting residuals of growth
+size$growth_residuals <- NA
+size$growth_residuals[which(!is.na(size$t1) & !is.na(size$t0))] <- summary(bestgrowth)$residuals^2
+
+summary(glm1)
+
+```
+
+
+
+
