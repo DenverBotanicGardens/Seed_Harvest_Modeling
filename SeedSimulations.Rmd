@@ -884,50 +884,76 @@ for(i in 1:4){ # for the starting population sizes (now should be 4 but this has
 
 ```{r}
 
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/"
+startpop <- c(10,100,500,1500)
+clucol <- c(1,3,5)
+
+# test
+s <- startpop[1]
+cl <- clucol[1]
+x <- resultpath[2]
+harv <- harvestlevels[2]
+GB <- unique(noANDharvest$GB_mat)[1]
+rm(s);rm(cl);rm(x);rm(harv);rm(GB)
+
 harvestsims_endpop <- lapply(startpop, function(s){
   clusters <- lapply(clucol, function(cl){
     resultpath <- list.files(path = pathstart, 
                              pattern = paste("popsz",s,"clustersz",cl,"reps100",sep=""), 
                              full.names=TRUE)
     dfs <- do.call(rbind,lapply(resultpath[-1], function(x){
-      load(x)
+      load(x) # loads a noANDharvest simulation for a species/clustersize/popsize/variableGBs
+      
       harvestlevels <- levels(factor(noANDharvest$Harvest))
-      if(is.na(any(noANDharvest$Yr2Ext))){ # Some populations do not go extinct
-          diff.EndPop <- do.call(rbind,lapply(1:1000, function(x){
-            # eventually check across levels of harvest, now is levels of good to bad
-            noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$EndPopSz),]
-            harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$EndPopSz),]
-            har_idx <- sample(1:nrow(harvest), size = 1)
-            out <- data.frame(DiffEndPopSz = log(harvest$EndPopSz[har_idx])/log(sample(noharvest$EndPopSz, size = 1)), # (log(sample(noharvest$EndPopSz, size = 1))-(log(harvest$EndPopSz[har_idx]))), 
-                              GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
-                              Harvest = harv, lifespan = unique(noANDharvest$lifespan), SPP = unique(noANDharvest$SPP),
-                              StartPopSz = s, CollClu = cl)
-            out
-            }))
-          diff.EndPop
-      } #End if
-      })) # all in list of different frequency rates
+      diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
+          
+          diff.GBmats <- do.call(rbind, lapply(unique(noANDharvest$GB_mat), function(GB){
+            if(any(!is.na(noANDharvest$EndPopSz[noANDharvest$Harvest=="0:0:0:0" & noANDharvest$GB_mat == GB])) &
+               any(!is.na(noANDharvest$EndPopSz[noANDharvest$Harvest==harv & noANDharvest$GB_mat == GB]))){ # Does the population not go extinct at this GB matrix?
+              diff.Yr2Ex <- do.call(rbind,lapply(1:2, function(reps){
+                # eventually check across levels of harvest, now is levels of good to bad
+                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$EndPopSz) & noANDharvest$GB_mat == GB,] 
+                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$EndPopSz) & noANDharvest$GB_mat == GB,]
+                har_idx <- sample(1:nrow(harvest), size = 1)
+                out <- data.frame(DiffEndPopsz =  (log(harvest$EndPopSz[har_idx]))/(log(sample(noharvest$EndPopSz, size = 1))),
+                                  GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
+                                  Harvest = harv, lifespan = unique(noANDharvest$lifespan), SPP = unique(noANDharvest$SPP),
+                                  StartPopSz = s, CollClu = cl)
+                out
+              }))
+              diff.Yr2Ex
+              } # end if statement
+            })) # all in list of different frequency rates
+          diff.GBmats
+          })) # end GB levels
+        diff.time2ext
+      }))
     dfs
     }) # clusters
   clusters
   }) # pop sizes
 
-table(harvestsims_endpop[[1]][[2]]$StartPopSz,harvestsims_endpop[[1]][[1]]$CollClu)
+table(harvestsims_endpop[[1]][[2]]$StartPopSz,harvestsims_endpop[[1]][[2]]$CollClu)
 
 # get error for very large numbers with EndPopSz
-i <- 1 # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
-j <- 3 # each sub-list has three, 1, 3, and 5 consecutive years of collections
-ggplot(harvestsims[[i]][[j]], aes(DistGB, DiffTime2Ext, colour = as.factor(lifespan)))+
-  # geom_point(size=0.25, alpha=0.25)+
-  stat_smooth(method = "lm")+
-  theme_bw()+
-  scale_color_discrete(name="Lifespan")+             
-  labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims[[i]][[j]]$Harvest), 
-                              ", starting population size ",unique(harvestsims[[i]][[j]]$StartPopSz), 
-                              ", and clusters of ", unique(harvestsims[[i]][[j]]$CollClu), 
-                              " consecutive years of collection.", sep=""), width = 70),
-       x = "Periodicity",
-       y = "Time to exctinction as a percent of no harvest")
+for(i in 1:4){ # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
+  for(j in 1:3){ # each sub-list has three, 1, 3, and 5 consecutive years of collections
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","StartPopSz",unique(harvestsims_endpop[[i]][[j]]$StartPopSz),
+                            "ClusterCol", unique(harvestsims_endpop[[i]][[j]]$CollClu),"_endpopsz.jpg",sep=""),
+           ggplot(harvestsims_endpop[[i]][[j]], aes(DistGB, DiffEndPopsz, colour = as.factor(lifespan)))+
+             # geom_point(size=0.25, alpha=0.25)+
+             stat_smooth(method = "lm", formula = y ~ x + I(x^2),se = FALSE)+ #method = "loess"
+             theme_bw()+
+             scale_color_discrete(name="Lifespan")+             
+             labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims_endpop[[i]][[j]]$Harvest), 
+                                         ", starting population size ",unique(harvestsims_endpop[[i]][[j]]$StartPopSz), 
+                                         ", and clusters of ", unique(harvestsims_endpop[[i]][[j]]$CollClu), 
+                                         " consecutive years of collection.", sep=""), width = 70),
+                  x = "Periodicity",
+                  y = "Final population size as a percent of no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+  }
+}
   
 
 ```
