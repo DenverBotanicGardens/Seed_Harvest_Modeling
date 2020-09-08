@@ -28,6 +28,8 @@ library(lme4)
 library(ggplot2)
 # install.packages("roxygen2")
 
+library(stringr)
+
 
 library(parallel); library(doParallel); library(foreach)
 
@@ -806,12 +808,13 @@ startszout
 Read in saved individual simulations, make figures
 ```{r}
 pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/"
-
+startpop <- c(10,100,500,1500)
+clucol <- c(1,3,5)
 
 # test
 # s <- startpop[1]
 # cl <- clucol[1]
-# x <- resultpath[2] 
+# x <- resultpath[2]
 # harv <- harvestlevels[2]
 # GB <- unique(noANDharvest$GB_mat)[1]
 # rm(s);rm(cl);rm(x);rm(harv);rm(GB)
@@ -828,15 +831,12 @@ harvestsims <- lapply(startpop, function(s){
       diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
           
           diff.GBmats <- do.call(rbind, lapply(unique(noANDharvest$GB_mat), function(GB){
-            if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0" & noANDharvest$GB_mat == GB]))){ # Does the population evenutally go to extinction at this GB matrix?
+            if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0" & noANDharvest$GB_mat == GB])) &
+               any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest==harv & noANDharvest$GB_mat == GB]))){ # Does the population eventually go to extinction at this GB matrix?
               diff.Yr2Ex <- do.call(rbind,lapply(1:100, function(reps){
                 # eventually check across levels of harvest, now is levels of good to bad
                 noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext) & noANDharvest$GB_mat == GB,] 
                 harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext) & noANDharvest$GB_mat == GB,]
-                print("No harvest df")
-                print(head(noharvest))
-                print("Harvest df")
-                print(head(harvest))
                 har_idx <- sample(1:nrow(harvest), size = 1)
                 out <- data.frame(DiffTime2Ext = harvest$Yr2Ext[har_idx]/sample(noharvest$Yr2Ext, size = 1), #(sample(noharvest$Yr2Ext, size = 1)-(harvest$Yr2Ext[har_idx])), 
                                   GB_matrix = harvest$GB_mat[har_idx], DistGB = harvest$DiffGB_mat[har_idx],
@@ -856,31 +856,34 @@ harvestsims <- lapply(startpop, function(s){
   clusters
   }) # pop sizes
 
-
-table(harvestsims[[1]][[2]]$StartPopSz,harvestsims[[1]][[1]]$CollClu)
-
-library(stringr)
+table(harvestsims[[1]][[2]]$StartPopSz,harvestsims[[1]][[2]]$CollClu)
 
 # get error for very large numbers with EndPopSz
-i <- 1 # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
-j <- 3 # each sub-list has three, 1, 3, and 5 consecutive years of collections
-ggplot(harvestsims[[i]][[j]], aes(DistGB, DiffTime2Ext, colour = as.factor(lifespan)))+
-  # geom_point(size=0.25, alpha=0.25)+
-  stat_smooth(method = "lm")+
-  theme_bw()+
-  scale_color_discrete(name="Lifespan")+             
-  labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims[[i]][[j]]$Harvest), 
-                              ", starting population size ",unique(harvestsims[[i]][[j]]$StartPopSz), 
-                              ", and clusters of ", unique(harvestsims[[i]][[j]]$CollClu), 
-                              " consecutive years of collection.", sep=""), width = 70),
-       x = "Periodicity",
-       y = "Time to exctinction as a percent of no harvest")
+for(i in 1:4){ # for the starting population sizes (now should be 4 but this has three, missing starting with 10)
+  for(j in 1:3){ # each sub-list has three, 1, 3, and 5 consecutive years of collections
+    ggsave(filename = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/","StartPopSz",unique(harvestsims[[i]][[j]]$StartPopSz),
+                            "ClusterCol", unique(harvestsims[[i]][[j]]$CollClu),"_time2ext.jpg",sep=""),
+           ggplot(harvestsims[[i]][[j]], aes(DistGB, DiffTime2Ext, colour = as.factor(lifespan)))+
+             # geom_point(size=0.25, alpha=0.25)+
+             stat_smooth(method = "lm", formula = y ~ x + I(x^2),se = FALSE)+ #method = "loess"
+             theme_bw()+
+             scale_color_discrete(name="Lifespan")+             
+             labs(title = str_wrap(paste("Difference in years to extinction at harvest level: ",unique(harvestsims[[i]][[j]]$Harvest), 
+                                         ", starting population size ",unique(harvestsims[[i]][[j]]$StartPopSz), 
+                                         ", and clusters of ", unique(harvestsims[[i]][[j]]$CollClu), 
+                                         " consecutive years of collection.", sep=""), width = 70),
+                  x = "Periodicity",
+                  y = "Time to exctinction as a percent of no harvest"),
+           width=300, height=300,units='mm', dpi=300)
+  }
+}
 
+    
 ```
 
 
 ```{r}
-### Ooops! not right
+
 harvestsims_endpop <- lapply(startpop, function(s){
   clusters <- lapply(clucol, function(cl){
     resultpath <- list.files(path = pathstart, 
