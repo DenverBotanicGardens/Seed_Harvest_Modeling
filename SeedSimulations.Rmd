@@ -219,6 +219,12 @@ lambda ~ fecundity
 ```{r}
 load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
 
+str(compadre[[1]]) # $Ecoregion
+str(compadre[[2]]) # split into 'prop' as seed or undetectable vs. 'active' for above ground, description of each class, number of classes
+str(compadre[[3]]) # each is a list of 4: the matA (average), matU only surivval-dependent demographic processes (seed bank, statis, progression, retrogression, vegetitative dormancy), matF for fecundity, matC (clonal reproduction)
+
+# $ SpeciesAuthor is the taxonomic name from author, and the name from The Plant List $SpeciesAccepted could check $SpeciesAccepted against status
+
 annuals <- compadre[[1]][grep("Annual", compadre[[1]]$OrganismType),]
 # write.csv(annuals, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/compadre_annuals.csv")
 
@@ -454,28 +460,7 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
 # Simulations
 ## Test output for one species - Dicerandra frutescens (Ellis et al. 2012). Lamiaceae, short lived <10 years (lifespan function estimated 10 years),
 iteroparous perennial. Post-fire population had positive growth, 6+ years since fire declining
-```{r}
 
-#TEST SIM
-# If good year, 45% chance staying good, 55% chance switch to bad, if bad year then 35% chance next will be good, 65% chance another bad
-GBmatrix <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-# Discrete rates
-Intensityrates <- c(0.1,0.1)
-FreqRates <- c(0.1,0.1)
-sp <- unique(tm$SPP)[5]
-
-SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
-                                 TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
-                              Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
-                              StartPopSize = 3500,
-                              GoodBadTm = GBmatrix,
-                              Freq = FreqRates,
-                              Int = Intensityrates,
-                              TotYrs = 100,
-                              ClusteredColl = 3)
-
-
-```
 
 Constrain
 Only populations that tend towards extinction    
@@ -877,61 +862,59 @@ for(i in 1:4){ # for the starting population sizes (now should be 4 but this has
 
 ```
 
-# make this generalizable  - right now, check the variable intensity levels, they are wrong!
+# make this generalizable 
 ```{r}
 pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/"
-startpop <- c(10,100,500)
+startpop <- c(10,100,500, 1500)
 clucol <- c(1,3,5)
+cores <- detectCores()-1
 
 # test
 # s <- startpop[1]
-# cl <- clucol[1]
-# x <- resultpath[2]
+# clust <- clucol[1]
 # i <- 0.6
+# x <- resultpath[2]
 # harv <- harvestlevels[7]
 # GB <- unique(noANDharvest$GB_mat)[2]
 # rm(s);rm(cl);rm(x);rm(harv);rm(GB)
 
 harvestsims <- lapply(startpop, function(s){
-  clusters <- lapply(clucol[1], function(cl){
-    intensity <- lapply(seq(0.1,1,by=0.1), function(i){
-    resultpath <- list.files(path = pathstart, 
-                             pattern = paste("popsz",s,"AvgIntensity",i,"clustersz",cl,"GB2","reps100",sep=""), 
-                             full.names=TRUE)
-    dfs <- do.call(rbind,lapply(resultpath, function(x){
-      load(x) # loads a noANDharvest simulation for a species/clustersize/popsize/variableGBs
-      harvestlevels <- levels(factor(noANDharvest$Harvest))
-      diff.time2ext <- do.call(rbind,lapply(harvestlevels[harvestlevels!="0:0:0:0"] ,function(harv){ # how many columns of frequency and intensity rates
-        # diff.GBmats <- do.call(rbind, lapply(unique(noANDharvest$GB_mat), function(GB){ # when I had replicates of random discrete GB matrices
-        # Now I think I only have one replicate of each randomly selecting average
-          # if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0" & noANDharvest$GB_mat == GB])) &
-          #      any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest==harv & noANDharvest$GB_mat == GB]))){ # Does the population eventually go to extinction at this GB matrix?
-        if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0"])) &
-           any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest==harv]))){
-              diff.Yr2Ex <- do.call(rbind,lapply(1:100, function(reps){
+  clusters <- lapply(clucol[1], function(clust){
+    intensity <- lapply(seq(0.1,1,by=0.1), function(i){ # Average intensity
+      resultpath <- list.files(path = pathstart, 
+                               pattern = paste("popsz",s,"AvgIntensity",i,"clustersz",clust,"GB2","reps100",sep=""), 
+                               full.names=TRUE)
+      cl <- makeCluster(cores)
+      registerDoParallel(cl)
+      diff.discrete <- foreach(x = resultpath, .combine = "rbind") %:% 
+        foreach(harv = levels(factor(noANDharvest$Harvest))[levels(factor(noANDharvest$Harvest))!="0:0:0:0"], .combine = "rbind") %dopar% {
+          load(x) # loads a noANDharvest simulation for a species/clustersize/popsize/variableGBs
+          
+          if(any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest=="0:0:0:0"])) &
+               any(!is.na(noANDharvest$Yr2Ext[noANDharvest$Harvest==harv]))){
+              diff.Yr2Ex <- do.call(rbind,lapply(1:10, function(reps){
                 # eventually check across levels of harvest, now is levels of good to bad
-                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext),] # & noANDharvest$GB_mat == GB,] 
-                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext),] # & noANDharvest$GB_mat == GB,]
+                noharvest <- noANDharvest[noANDharvest$Harvest=="0:0:0:0" & !is.na(noANDharvest$Yr2Ext),]  
+                harvest <- noANDharvest[noANDharvest$Harvest==harv & !is.na(noANDharvest$Yr2Ext),] 
                 har_idx <- sample(1:nrow(harvest), size = 1)
-                out <- data.frame(DiffTime2Ext = harvest$Yr2Ext[har_idx]/sample(noharvest$Yr2Ext, size = 1), #(sample(noharvest$Yr2Ext, size = 1)-(harvest$Yr2Ext[har_idx])), 
+                out <- data.frame(DiffTime2Ext = harvest$Yr2Ext[har_idx]/sample(noharvest$Yr2Ext, size = 1),
                                   GB_matrix = harvest$GB_mat[har_idx], IntensityRatio = harvest$IntRatio[har_idx],
                                   Harvest = harv, lifespan = unique(noANDharvest$lifespan), SPP = unique(noANDharvest$SPP),
-                                  StartPopSz = s, CollClu = cl, AverageIntensity = i)
+                                  StartPopSz = s, CollClu = clust, AverageIntensity = i)
                 out
-              }))
+                }))
               diff.Yr2Ex
               } # end if statement
-            })) # all in list of different frequency rates
-          # diff.GBmats
-          # })) # end GB levels
-        diff.time2ext
-        }))
-      dfs
-      }) # clusters
+          
+          } # end dopar, spit out diff.discrete
+      on.exit(stopCluster(cl))
+      diff.discrete
+      }) # intensity
     intensity
-    })
-    clusters
+    }) # clusters
+  clusters
   }) # pop sizes
+
 
 table(harvestsims[[1]][[2]]$StartPopSz,harvestsims[[1]][[2]]$CollClu)
 
