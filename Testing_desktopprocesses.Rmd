@@ -108,7 +108,26 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   #     Freq
   #Good X
   #Bad  Y
-  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))/ClusteredColl
+  
+  if(ClusteredColl > 1){
+    numCollections <- Freq[1]*TotYrs
+    numclusters <- floor(numCollections/ClusteredColl) # might underestimate
+    i <- 0
+    collectionyr_ix <- c(0)
+    while(i < numclusters){
+      clst <- floor(runif(1, min = 1, max = TotYrs-ClusteredColl+1)) # so floor will sometimes select largest value
+      testclust <- c(clst:(clst+ClusteredColl-1))
+      if(any(testclust %in% collectionyr_ix)){
+        i <- i
+      } else {
+        collectionyr_ix <- c(collectionyr_ix,testclust)
+        i <- i+1
+      }
+    }
+  }
+
+  # Good vs. bad - either determine the percent per good and bad after given clusters or just keep not in clusters and
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
   Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
 
     # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of recruitment to seed production
@@ -182,7 +201,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
             "Bad"
         } 
         yrs <- yrs+1
-        if(yrs > TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
+        if(yrs >= TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
         } # end while in a clustered collection cycle
     } ########## Cluster ###########
     } # Ends function
