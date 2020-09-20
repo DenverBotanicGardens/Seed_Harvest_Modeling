@@ -62,15 +62,21 @@ lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
 }
 
 # to test
-# GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-# Freq <- c(0.1,0.3)
-# Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
-# Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
-# TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
-# Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
-# StartPopSize <- 500
-# TotYrs <- 100
-# ClusteredColl <- 14
+GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+Freq <- c(0.1,0.3)
+Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
+TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
+Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
+StartPopSize <- 500
+TotYrs <- 100
+ClusteredColl <- 14
+Yr <- "Good"
+  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum)
+  mn_f <- mean(f_all) 
+  above_f <- which(f_all >= mn_f)
+  below_f <- which(f_all < mn_f)
+    vec <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
 # # 
 # rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(vec); rm(nx); rm(fecundMx)
 
@@ -85,7 +91,7 @@ AnnualTransition <-function(){
   
   # Freq[] is the likelihood to collect seed in good or bad years
   if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
-    fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix by the matrix without fecundity rate to get only fecundity rate
+    fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix (Mx) by the matrix without fecundity rate (TMx) to get only fecundity rate
     fecundMx <- fecundMx - fecundMx*Inten_m[Yr,] # Reduce all fecundity rates by intensity of harvest
     nx <- fecundMx + TMx_list[[Mx_i]] # add the reduced fecundity rates to the transition matrix that lacks the fecundity rate to get new transition matrix
   } else {
@@ -93,8 +99,8 @@ AnnualTransition <-function(){
     }
   
   # Multiply N_t+1 = Matrix*N_t; vec comes from the SeedHarvestSim function
-  vec <- nx%*%vec 
-  vec
+  vec <- floor(nx%*%vec)
+  list(vec, lambda(nx))
 }
 
 
@@ -127,31 +133,28 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     Freqs <- rep(NA,TotYrs)
     Intens <- rep(NA,TotYrs)
     PopSize <- rep(NA, TotYrs)
+    lambdas <- rep(NA, TotYrs)
     yrs <- 1
 
-  # if clustered collection then does not depend on good or bad, will collect during a bad year, all match the larger frequency or the average??
+  # if clustered collection then does not depend on good or bad, will collect during a bad year, all match the larger frequency
   if(ClusteredColl > 1){
     numCollections <- max(Freq)*TotYrs
     numclusters <- floor(numCollections/ClusteredColl) # might underestimate
     i <- 0
     collectionyr_ix <- c()
+    notavailable <- c()
     while(i < numclusters){
-      available <- setdiff((1:(TotYrs-ClusteredColl)),collectionyr_ix) # but need to substract ClusteredColl from each start (clst) 
+      available <- setdiff((1:(TotYrs-ClusteredColl)),notavailable) # but need to substract ClusteredColl from each start (clst) 
       clst <- sample(size = 1, x = available) # select from possible non-overlapping starts
-      testclust <- c(clst:(clst+ClusteredColl-1))
-      # if(any(diff(c(1,collectionyr_ix,TotYrs)) >ClusteredColl)){ # is there space for another non-overlapping cluster?
-        if(any(testclust %in% collectionyr_ix)){
-          i <- i
-          } else {
-          collectionyr_ix <- c(collectionyr_ix,testclust)
-          i <- i+1
-        } # possible to fit in clustered collection
-      } else {
+      notavailable <- c(notavailable, (clst-ClusteredColl):(clst+ClusteredColl-1))
+      collectionyr_ix <- c(collectionyr_ix,c(clst:(clst+ClusteredColl-1)))
+      i <- i+1
+      if(length(available)<ClusteredColl){
         warning("Cannot find non-overlapping cluster period, set at frequency")
-        collectionyr_ix <- sample()
-        i <- i+1
+        collectionyr_ix <- c(collectionyr_ix, sample(size = (numCollections-length(collectionyr_ix)), setdiff((1:TotYrs),collectionyr_ix)))
+        break
+        }
       } # allow adding overlappying cluster periods
-      }
     Freqs <- rep(0,TotYrs)
     Freqs[collectionyr_ix] <- 1
     
@@ -170,49 +173,47 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         Intens[yrs] <- Inten_m[Yr,]
       }
       if(ddceiling == TRUE){
-        if(sum(onetransition) < ceil){
-          vec <- onetransition
+        if(sum(onetransition[[1]]) < ceil){
+          vec <- onetransition[[1]]
           }
         } else {
-          vec <- onetransition
+          vec <- onetransition[[1]]
           } # done with density dependant ceiling
-      
-      PopSize[yrs] <- floor(sum(vec))
 
+      PopSize[yrs] <- floor(sum(vec))
+      lambdas[yrs] <- onetransition[[2]] 
       yrs <- yrs+1
-      # if(yrs >= TotYrs) break  # can't start a cluster if already at the end
       }
     } else {
-        ######################## Annual Transitions without clusters ######################
-        while(yrs <= TotYrs){
-          CollectYN <- rbinom(1,1,Freq_m[Yr,]) # this was in the Annual transition
-          onetransition <- AnnualTransition()
-          GBs[yrs] <- Yr
-          # CollectYN <- onetransition["CollectYN"][[1]] # no longer set within Annualtransion function
-          Freqs[yrs] <- CollectYN
-          if(CollectYN==1){
-            Intens[yrs] <- Inten_m[Yr,]
-          }
-          if(ddceiling == TRUE){
-            if(sum(onetransition["vec"][[1]][,1]) < ceil){
-              vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-              }
-            } else {
-              vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-              }
-          
-          PopSize[yrs] <- floor(sum(vec))
-          # Transition between good and bad years
-          Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
-            "Good"
+      ######################## Annual Transitions without clusters ######################
+      while(yrs <= TotYrs){
+        # Transition between good and bad years
+        Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+          "Good"
+        } else {
+            "Bad"
+          } 
+        CollectYN <- rbinom(1,1,Freq_m[Yr,]) # this was in the Annual transition
+        onetransition <- AnnualTransition()
+        GBs[yrs] <- Yr
+        Freqs[yrs] <- CollectYN
+        if(CollectYN==1){
+          Intens[yrs] <- Inten_m[Yr,]
+        }
+        if(ddceiling == TRUE){
+          if(sum(onetransition[[1]]) < ceil){
+            vec <- onetransition[[1]] # output is a matrix with one column of stage class numbers, needs to be a vector
+            }
           } else {
-              "Bad"
-            } 
-          yrs <- yrs+1
-          # if(yrs >= TotYrs) break  # can't start a cluster if already at the end
+            vec <- onetransition[[1]] # output is a matrix with one column of stage class numbers, needs to be a vector
+            }
+        
+        PopSize[yrs] <- sum(vec)
+        lambdas[yrs] <- onetransition[[2]]
+        yrs <- yrs+1
         }
       } # ends all annual transitions without clusters
-    SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs)
+    SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs, lambdas = lambdas)
     list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
     }
 
@@ -338,22 +339,21 @@ out <- do.call(rbind, lapply(1:10, function(x){
                            TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
                            Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
                            StartPopSize = 100,
-                           GoodBadTm = matrix(c(0.45,0.55,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))),
-                           Freq = c(.8,.1),
-                           Int = c(0.2,1),
+                           GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                           Freq = c(.5,.1),
+                           Int = c(0.6,1),
                            TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
-                           ClusteredColl = 10,
+                           ClusteredColl = 5,
                            ddceiling = TRUE)
   test_SPP[[1]]$Rep <- x
   test_SPP[[1]]
   }))
 
-table(test_SPP[[1]]$Frequency)
-
 ggplot(out, aes(Year, PopulationSize, colour= as.factor(Rep)))+
   geom_line()+
   theme_bw()+ 
   theme(legend.position="none")
+
 
 ```
 
