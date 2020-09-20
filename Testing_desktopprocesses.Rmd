@@ -70,7 +70,7 @@ lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
 # Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
 # StartPopSize <- 500
 # TotYrs <- 100
-# ClusteredColl <- 4
+# ClusteredColl <- 14
 # # 
 # rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(vec); rm(nx); rm(fecundMx)
 
@@ -134,11 +134,12 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     numCollections <- max(Freq)*TotYrs
     numclusters <- floor(numCollections/ClusteredColl) # might underestimate
     i <- 0
-    collectionyr_ix <- c(0)
+    collectionyr_ix <- c()
     while(i < numclusters){
-      clst <- floor(runif(1, min = 1, max = TotYrs-ClusteredColl+1)) # so floor will sometimes select largest value
+      available <- setdiff((1:(TotYrs-ClusteredColl)),collectionyr_ix) # but need to substract ClusteredColl from each start (clst) 
+      clst <- sample(size = 1, x = available) # select from possible non-overlapping starts
       testclust <- c(clst:(clst+ClusteredColl-1))
-      if((numclusters*ClusteredColl) < numCollections){
+      # if(any(diff(c(1,collectionyr_ix,TotYrs)) >ClusteredColl)){ # is there space for another non-overlapping cluster?
         if(any(testclust %in% collectionyr_ix)){
           i <- i
           } else {
@@ -146,8 +147,8 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
           i <- i+1
         } # possible to fit in clustered collection
       } else {
-        warning("Cannot find non-overlapping cluster period, frequency will be lower than expected")
-        collectionyr_ix <- c(collectionyr_ix,testclust)
+        warning("Cannot find non-overlapping cluster period, set at frequency")
+        collectionyr_ix <- sample()
         i <- i+1
       } # allow adding overlappying cluster periods
       }
