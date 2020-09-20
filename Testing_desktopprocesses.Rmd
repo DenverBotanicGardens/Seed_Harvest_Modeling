@@ -71,9 +71,8 @@ lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
 # StartPopSize <- 500
 # TotYrs <- 100
 # ClusteredColl <- 4
-# 
+# # 
 # rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(vec); rm(nx); rm(fecundMx)
-# # ; rm(seedbank); rm(fecundityRows)
 
 AnnualTransition <-function(){
   # above_f <- Mx_list[which(f_all >= mn_f)]  from the SeedHarvestSim function
@@ -98,10 +97,11 @@ AnnualTransition <-function(){
   vec
 }
 
+
 SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), 
                            TotYrs, ClusteredColl = 1, ddceiling = FALSE){
   # take the distribution of classes (likely the stable stage distribution) and scale to starting population size with integers
-  vec <- floor(Nx*(StartPopSize/sum(Nx))) 
+  vec <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
   # Annual transition function needs local environment variables
   environment(AnnualTransition) <- environment() 
 
@@ -138,16 +138,21 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     while(i < numclusters){
       clst <- floor(runif(1, min = 1, max = TotYrs-ClusteredColl+1)) # so floor will sometimes select largest value
       testclust <- c(clst:(clst+ClusteredColl-1))
-      if(any(testclust %in% collectionyr_ix)){
-        i <- i
+      if((numclusters*ClusteredColl) < numCollections){
+        if(any(testclust %in% collectionyr_ix)){
+          i <- i
+          } else {
+          collectionyr_ix <- c(collectionyr_ix,testclust)
+          i <- i+1
+        } # possible to fit in clustered collection
       } else {
+        warning("Cannot find non-overlapping cluster period, frequency will be lower than expected")
         collectionyr_ix <- c(collectionyr_ix,testclust)
         i <- i+1
+      } # allow adding overlappying cluster periods
       }
-    }
     Freqs <- rep(0,TotYrs)
     Freqs[collectionyr_ix] <- 1
-  
     
     while(yrs <= TotYrs){
       # Transition between good and bad years
@@ -217,7 +222,6 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
 
 
 ```{r}
-
 # Ellis et al. 2012 paper
 tm <- read.csv("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Kaye_transitionmatrices.csv")
 
@@ -286,7 +290,8 @@ x <- unique(tm$SPP)[3]
 ```
 
 
-```{r}
+
+```{r} 
 seedlingbins <- data.frame(SPP = unique(tm$SPP), seedlingBin = c(1,1,2,1,2,
                                                                  2,2,1,1,1,
                                                                  1,2,1,1,1,
@@ -315,8 +320,9 @@ avg.lifespan.sp <- aggregate(lifespan~SPP,data = lifelengthsXspecies, mean)
 sd.lifespan.sp <- aggregate(lifespan~SPP,data = lifelengthsXspecies, sd)
 
 lifespan.sp <- cbind(avg.lifespan.sp, SDlifespan = sd.lifespan.sp[,2])
-
 ```
+
+
 
 
 
@@ -326,14 +332,14 @@ Why would some population max out at different values?
 ```{r}
 
 sp <- unique(tm$SPP)[3]
-out <- do.call(rbind, lapply(1:100, function(x){
+out <- do.call(rbind, lapply(1:10, function(x){
   test_SPP <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
                            TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
                            Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
                            StartPopSize = 100,
                            GoodBadTm = matrix(c(0.45,0.55,0.45,0.55), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))),
-                           Freq = c(.75,.75),
-                           Int = c(1,1),
+                           Freq = c(.8,.1),
+                           Int = c(0.2,1),
                            TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
                            ClusteredColl = 10,
                            ddceiling = TRUE)
@@ -341,7 +347,7 @@ out <- do.call(rbind, lapply(1:100, function(x){
   test_SPP[[1]]
   }))
 
-
+table(test_SPP[[1]]$Frequency)
 
 ggplot(out, aes(Year, PopulationSize, colour= as.factor(Rep)))+
   geom_line()+
