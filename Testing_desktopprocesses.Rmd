@@ -95,10 +95,11 @@ AnnualTransition <-function(){
   
   # Multiply N_t+1 = Matrix*N_t; vec comes from the SeedHarvestSim function
   vec <- nx%*%vec 
-  list(vec = vec,CollectYN = CollectYN)
+  vec
 }
 
-SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), TotYrs, ClusteredColl = 1, ddceiling = FALSE){
+SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq = c(0,0), Int = c(0,0), 
+                           TotYrs, ClusteredColl = 1, ddceiling = FALSE){
   # take the distribution of classes (likely the stable stage distribution) and scale to starting population size with integers
   vec <- floor(Nx*(StartPopSize/sum(Nx))) 
   # Annual transition function needs local environment variables
@@ -108,9 +109,29 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
   #     Freq
   #Good X
   #Bad  Y
+  # Good vs. bad - either determine the percent per good and bad after given clusters or just keep not in clusters and
+  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
+  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
+
+    # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of recruitment to seed production
+  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum) # subtracting the matrices with fecundity from the matrices with all transitions leaves only the fecundity transitions
+  mn_f <- mean(f_all) 
+  #The index of above/equal and below average
+  above_f <- which(f_all >= mn_f)
+  below_f <- which(f_all < mn_f)
   
+    # Initialize 
+    ceil <- 10*StartPopSize
+    Yr <- "Good"
+    GBs <- rep(NA,TotYrs)
+    Freqs <- rep(NA,TotYrs)
+    Intens <- rep(NA,TotYrs)
+    PopSize <- rep(NA, TotYrs)
+    yrs <- 1
+
+  # if clustered collection then does not depend on good or bad, will collect during a bad year, all match the larger frequency or the average??
   if(ClusteredColl > 1){
-    numCollections <- Freq[1]*TotYrs
+    numCollections <- max(Freq)*TotYrs
     numclusters <- floor(numCollections/ClusteredColl) # might underestimate
     i <- 0
     collectionyr_ix <- c(0)
@@ -124,90 +145,70 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         i <- i+1
       }
     }
-  }
-
-  # Good vs. bad - either determine the percent per good and bad after given clusters or just keep not in clusters and
-  Freq_m <- matrix(Freq, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Freq")))
-  Inten_m <- matrix(Int, nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Inten")))
-
-    # fecundity is the cutoff (practical sense of a good year with lots of seed vs few seed produced) but this doesn't really tell me if there is high production of seed, it's the ratio of recruitment to seed production
-  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum) # subtracting the matrices with fecundity from the matrices with all transitions leaves only the fecundity transitions
-  mn_f <- mean(f_all) 
-  #The index of above/equal and below average
-  above_f <- which(f_all >= mn_f)
-  below_f <- which(f_all < mn_f)
+    Freqs <- rep(0,TotYrs)
+    Freqs[collectionyr_ix] <- 1
   
-  # Start with good; fill vectors to hold distribution of good or bad years, the frequency at which a year is harvested (CollectYN), the intensity or percentage fecundity is reduced selected from the good or bad rates (depending on which it is); and the population size which is saved in list 
-  ceil <- 10*StartPopSize
-  Yr <- "Good"
-  GBs <- rep(NA,TotYrs)
-  Freqs <- rep(NA,TotYrs)
-  Intens <- rep(NA,TotYrs)
-  PopSize <- rep(NA, TotYrs)
-  yrs <- 1
-  
-  ######################## Annual Transitions with clusters ######################
-  while(yrs <= TotYrs){
-    #Annual transition function returns a list of ["vec"] [[1]] the t+1 vector (number of individuals by class or bin) and ["CollectYN"] [[2]] 1/0 for CollectYN
-    CollectYN <- rbinom(1,1,Freq_m[Yr,]) # this was in the Annual transition
-    onetransition <- AnnualTransition()
-    GBs[yrs] <- Yr
-    # CollectYN <- onetransition["CollectYN"][[1]] # no longer set within Annualtransion function
-    Freqs[yrs] <- CollectYN
-    if(CollectYN==1){
-      Intens[yrs] <- Inten_m[Yr,]
-    }
-    if(ddceiling == TRUE){
-      if(sum(onetransition["vec"][[1]][,1]) < ceil){
-        vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-        }
-      } else {
-        vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-        }
     
-    PopSize[yrs] <- floor(sum(vec))
-    # Transition between good and bad years
-    Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
-      "Good"
-    } else {
-        "Bad"
-      } 
-    yrs <- yrs+1
-    if(yrs >= TotYrs) break  # can't start a cluster if already at the end
-
-        ########## Cluster ###########    
-    if(Freqs[yrs-1] == 1){
-      # start a cluster of collecting, values can be 1 (no clustering) to totyrs (same as 100% frequency)
-      clust <- 1 # start the consecutive years of clustered collecting
-      while(clust < ClusteredColl){
-        clust <- clust+1 
-        CollectYN <- 1
-        onetransitionCluster <- AnnualTransition()
-        GBs[yrs] <- Yr
-        Freqs[yrs] <- 1 # Must collect for consecutive years of a cluster
-        Intens[yrs] <- Inten_m[Yr,] # the intensity depends on if it's a "good" or "bad" year    
-        if(ddceiling == TRUE){
-          if(sum(onetransition["vec"][[1]][,1]) < ceil){
-            vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-            }
-          } else {
-            vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
-            }
-        PopSize[yrs] <- floor(sum(vec))
-        # Transition between good and bad years
-        Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
-          "Good"
+    while(yrs <= TotYrs){
+      # Transition between good and bad years
+      Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+        "Good"
+      } else {
+          "Bad"
+        } # Make next a good or bad year
+      
+      CollectYN <- Freqs[yrs] # this was in the Annual transition
+      onetransition <- AnnualTransition()
+      GBs[yrs] <- Yr
+      if(CollectYN==1){
+        Intens[yrs] <- Inten_m[Yr,]
+      }
+      if(ddceiling == TRUE){
+        if(sum(onetransition) < ceil){
+          vec <- onetransition
+          }
         } else {
-            "Bad"
-        } 
-        yrs <- yrs+1
-        if(yrs >= TotYrs) break # if starting a cluster towards the end, needs to stop when total years is reached
-        } # end while in a clustered collection cycle
-    } ########## Cluster ###########
-    } # Ends function
-  SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs)
-  list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
-  }
+          vec <- onetransition
+          } # done with density dependant ceiling
+      
+      PopSize[yrs] <- floor(sum(vec))
+
+      yrs <- yrs+1
+      # if(yrs >= TotYrs) break  # can't start a cluster if already at the end
+      }
+    } else {
+        ######################## Annual Transitions without clusters ######################
+        while(yrs <= TotYrs){
+          CollectYN <- rbinom(1,1,Freq_m[Yr,]) # this was in the Annual transition
+          onetransition <- AnnualTransition()
+          GBs[yrs] <- Yr
+          # CollectYN <- onetransition["CollectYN"][[1]] # no longer set within Annualtransion function
+          Freqs[yrs] <- CollectYN
+          if(CollectYN==1){
+            Intens[yrs] <- Inten_m[Yr,]
+          }
+          if(ddceiling == TRUE){
+            if(sum(onetransition["vec"][[1]][,1]) < ceil){
+              vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
+              }
+            } else {
+              vec <- onetransition["vec"][[1]][,1] # output is a matrix with one column of stage class numbers, needs to be a vector
+              }
+          
+          PopSize[yrs] <- floor(sum(vec))
+          # Transition between good and bad years
+          Yr <- if(rbinom(1,1,GoodBadTm[Yr,1])==1){
+            "Good"
+          } else {
+              "Bad"
+            } 
+          yrs <- yrs+1
+          # if(yrs >= TotYrs) break  # can't start a cluster if already at the end
+        }
+      } # ends all annual transitions without clusters
+    SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs)
+    list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
+    }
 
 
 ```
