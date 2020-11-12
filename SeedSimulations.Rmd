@@ -260,6 +260,7 @@ m2 <- strsplit(m1, ";")  # remove the ";" that separates rows
 # Tmx: Annual trnasition matrix with transition probabilities, no fecundity
 # Nx: Vector of observed stage structures (counts in each stage); must be at the start
 
+# NA for unobserved stages
 Nx_all <- lapply(1:nrow(tm), function(i){
   v1 <- gsub("\\[|\\]", "", tm$Nx[i])
   v2 <- sapply(v1, function(x) strsplit(trimws(x,"l"), " ")) 
@@ -267,6 +268,7 @@ Nx_all <- lapply(1:nrow(tm), function(i){
   v3
 })
 
+#CIPI get rid of the matrix with different number of stages, do that on its own, most have 3, one population has 6, rename species CIPI3 and CIPI6
 Nx_names <- lapply(1:nrow(tm), function(i){
   spp <- tm$SPP[i]
   pop <- tm$POP[i]
@@ -274,13 +276,21 @@ Nx_names <- lapply(1:nrow(tm), function(i){
   paste(spp, pop, yr)
 })
 
+# Nx_all[grep("CIPI", unlist(Nx_names))][which(sapply(Nx_all[grep("CIPI", unlist(Nx_names))], function(x) length(x))==3)]
+
+# which(sapply(Nx_all[grep("CIPI", unlist(Nx_names))], function(x) length(x))==3)
+# which(sapply(Nx_all[grep("CIPI", unlist(Nx_names))], function(x) length(x))==6)
+
+Nx_names[grep("CIPI", Nx_names)][1:30] <- str_replace_all(Nx_names[grep("CIPI", Nx_names)][1:30], "CIPI", "CIPI3")
+Nx_names[grep("CIPI", Nx_names)][31:35] <- str_replace_all(Nx_names[grep("CIPI", Nx_names)][31:35], "CIPI", "CIPI6")
+
+Nx_all[grep("CIPI3", unlist(Nx_names))]
+Nx_all[grep("CIPI6", unlist(Nx_names))]
+
+tm$SPP[grep("CIPI", tm$SPP)][1:30] <- "CIPI3"
+tm$SPP[grep("CIPI", tm$SPP)][31:35] <- "CIPI6"
+
 names(Nx_all) <- Nx_names
-
-# Validate structure of matrices with an example
-# Nx_all[[100]]
-# Nx_names[[100]] # Dicerandra fruitescens: short lived (<10 years); fire; recorded quarterly; 6 identified stages: (1) seed bank, seedlings, (3) vegetative, (4) small fl, (5) med fl, (6) large fl.; seedbank from simulation see Menges et al. 2006
-# TMx_all[grep("NEMA", unlist(Nx_names))][1] %*% Nx_all[grep("NEMA", unlist(Nx_names))][1]
-
 
 # Transitions without fecundity
 TMx_all <- sapply(1:nrow(tm), function(i){
@@ -291,7 +301,22 @@ TMx_all <- sapply(1:nrow(tm), function(i){
   m4
 }, simplify =FALSE, USE.NAMES = TRUE)
 
+
+#CIPI get rid of the matrix with different number of stages, do that on its own, most have 3, one population has 6, rename species CIPI3 and CIPI6
+# TMx_all[grep("CIPI", unlist(Nx_names))][which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==3)]
+# which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==3)
+# which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==6)
+# Nx_names[grep("CIPI", Nx_names)][1:30] <- str_replace_all(Nx_names[grep("CIPI", Nx_names)][1:30], "CIPI", "CIPI3")
+# Nx_names[grep("CIPI", Nx_names)][31:35] <- str_replace_all(Nx_names[grep("CIPI", Nx_names)][31:35], "CIPI", "CIPI6")
+# TMx_all[grep("CIPI3", unlist(Nx_names))]
+# TMx_all[grep("CIPI6", unlist(Nx_names))]
+
 names(TMx_all) <- Nx_names
+
+sp_info <- rbind(sp_info, sp_info[sp_info$SPP == "CIPI",])
+sp_info$SPP[sp_info$SPP == "CIPI"][1] <- "CIPI3" 
+sp_info$SPP[sp_info$SPP == "CIPI"] <- "CIPI6" 
+
 
 # Transitions and fecundity
 Mx_all <- sapply(1:nrow(tm), function(i){
@@ -303,7 +328,7 @@ Mx_all <- sapply(1:nrow(tm), function(i){
 }, simplify =FALSE, USE.NAMES = TRUE)
 
 names(Mx_all) <- Nx_names
-Mx_all[grep("ASSC", names(Mx_all))]
+Mx_all[grep("CIPI", names(Mx_all))]
 
 lambdas <- sapply(Mx_all, function(x) lambda(x), simplify = FALSE, USE.NAMES = TRUE)
 
@@ -427,7 +452,7 @@ for(i in  unique(tm$SPP)){
 Levels: ARFE ASSC ASTY CIPI CYFA DIFR ERCU GEPN HARA HOCO HYCU LAVE LISC LOCO NEMA PHEM PHIN SIAC SISP TRGR    
     
 ARFE 1    
-CIPI 1    
+CIPI3 1    
 ASSC 2 (stage 1 is dormant)  
 CYFA 1    
 DIFR 2 fire kills and post-fire recruitment from soil seed bank   
@@ -448,20 +473,20 @@ SIAC 2
 SISP 1 dormancy is hopefully the 4th stage    
 PHIN 2      
 PHEM 2      
-TRGR 1    
+TRGR 1 - but the first is germinants that are estimated with destructive sampling of seed baskets 
+CIPI6 1
 
 ```{r}
+
+
 # Enter plants as seedlings, not as seed
 seedlingbins <- data.frame(SPP = unique(tm$SPP), seedlingBin = c(1,1,2,1,2,
                                                                  2,2,1,1,1,
                                                                  1,2,1,1,1,
-                                                                 2,1,2,2,1))
+                                                                 2,1,2,2,1,
+                                                                 1))
 
-sp_info[sp_info$SPP == "NEMA",]
-Nx_names[grep("NEMA", Nx_names)]
-bySites <- sapply(Nx_names, function(x) strsplit(x, " ")[[1]][2])
-# unique(tm$POP)
-# p<-unique(tm$POP)[1];rm(p)
+apply(Nx_all, 1, function(x) which(is.na(x[[1]])))
 
 lifelengthsXmatrix <- do.call(rbind,lapply(1:length(Mx_all), function(i){
   data.frame(Lifespan = lifespanMPM(Mx_all[i], TMx_all[i], 
@@ -582,34 +607,32 @@ pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography
 # sp <- "ARFE"
 # rep <- 1
 
-#CIPI get rid of the matrix with different number of stages, do that on its own, most have 3, one population has 6
-TMx_all[grep("CIPI", unlist(Nx_names))][which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==3)]
 
-lapply(unique(tm$SPP)[-2], function(sp){
-  bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
-  # lapply(0, function(FrG){
-    # avgInt <- lapply(0, function(avgInt){
-      outdf <- do.call(rbind,lapply(1:100, function(rep){
-        outSimulation <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+SimSimple <- function(HarvestType = "No", sppVector = unique(tm$SPP)[-2], FrG = 0, FrB = 0, intG = 0, intB = 0, 
+                      AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100){
+  lapply(sppVector, function(sp){
+    bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
+      outdf <- do.call(rbind,lapply(1:reps, function(rep){
+        outSimulation <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
                                         TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
                                         Nx_list = Nx_all[grep(sp, unlist(Nx_names))],
                                         Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
                                         StartPopSize = popsz,
-                                        GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), 
+                                        GoodBadTm = matrix(Cgg_gb_bg_bb, 
                                                            nrow=2, byrow = TRUE, 
                                                            dimnames = list(c("Good","Bad"),
                                                                            c("Good","Bad"))),
-                                        Freq = c(0,0), # c(FrG,0),
-                                        Int = c(0,0), # c(intG,intB),
+                                        Freq = c(FrG,FrB), Int = c(intG,intB), 
                                         TotYrs = 50*(floor(lifespan.sp$Lifespan[lifespan.sp$SPP==sp])),
                                         ClusteredColl = 1, # clust,
                                         ddceiling = FALSE)
-        save(outSimulation, file = paste(pathstart,"NoHarvest_",sp,"PopSz",popsz,"Rep",rep,".Rdata", sep="")) #"AvgInt",avgInt,"Freq",FrG,"
-        
+        save(outSimulation, file = paste(pathstart,HarvestType,"Harvest_",sp,"PopSz",popsz,"Rep",rep,
+                                         "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
+                                         "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),
+                                         ".Rdata", sep=""))
         # Damping ratio
         AMx <- mean(outSimulation[[6]])
         dampR <- eigen(AMx)$values[1]/abs(eigen(AMx)$values[2])
-     
         outSimulation[[1]]$Rep <- rep
         outSimulation[[1]]$SPP <- sp
         if(any(outSimulation[[1]]$PopulationSize==0)){
@@ -623,26 +646,30 @@ lapply(unique(tm$SPP)[-2], function(sp){
         out <- data.frame(Tulapprox = outSimulation$LogGrowthRate$approx, 
                           Exterpated, Time2Ext, 
                           DampingRatio = as.numeric(dampR),
-                          FreqG = 0, FreqB = 0, 
-                          IntG = 0, IntB = 0,
+                          FreqG = FrG, FreqB = FrB, 
+                          IntG = intG, IntB = intB,
                           SPP = sp, Clust = 1, StPopSz = popsz, lifespan = floor(lifespan.sp$Lifespan[lifespan.sp$SPP==sp]),
                           Frequency = 0, IntRatio = 0)# Int[1]/Int[2])
         rm(outSimulation)
         out
-        # list(out, outSimulation[[1]])
         })) # end replicates
       outdf
-      # save(out, file = paste(pathstart,"NoHarvest_",sp,"PopulationStart",popsz,"AvgInt",avgInt,"Freq",FrG,".Rdata", sep=""))
-      # }) # end average intensity
-    # }) # end frequency of good
-  })) # end popsz 
+      })) # end popsz 
   # bypopsz
-  save(bypopsz, file = paste(pathstart, "NoHarvest",sp,".Rdata", sep=""))
+  save(bypopsz, file = paste(pathstart, HarvestType,"Harvest",sp,
+                             "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
+                             "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),
+                             ".Rdata", sep=""))
   }) # end species
+}
+
+
+
+SimSimple(HarvestType = "No", sppVector = c("CIPI3","CIPI6"))
 
 # load to bind and plot
 toplot <- do.call(rbind, lapply(unique(tm$SPP)[1], function(sp){
-  load(paste(pathstart, "NoHarvest", sp, ".Rdata", sep=""))
+  load(paste(pathstart, HarvestType,"Harvest", sp, ".Rdata", sep=""))
   bypopsz
   }))
 
