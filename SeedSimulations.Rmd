@@ -769,6 +769,8 @@ Best to run on desktop, not on laptop
 # Figures   
 Plot Equal harvest compared to no harvest   
 ```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
 HarvestType <- "SameGB"
 files <- list.files(path = pathstart, pattern = paste(HarvestType, "Harvest", sep=""))
 files <- files[!grepl("SameGBHarvestFr0.75_0In", files)] # accidentally made some called Same but not same
@@ -788,10 +790,10 @@ toplotNoharvest <-  do.call(rbind, lapply(filesNoHarvest, function(x){
 }))
 toplot <- rbind(toplot, toplotNoharvest)
 table(toplot$IntG, toplot$FreqG, toplot$SPP)
-head(toplot) # Note that 'lifespan' really means generation time
+# head(toplot) # Note that 'lifespan' really means generation time
 
-filesNoHarvest[grep("SEER", filesNoHarvest)]
-files[grep("SameGBHarvestFr0.75_0In", files)]
+# filesNoHarvest[grep("SEER", filesNoHarvest)]
+# files[grep("SameGBHarvestFr0.75_0In", files)]
 
 
 toplot$LifeHistory <- "Annual"
@@ -803,11 +805,34 @@ toplot$LifeHistory <- factor(toplot$LifeHistory, levels = c("Annual","Short-live
 # all values as standardized mean difference from no harvest or the z-score of everyone from no harvest
 names(toplot)
 
-
 ggplot(toplot, aes(lifespan, DampingRatio, colour = as.factor(StPopSz )))+
   geom_point()+
   stat_smooth()
 
+toplot$IntFreq <- paste(toplot$IntG,toplot$FreqG,sep = "_")
+unique(toplot$IntFreq)
+
+
+# --------------------------------- cumulative distributions ----------------------
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaCDF.jpg",
+  ggplot(toplot, aes(Tulapprox, colour = as.factor(FreqG), linetype  = as.factor(IntG),
+                     size = as.factor(IntG), alpha = as.factor(IntG)))+
+    stat_ecdf()+
+    facet_wrap(~LifeHistory, ncol = 1)+
+    theme_bw()+
+    scale_color_manual(values = c("black","red","orange","darkgreen","blue"),
+                       name = "Intensity \n of harvest")+
+    scale_linetype_manual(values = c("solid","longdash","dashed","dotted", "dotdash","twodash"),
+                          name = "Probability \n of harvest")+
+    scale_size_manual(values = c(2,rep(1,5)),guide = "none")+
+    scale_alpha_manual(values = c(1,0.95,0.95,0.95,0.95,0.95), guide = "none")+
+    ylab("Empirical cumulative distribution")+
+    xlab("Stochastic Lambda \n (simulations of 50 generations)"),
+width=175, height=150,units='mm', dpi=300)
+  
+## Can I do a bifercating analysis to classify PDFs (or cumulative distribution curves) into groups and see if annuals and some split of lifespan comes out? 
+
+# Not needed
 # ------------------------------------- Z-score -----------------------------------
 # Stochastic lambda not changing by population starting size
 for(sp in unique(toplot$SPP)){
@@ -822,27 +847,60 @@ for(sp in unique(toplot$SPP)){
 }
 
 
+save(toplot, file = paste(pathstart,"DF_toplot_equal.Rdata", sep=""))
+
 # ------------------------------------ Effect size -----------------------------------
 # Effect size is the change in correlation coefficient (r^2) (change in r^2)/(1-r^2 of full model)
 # <https://stats.stackexchange.com/questions/95054/how-to-get-an-overall-p-value-and-effect-size-for-a-categorical-factor-in-a-mi> 
 # LifeHistory offset is 
-glm1 <- lmer(TulapproxSMD ~ IntG + FreqG + (1|SPP), data = toplot)
-glm2 <- lmer(TulapproxSMD ~ IntG + FreqG + (1|LifeHistory), data = toplot)
-glm3 <- lmer(TulapproxSMD ~ IntG + FreqG + LifeHistory + (1|SPP), data = toplot)
+# glm1 <- lmer(TulapproxSMD ~ IntG + FreqG + (1|SPP), data = toplot)
+# glm2 <- lmer(TulapproxSMD ~ IntG + FreqG + (1|LifeHistory), data = toplot)
+# glm3 <- lmer(TulapproxSMD ~ IntG + FreqG + LifeHistory + (1|SPP), data = toplot)
+# 
+# summary(glm2)
+# summary(glm3)
+# 
+# # Effect size
+# r2.corr.mer <- function(m) {
+#   lmfit <-  lm(model.response(model.frame(m)) ~ fitted(m))
+#   summary(lmfit)$r.squared
+# }
+# 
+# r2.corr.mer(glm1)
+# 1-var(residuals(glm1))/(var(model.response(model.frame(glm1))))
 
-summary(glm2)
-summary(glm3)
+# ------------------------------------ Frequency or Intensity, which matters more? ------------------
 
-# Effect size
-r2.corr.mer <- function(m) {
-  lmfit <-  lm(model.response(model.frame(m)) ~ fitted(m))
-  summary(lmfit)$r.squared
-}
+require(AICcmodavg)
 
-r2.corr.mer(glm1)
-1-var(residuals(glm1))/(var(model.response(model.frame(glm1))))
+# offset for intercept for either every spp is different or differs by generation time 
+lm1 <- lm(Tulapprox  ~ IntG + FreqG + SPP, data = toplot)
+lm2 <- lm( Tulapprox ~ IntG + FreqG + LifeHistory, data = toplot)
+lm3 <- lm( Tulapprox ~ IntG + SPP, data = toplot)
+lm4 <- lm( Tulapprox ~ FreqG + SPP, data = toplot)
+lm5 <- lm( Tulapprox ~ IntG + LifeHistory, data = toplot)
+lm6 <- lm( Tulapprox ~ FreqG + LifeHistory, data = toplot)
+lm7 <- lm( Tulapprox ~ FreqG + IntG + lifespan, data = toplot) # Where lifespan is really generation time from
+lm8 <- lm( Tulapprox ~ IntG + lifespan, data = toplot) # Where lifespan is really generation time from
+lm9 <- lm( Tulapprox ~ FreqG + lifespan, data = toplot) # Where lifespan is really generation time from popbio::generation.time
+# different slopes and intercepts?
+lm10 <- lm( Tulapprox ~ (IntG + FreqG) * SPP, data = toplot)
+lm11 <- lm( Tulapprox ~ (IntG + FreqG) * LifeHistory, data = toplot)
+lm12 <- lm( Tulapprox ~ IntG * SPP, data = toplot)
+lm13 <- lm( Tulapprox ~ FreqG * SPP, data = toplot)
+lm14 <- lm( Tulapprox ~ IntG * LifeHistory, data = toplot)
+lm15 <- lm( Tulapprox ~ FreqG * LifeHistory, data = toplot)
+lm16 <- lm( Tulapprox ~ (FreqG + IntG) * lifespan, data = toplot) # Where lifespan is really generation time from
+lm17 <- lm( Tulapprox ~ IntG * lifespan, data = toplot) # Where lifespan is really generation time from
+lm18 <- lm( Tulapprox ~ FreqG * lifespan, data = toplot) # Where lifespan is really generation time from popbio::generation.time
+
+lm.list <- list(lm1,lm2,lm3,lm4,lm5,lm6,lm7,lm8,lm9,lm10,lm11,lm12,lm13,lm14,lm15,lm16,lm17,lm18)
+# lm.list <- do.call(as.name,list(paste("lm",1:18,sep="")))
+lm.names <- as.character(unlist(lapply(lm.list, formula)))
+(lm.results <- aictab(lm.list, modnames = lm.names))
 
 # ---------------------------------------------------------------------------------------
+
 
 StochLamNo <- ggplot(toplot, aes(IntG, TulapproxSMD,colour = as.factor(FreqG)))+ # fill = as.factor(FreqG), group = as.factor(FreqG),
     # geom_boxplot(position = position_dodge2())+ 
@@ -926,7 +984,15 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
        width=100, height=100,units='mm', dpi=300)
 ```
 
+# Which describes different more, frequency or intensity?   
+```{r}
+head(toplot)
+head(extinctionrisk)
 
+
+```
+
+some are "OnlyGood", "OnlyGB", and some "Same" do not have equal good and bad intensity and frequencies, need to cut out wrong ones (nervous to delete them!)
 
 Unequal harvest
 
