@@ -304,6 +304,9 @@ tm$SPP[grep("CIPI", tm$SPP)][1:30] <- "CIPI3"
 tm$SPP[grep("CIPI", tm$SPP)][31:35] <- "CIPI6"
 tm$SPP <- as.factor(tm$SPP)
 
+
+
+
 names(Nx_all) <- Nx_names
 
 # Transitions without fecundity
@@ -314,8 +317,11 @@ TMx_all <- sapply(1:nrow(tm), function(i){
   m4 <- matrix(as.numeric(unlist(m3)), nrow = length(m3[[1]][[1]]), byrow = TRUE)
   m4
 }, simplify =FALSE, USE.NAMES = TRUE)
+names(TMx_all) <- Nx_names
 
-
+table(tm$SPP)
+table(tm$POP)
+length(TMx_all[grep("CIPI", names(TMx_all))])
 #CIPI get rid of the matrix with different number of stages, do that on its own, most have 3, one population has 6, rename species CIPI3 and CIPI6
 # TMx_all[grep("CIPI", unlist(Nx_names))][which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==3)]
 # which(sapply(TMx_all[grep("CIPI", unlist(Nx_names))], function(x) dim(x))[1,]==3)
@@ -325,7 +331,6 @@ TMx_all <- sapply(1:nrow(tm), function(i){
 # TMx_all[grep("CIPI3", unlist(Nx_names))]
 # TMx_all[grep("CIPI6", unlist(Nx_names))]
 
-names(TMx_all) <- Nx_names
 
 sp_info$SPP <- as.character(sp_info$SPP)
 sp_info <- rbind(sp_info, sp_info[sp_info$SPP == "CIPI",])
@@ -356,43 +361,6 @@ x <- unique(tm$SPP)[3]
 
 ```
 
-To create a generation time function
-```{r}
-library(matlib)
-
-# Identity matrix
-I <- diag(length(Nx_all[[1]]))
-# Inverse matrix exists when det(A) != 0
-if(det(Mx_all[[1]]) != 0) AI <- inv(Mx_all[[1]])
-Mx_all[[1]]
-TMx_all[[1]]
-AI
-# 
-eigen(Mx_all[[1]])
-# Asymptotic growth rate
-lambda(Mx_all[[1]])
-# stable stage distribution (w: right eigen vector)
-stable.stage(Mx_all[[1]])
-# Relative contribution of individuals in each stage to future population growth (v: left eigenvector)
-# Arabis fecunda stage 4 reproduces into any of the stage classes, transitions from any size to another
-reproductive.value(Mx_all[[1]])
-
-
-Nx_names[[100]] # Dicerandra frutescens
-eigen(Mx_all[[100]])
-lambda(Mx_all[[100]])
-stable.stage(Mx_all[[100]])
-reproductive.value(Mx_all[[100]]) # seedbank, seedlings, small, flowering sm, med fl, large fl
-generation.time(Mx_all[[100]])
-
-# Life history traits from stage based matrices; all will differ for different newborn types, none depend on stable stage
-# P_x: discrete survivorship function
-# expected remaining life-span of an individual in stage i
-# mean age at maturity
-# f_x: discrete maternity function
-# R_o: net reproductive rate
-
-```
 
 ```{r}
 # how would I expect species to respond to pop size and harvest?   
@@ -620,15 +588,16 @@ Arabis fecunda - short lived, no seed bank, no dormancy, fecundity are number of
 
 pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
 
+rm(sp)
+
 # to accommodate annuals and addition species to the Ellis paper
 # lifespan is really generation time
 SimSimple <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, FrB = 0, intG = 0, intB = 0, 
-                      AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs,
-                      Simlength = 50*(floor(lifespan.sp$generationTime[lifespan.sp$SPP==sp])), 
-                      lifespan = floor(lifespan.sp$generationTime[lifespan.sp$SPP==sp])){
+                      AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs){
   lapply(sppVector, function(sp){
     bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
       outdf <- do.call(rbind,lapply(1:reps, function(repNow){
+        lifespan <- floor(lifespan.sp$generationTime[lifespan.sp$SPP==sp])
         outSimulation <- SeedHarvestSim(Mx_list = Mxs,
                                         TMx_list = TMxs,
                                         Nx_list = Nxs,
@@ -639,7 +608,7 @@ SimSimple <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, F
                                                            dimnames = list(c("Good","Bad"),
                                                                            c("Good","Bad"))),
                                         Freq = c(FrG,FrB), Int = c(intG,intB), 
-                                        TotYrs = Simlength,
+                                        TotYrs = 50*(floor(lifespan.sp$generationTime[lifespan.sp$SPP==sp])),
                                         ClusteredColl = 1, # clust,
                                         ddceiling = FALSE)
         # save(outSimulation, file = paste(pathstart,HarvestType,"Harvest_",sp,"PopSz",popsz,"Rep",rep,
@@ -689,6 +658,8 @@ Figures pre-harvest conditions
 ```{r}
 # SimSimple(HarvestType = "No", sppVector = unique(tm$SPP)[1:3], reps = 10)
 
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
 # load to bind and plot
 HarvestType <- "No"
 files <- list.files(path = pathstart, pattern = paste(HarvestType, "Harvest", sep=""))
@@ -697,15 +668,13 @@ toplotNo <- do.call(rbind, lapply(files, function(x){
   bypopsz
   }))
 
-model <- glm(DampingRatio ~ lifespan, data = toplotNo, family = poisson)
-summary(model)
-# 
+
 DRpNo <-
 ggplot(toplotNo, aes(lifespan, DampingRatio))+ #
   geom_jitter(height = 0, width = 1, alpha = 0.04, shape = 20)+
   # stat_smooth(method = "glm", family = "quasipoisson", formula = y ~ ns(x, 3))+
   # geom_smooth(method = MASS::glm.nb, aes(color = "NB"), se = FALSE)+
-  geom_line(aes(y=fitted(model)))+
+  # geom_line(aes(y=fitted(model)))+
   theme_bw()+
   ylab("Damping Ratio")+
   xlab("Generation Time")
@@ -713,15 +682,28 @@ ggplot(toplotNo, aes(lifespan, DampingRatio))+ #
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/DampingRatioNoharvest.jpg", DRpNo,
            width=100, height=100,units='mm', dpi=300)
 
-# , colour = as.factor(StPopSz)
-ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvest.jpg",
-       ggplot(toplotNo, aes(lifespan, Tulapprox ))+
+stochlambda_all <- ggplot(toplotNo, aes(lifespan, Tulapprox ))+
          geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
-         stat_smooth(method = "glm")+
+         # stat_smooth(method = "glm")+
          theme_bw()+
-         ylab("Log stochastic growth rate \n (Tuljapukar's approximation)")+
-         xlab("Generation Time"), width=100, height=100,units='mm', dpi=300)
+         ylab(expression(paste("ln(",lambda,")"), sep=""))+ # stochastic growth rate \n (Tuljapukar's approximation)")+
+         xlab("Generation span")+
+  ggtitle("a)")
+  
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvest.jpg",
+       stochlambda_all, width=100, height=100,units='mm', dpi=300)
 # 
+
+stochlambda_all_trans <-        ggplot(toplotNo, aes(lifespan, exp(Tulapprox) ))+
+         geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+         # stat_smooth(method = "glm")+
+         theme_bw()+
+         ylab(expression(lambda))+
+         xlab("Generation span")+
+  ggtitle("a)")
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvestexp.jpg",
+stochlambda_all_trans, width=100, height=100,units='mm', dpi=300)
+
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Time2ExtNoharvest.jpg",
        ggplot(toplotNo, aes(as.factor(StPopSz), Time2Ext))+
          geom_boxplot()+
@@ -731,13 +713,162 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
          ylab("Time to extinction (< 1)")+
          xlab("Starting population size"), width=300, height=300,units='mm', dpi=300)
 
+t2ext_all <-        ggplot(toplotNo, aes(lifespan, Time2Ext))+
+         # geom_boxplot()+
+         theme_bw()+
+         facet_wrap(~as.factor(StPopSz))+ #, scales = "free")+
+         geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+         ylab("Time to extinction (< 1)")+
+         xlab("Generation span")+
+    ggtitle("a)")
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Time2ExtNoharvestall.jpg",t2ext_all, 
+       width=100, height=100,units='mm', dpi=300)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Generations2ExtNoharvest_popsize.jpg",
+       ggplot(toplotNo, aes(as.factor(StPopSz), Time2Ext/lifespan, colour = lifespan))+
+         geom_jitter(height = 0, width = 0.3, size = 0.5)+ #alpha = 0.85, ,  shape = 16
+         # geom_boxplot(alpha = 0.5)+
+         theme_bw()+
+         ylab("Generations to extinction \n (population < 1)")+
+         xlab("Population size")+
+         scale_colour_gradient2(low = "green", mid = "blue", high = "orange",
+                                midpoint = 40), width=130, height=100,units='mm', dpi=300)
+
+
+t2ext_loggeneration_all <-  ggplot(toplotNo, aes(as.factor(StPopSz), log(Time2Ext/lifespan), colour = lifespan))+
+         geom_jitter(height = 0, width = 0.3, size = 0.5)+ #alpha = 0.85, ,  shape = 16
+         # geom_boxplot(alpha = 0.5)+
+         theme_bw()+
+         ylab("log generations to extinction \n (population < 1)")+
+         xlab("Population size")+
+         # scale_colour_gradient2(low = "green", mid = "blue", high = "orange",
+         #                        midpoint = 40), 
+         scale_colour_gradientn(colours = c("cyan","yellow","gold","red","blue"),
+                                breaks = c(1,1.01,10,40,86.63166),
+                                labels = c(1, "", 10, 40, 80))
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/logGenerations2ExtNoharvest_popsize.jpg",
+      t2ext_loggeneration_all,
+      width=130, height=100,units='mm', dpi=300)
 
 extinctionrisk <- aggregate(Exterpated ~ SPP + StPopSz + FreqG + FreqB + IntG + IntB + lifespan, function(x) sum(x)/length(x) ,data =  toplotNo)
+
+nrow(extinctionrisk[extinctionrisk$Exterpated > 0 & extinctionrisk$StPopSz == 10,]) # 23
+nrow(extinctionrisk[extinctionrisk$Exterpated > 0 & extinctionrisk$StPopSz == 50,]) # 20
+nrow(extinctionrisk[extinctionrisk$Exterpated > 0 & extinctionrisk$StPopSz == 100,]) # 20
+nrow(extinctionrisk[extinctionrisk$Exterpated > 0 & extinctionrisk$StPopSz == 500,]) # 16
+
+
 
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ExtRiskNoharvest.jpg",
 ggplot(extinctionrisk, aes(lifespan, Exterpated))+
   # geom_smooth(method=MASS::glm.nb, se = FALSE)+
-  stat_smooth(method="glm", family="binomial", formula=y~log(x),se=FALSE)+
+  stat_smooth(method="glm", formula=y~log(x),se=FALSE)+
+  theme_bw()+
+  facet_wrap(~as.factor(StPopSz))+
+  geom_point()+
+  xlab("Generation Time")+
+  ylab("Extinction Risk"),
+           width=100, height=100,units='mm', dpi=300)
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ExtRiskNoharvest_bysize.jpg",
+ggplot(extinctionrisk, aes(lifespan, Exterpated))+
+  stat_smooth(method="glm", formula=y~log(x),se=FALSE)+
+  theme_bw()+
+  facet_wrap(~as.factor(StPopSz))+
+  geom_point()+
+  xlab("Generation Time")+
+  ylab("Extinction Risk"),
+           width=100, height=100,units='mm', dpi=300)
+
+```
+
+# ---------------- Does it make a difference if we only do 100 years for each one instead of 50 generations -----------------
+Figures pre-harvest conditions
+```{r}
+
+pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
+
+# load to bind and plot
+HarvestType <- "No100years"
+files <- list.files(path = pathstart100, pattern = paste(HarvestType, "Harvest", sep=""))
+toplotNo100yrs <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart100,x,sep = ""))
+  bypopsz
+  }))
+
+stochlambda100yrs <-        ggplot(toplotNo100yrs, aes(lifespan, exp(Tulapprox) ))+
+  geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+  theme_bw()+
+  ylab(expression(lambda) )+ # "Lambda \n (Tuljapukar's approximation transformed)")+
+  xlab("Generation span")+
+  ggtitle("b)")
+  
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvestexp100yrs.jpg",
+       stochlambda_all_trans  + stochlambda100yrs 
+       , width=150, height=75,units='mm', dpi=300)
+
+time2ext100yrs <-        ggplot(toplotNo100yrs, aes(lifespan, Time2Ext))+
+         # geom_boxplot()+
+         theme_bw()+
+         facet_wrap(~as.factor(StPopSz))+ #, scales = "free")+
+         geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+         ylab("Time to extinction (< 1)")+
+         xlab("Generation span")+
+         ggtitle("b)")
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Time2ExtNoharvestall100yrs.jpg",
+       t2ext_all + time2ext100yrs, width=200, height=100,units='mm', dpi=300)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Generations2ExtNoharvest_popsize.jpg",
+       ggplot(toplotNo100yrs, aes(as.factor(StPopSz), Time2Ext/lifespan, colour = lifespan))+
+         geom_jitter(height = 0, width = 0.3, size = 0.5)+ #alpha = 0.85, ,  shape = 16
+         # geom_boxplot(alpha = 0.5)+
+         theme_bw()+
+         ylab("Generations to extinction \n (population < 1)")+
+         xlab("Population size")+
+         scale_colour_gradient2(low = "green", mid = "blue", high = "orange",
+                                midpoint = 40), width=130, height=100,units='mm', dpi=300)
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/logGenerations2ExtNoharvest_popsize.jpg",
+       ggplot(toplotNo100yrs, aes(as.factor(StPopSz), log(Time2Ext/lifespan), colour = lifespan))+
+         geom_jitter(height = 0, width = 0.3, size = 0.5)+ #alpha = 0.85, ,  shape = 16
+         # geom_boxplot(alpha = 0.5)+
+         theme_bw()+
+         ylab("log generations to extinction \n (population < 1)")+
+         xlab("Population size")+
+         # scale_colour_gradient2(low = "green", mid = "blue", high = "orange",
+         #                        midpoint = 40), 
+         scale_colour_gradientn(colours = c("cyan","yellow","gold","red","blue"),
+                                breaks = c(1,1.01,10,40,86.63166),
+                                labels = c(1, "", 10, 40, 80)),
+       width=130, height=100,units='mm', dpi=300)
+
+extinctionrisk100yrs <- aggregate(Exterpated ~ SPP + StPopSz + FreqG + FreqB + IntG + IntB + lifespan, function(x) sum(x)/length(x) ,data =  toplotNo100yrs)
+
+nrow(extinctionrisk100yrs[extinctionrisk100yrs$Exterpated > 0 & extinctionrisk100yrs$StPopSz == 10,]) # 23
+nrow(extinctionrisk100yrs[extinctionrisk100yrs$Exterpated > 0 & extinctionrisk100yrs$StPopSz == 50,]) # 20
+nrow(extinctionrisk100yrs[extinctionrisk100yrs$Exterpated > 0 & extinctionrisk100yrs$StPopSz == 100,]) # 20
+nrow(extinctionrisk100yrs[extinctionrisk100yrs$Exterpated > 0 & extinctionrisk100yrs$StPopSz == 500,]) # 16
+
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ExtRiskNoharvest.jpg",
+ggplot(extinctionrisk100yrs, aes(lifespan, Exterpated))+
+  # geom_smooth(method=MASS::glm.nb, se = FALSE)+
+  stat_smooth(method="glm", formula=y~log(x),se=FALSE)+
+  theme_bw()+
+  facet_wrap(~as.factor(StPopSz))+
+  geom_point()+
+  xlab("Generation Time")+
+  ylab("Extinction Risk"),
+           width=100, height=100,units='mm', dpi=300)
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ExtRiskNoharvest_bysize.jpg",
+ggplot(extinctionrisk100yrs, aes(lifespan, Exterpated))+
+  stat_smooth(method="glm", formula=y~log(x),se=FALSE)+
   theme_bw()+
   facet_wrap(~as.factor(StPopSz))+
   geom_point()+
@@ -748,23 +879,20 @@ ggplot(extinctionrisk, aes(lifespan, Exterpated))+
 ```
 
 # seed collection only in good years   Pre-2020.11.15
-Old version, add levels between 0.1, 0.25, 0.5, 0.75, 0.9 as needed   
-Best to run on desktop, not on laptop
-```{r}
 
-# pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
-# 
-# # ONly got through GEPN for Freq 0.2, Int 0.2. Might need to do fewer
-# 
-# #Intensity of 0.1 to 1; Frequency 0.1 to 0.9: wouldn't ever do 100 of seed 100 of the time
-# lapply(seq(0.1,1, by = 0.1), function(intG){
-#   lapply(seq(0.1,1, by = 0.1), function(FrG){
-#   SimSimple(HarvestType = "GoodYrOnly", sppVector = unique(tm$SPP), intG = intG, FrG = FrG )
-#   })
-#   })
+# Biased in good or bad, equal an average   
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
+# load to bind and plot
+HarvestType <- "BiasAvg"
+files <- list.files(path = pathstart, pattern = paste(HarvestType, "Harvest", sep=""))
+toplotNo <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart,x,sep = ""))
+  bypopsz
+  }))
 
 ```
-
 
 # Figures   
 Plot Equal harvest compared to no harvest   
@@ -830,7 +958,75 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
     xlab("Stochastic Lambda \n (simulations of 50 generations)"),
 width=175, height=150,units='mm', dpi=300)
   
-## Can I do a bifercating analysis to classify PDFs (or cumulative distribution curves) into groups and see if annuals and some split of lifespan comes out? 
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaCDFall.jpg",
+  ggplot(toplot, aes(exp(Tulapprox), colour = as.factor(FreqG), linetype  = as.factor(IntG),
+                     size = as.factor(IntG), alpha = as.factor(IntG)))+
+    stat_ecdf()+
+    theme_bw()+
+    scale_color_manual(values = c("black","red","orange","darkgreen","blue"),
+                       name = "Intensity \n of harvest")+
+    scale_linetype_manual(values = c("solid","longdash","dashed","dotted", "dotdash","twodash"),
+                          name = "Probability \n of harvest")+
+    scale_size_manual(values = c(2,rep(1,5)),guide = "none")+
+    scale_alpha_manual(values = c(1,0.95,0.95,0.95,0.95,0.95), guide = "none")+
+    ylab("Empirical cumulative distribution")+
+    xlab("Growth Rate \n (simulations of 50 generations)"),
+width=175, height=150,units='mm', dpi=300)
+
+ksresulttable <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75, 0.9), function(i){
+  fout <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75), function(f){
+    testout <- ks.test(toplot$Tulapprox[toplot$FreqG==0 & toplot$IntG == 0],
+        toplot$Tulapprox[toplot$FreqG==f & toplot$IntG == i],
+        alternative = "less")
+    dfout <- data.frame(Freq = f, Int = i, D = testout$statistic, p = testout$p.value)
+  }))
+  fout
+}))
+
+ksresulttableannuals <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75, 0.9), function(i){
+  fout <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75), function(f){
+      testout <- ks.test(toplot$Tulapprox[toplot$FreqG==0 & toplot$IntG == 0 & toplot$lifespan == 1],
+                         toplot$Tulapprox[toplot$FreqG==f & toplot$IntG == i & toplot$lifespan == 1],
+                         alternative = "less")
+      dfout <- data.frame(Freq = f, Int = i, D = testout$statistic, p = testout$p.value)
+      }))
+  fout
+  }))
+
+
+ksresulttableshort <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75, 0.9), function(i){
+  fout <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75), function(f){
+      testout <- ks.test(toplot$Tulapprox[toplot$FreqG==0 & toplot$IntG == 0 & toplot$lifespan > 1& toplot$lifespan < 11],
+                         toplot$Tulapprox[toplot$FreqG==f & toplot$IntG == i & toplot$lifespan > 1& toplot$lifespan < 11],
+                         alternative = "less")
+      dfout <- data.frame(Freq = f, Int = i, D = testout$statistic, p = testout$p.value)
+      }))
+  fout
+  }))
+
+
+ksresulttableslong <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75, 0.9), function(i){
+  fout <- do.call(rbind,lapply(c(0.1,0.25,0.5,0.75), function(f){
+      testout <- ks.test(toplot$Tulapprox[toplot$FreqG==0 & toplot$IntG == 0 & toplot$lifespan > 9],
+                         toplot$Tulapprox[toplot$FreqG==f & toplot$IntG == i & toplot$lifespan > 9],
+                         alternative = "less")
+      dfout <- data.frame(Freq = f, Int = i, D = testout$statistic, p = testout$p.value)
+      }))
+  fout
+  }))
+
+table(toplot$FreqG,toplot$IntG)
+nrow(lifespan.sp[lifespan.sp$generationTime < 10,]) # 12
+nrow(lifespan.sp[lifespan.sp$generationTime >9,]) # 10
+
+
+test1 <- ks.test(toplot$Tulapprox[toplot$FreqG==0 & toplot$IntG == 0],
+        toplot$Tulapprox[toplot$FreqG==0.9 & toplot$IntG == 0.75],
+        alternative = "less")
+test1$statistic
+
+## Can I do a bifurcating analysis to classify PDFs (or cumulative distribution curves) into groups and see if annuals and some split of lifespan comes out? 
 
 # Not needed
 # ------------------------------------- Z-score -----------------------------------
