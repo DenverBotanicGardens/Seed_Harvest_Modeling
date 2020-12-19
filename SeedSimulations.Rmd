@@ -357,9 +357,19 @@ fecundity <- mapply(function(x,y){
   rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
   }, Mx_all, TMx_all)
 
-x <- unique(tm$SPP)[3]
+# x <- unique(tm$SPP)[3]
 
 ```
+
+Keyfitz's delta is sum of differences between stable stage distribution (dominant right eigenvector of A) and the provided demographic distribution vector of the population; better might be Cohen's cumulative distance metric
+```{r}
+library(popdemo)
+
+mapply(function(M,N) Keyfitz.delta(M, N), Mx_all, Nx_all)
+KeyfitzD(Mx_all[[1]], Nx_all[[1]])
+
+```
+
 
 
 ```{r}
@@ -653,6 +663,161 @@ SimSimple <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, F
 }
 
 ```
+
+
+
+
+# ---------------------- Figures 100 years vs. 50 generations ------------------------- 
+
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+# load to bind and plot
+HarvestType <- "No"
+files <- list.files(path = pathstart, pattern = paste(HarvestType, "Harvest", sep=""))
+toplotNo <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart,x,sep = ""))
+  bypopsz
+  }))
+stochlambda_all <- ggplot(toplotNo, aes(lifespan, exp(Tulapprox) ))+
+  geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+  theme_bw()+
+  ylab(expression(lambda))+ # stochastic growth rate \n (Tuljapukar's approximation)")+
+  xlab("Generation time")+
+  ggtitle("b) Simulation 50 generations")+
+  facet_wrap(~StPopSz)
+
+pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
+# load to bind and plot
+HarvestType <- "No100years"
+files <- list.files(path = pathstart100, pattern = paste(HarvestType, "Harvest", sep=""))
+toplotNo100yrs <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart100,x,sep = ""))
+  bypopsz
+  }))
+stochlambda100yrs <- ggplot(toplotNo100yrs, aes(lifespan, exp(Tulapprox) ))+
+  geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+  theme_bw()+
+  ylab(expression(lambda) )+ 
+  # theme(axis.text.y = element_text(angle = 90))+
+  xlab("Generation time")+
+  ggtitle("a) Simulation 100 years")+
+  facet_wrap(~StPopSz)
+  
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvest_100yrs50gen.jpg",
+       
+       stochlambda100yrs +stochlambda_all, 
+       
+       width=200, height=100,units='mm', dpi=300)
+
+
+Simlength_100yr_50gen <- rbind(data.frame(SimLength = "100yrs", toplotNo100yrs),
+                               data.frame(SimLength = "50gen", toplotNo))
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/StochLambdaNoharvest_ECDF_100yrs50gen.jpg",
+ggplot(Simlength_100yr_50gen, aes(exp(Tulapprox), colour = SimLength))+
+  stat_ecdf()+
+  facet_wrap(~StPopSz)+
+  theme_bw()+
+  xlab(expression(lambda) )+ 
+  ylab("Empirical cumulative distribution")+
+  scale_colour_discrete(name = "Simulation length"), 
+width=100, height=80,units='mm', dpi=300)
+  
+
+# ----------------- Damping ratio ---------------------
+damprat100yrs <- ggplot(toplotNo100yrs, aes(lifespan, DampingRatio ))+
+  geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+  theme_bw()+
+  ylab(expression(rho) )+ 
+  xlab("Generation time")+
+  ggtitle("a) Simulation 100 years")
+# +
+#   facet_wrap(~StPopSz)
+
+damprat50gen <- ggplot(toplotNo, aes(lifespan, DampingRatio ))+
+  geom_jitter(height = 0, width = 0.5, alpha = 0.4, shape = 20)+
+  theme_bw()+
+  ylab(expression(rho) )+ 
+  xlab("Generation time")+
+  ggtitle("b) Simulation 50 generations")
+# +
+  # facet_wrap(~StPopSz)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/DampingRatio_100yrs50gen.jpg",
+       
+       damprat100yrs +damprat50gen, 
+       
+       width=200, height=100,units='mm', dpi=300)
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/DampingRatio_ECDF_100yrs50gen.jpg",
+       ggplot(Simlength_100yr_50gen, aes(DampingRatio,colour = SimLength))+
+          stat_ecdf()+
+          facet_wrap(~StPopSz)+
+          theme_bw()+
+          xlab(expression(lambda) )+ 
+          ylab("Empirical cumulative distribution")+
+          scale_colour_discrete(name = "Damping Ratio"), 
+width=100, height=80,units='mm', dpi=300)
+
+
+
+# -------------------- Extinction risk --------------------
+extinctionrisk100yrs50gen <- aggregate(Exterpated ~ SimLength + SPP + StPopSz + FreqG + FreqB + IntG + IntB + lifespan, 
+                                  function(x) sum(x)/length(x), data =  Simlength_100yr_50gen)
+
+extrisk_100yr50gen <- ggplot(extinctionrisk100yrs50gen, aes(lifespan, Exterpated, colour = SimLength))+
+  geom_jitter(height = 0, width = 0.5)+
+  stat_smooth(method="glm", formula=y~log(x),se=FALSE)+
+  theme_bw()+
+  xlab("Generation time")+
+  ylab("Extinction Risk")+
+  facet_wrap(~StPopSz)+
+  scale_colour_discrete(name = "Simulation length")
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ExtinctionRiskNoharvest_100yrs50gen.jpg",
+       extrisk_100yr50gen,
+       width=200, height=100,units='mm', dpi=300)
+
+
+```
+
+# Compare baseline to harvest levels at 100 years and 50 generations   
+```{r}
+HarvestType <- "SameGB"
+files <- list.files(path = pathstart, pattern = paste(HarvestType, "Harvest", sep=""))
+files <- files[!grepl("SameGBHarvestFr0.75_0In", files)] # accidentally made some called Same but not same
+files <- files[!grepl("SameGBHarvestFr0.5_0In", files)] # accidentally made some called Same but not same
+files <- files[!grepl("SameGBHarvestFr0.25_0In", files)] # accidentally made some called Same but not same
+files <- files[!grepl("SameGBHarvestFr0.1_0In", files)] # accidentally made some called Same but not same
+toplotSame50Gen <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart,x,sep = ""))
+  bypopsz
+}))
+
+HarvestType <- "SameGB100"
+files <- list.files(path = pathstart100, pattern = paste(HarvestType, "Harvest", sep=""))
+toplotSame100yrs <- do.call(rbind, lapply(files, function(x){
+  load(file = paste(pathstart100,x,sep = ""))
+  bypopsz
+  }))
+
+table(toplotSame100yrs$FreqG, toplotSame100yrs$IntG)
+table(toplotSame50Gen$FreqG, toplotSame50Gen$IntG)
+
+
+
+```
+
+
+
+
+
+
+
+
+
 
 Figures pre-harvest conditions
 ```{r}
