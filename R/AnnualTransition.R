@@ -17,6 +17,7 @@
 #' 
 #' @return 
 
+
 AnnualTransition <-function(){
   # above_f <- Mx_list[which(f_all >= mn_f)]  from the SeedHarvestSim function get index of one above 
   # below_f <- Mx_list[which(f_all < mn_f)]   from the SeedHarvestSim function get index of one below
@@ -44,3 +45,31 @@ AnnualTransition <-function(){
   }
   list(vec, lambda(nx), projmat = nx)
 }
+
+# AnnualTransition <-function(){
+#   # above_f <- Mx_list[which(f_all >= mn_f)]  from the SeedHarvestSim function get index of one above 
+#   # below_f <- Mx_list[which(f_all < mn_f)]   from the SeedHarvestSim function get index of one below
+#   if(Yr == "Good"){
+#     Mx_i <- sample(above_f, 1) # randomly sample from the high fecundity transition matrices
+#   } else {
+#     Mx_i <- sample(below_f, 1)
+#   }
+#   
+#   # Freq[] is the likelihood to collect seed in good or bad years
+#   if(CollectYN == 1){  # yes collect, reduce fecuntity by the year good or bad
+#     fecundMx <- Mx_list[[Mx_i]] - TMx_list[[Mx_i]] # Subtract the transition matrix (Mx) by the matrix without fecundity rate (TMx) to get only fecundity rate
+#     fecundMx <- fecundMx - fecundMx*Inten_m[Yr,] # Reduce all fecundity rates by intensity of harvest
+#     nx <- fecundMx + TMx_list[[Mx_i]] # add the reduced fecundity rates to the transition matrix that lacks the fecundity rate to get new transition matrix
+#   } else {
+#     nx <- Mx_list[[Mx_i]]
+#   }
+#   K <- 100*StartPopSize  # maximum population size
+#   if(ddceiling == TRUE & sum(vec[!is.na(Nx_list[[1]])]) >= K*0.9){
+#     vec.t1 <- floor(nx%*%vec)
+#     vec <- floor(vec.t1/(lambda(nx))*(1+(lambda(nx)-1)*(1-(sum(vec[!is.na(Nx_list[[1]])])/K ))))  # dominant eigenvalue is lambda and the same as eigen(nx)$values[1]; what now? 1+(lambda(nx)-1) is just lambda(nx)
+#   } else {
+#     # Multiply N_t+1 = Matrix*N_t; vec comes from the SeedHarvestSim function
+#     vec <- floor(nx%*%vec)
+#   }
+#   list(vec, lambda(nx), projmat = nx)
+# }

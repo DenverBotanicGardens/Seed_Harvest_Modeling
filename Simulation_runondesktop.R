@@ -553,6 +553,13 @@ script <- getURL("https://raw.githubusercontent.com/DenverBotanicGardens/Seed_Ha
 # ---------------- No Harvest for only 100 years  ------------
 SimSimple100(HarvestType = "No100years", sppVector = unique(tm$SPP)[-1],  Mxs = Mx_all, TMxs = TMx_all, Nxs = Nx_all)
 
+SimSimple100(HarvestType = "100yearsRandomNx", sppVector = unique(tm$SPP)[-1],  Mxs = Mx_all, TMxs = TMx_all, Nxs = Nx_all, stablestagestart = FALSE)
+
+
+SimSimple100(HarvestType = "No10years", sppVector = unique(tm$SPP)[-1],  Mxs = Mx_all, TMxs = TMx_all, Nxs = Nx_all, Simlength = 10)
+
+SimSimple100(HarvestType = "10yearsRandomNx", sppVector = unique(tm$SPP)[-1],  Mxs = Mx_all, TMxs = TMx_all, Nxs = Nx_all, Simlength = 10, stablestagestart = FALSE)
+
 
 # --------------- Need to adjust simple100 to add new species without the lifespan.sp table ----------------------
 # lifespan is really generation time
