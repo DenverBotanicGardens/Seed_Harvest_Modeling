@@ -4,8 +4,15 @@ Nx <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
 
 SimSimple100 <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, FrB = 0, intG = 0, intB = 0, 
                          AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs,
-                         Simlength = 100, stablestagestart = TRUE){  
+                         Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
   lapply(sppVector, function(sp){
+    if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mx_sample))
+    if(stablestagestart == FALSE) Nx_start <- sample(Nxs,1)[[1]]
+    if(generationspan == TRUE) {
+      projlength <- floor(Simlength * gentim)
+    } else {
+      projlength <- Simlength
+    }
     bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
       outdf <- do.call(rbind,lapply(1:reps, function(repNow){
         if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))]))
@@ -53,7 +60,7 @@ SimSimple100 <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0
       outdf
     })) # end bypopsz 
     # bypopsz
-    save(bypopsz, file = paste(pathstart100, HarvestType,"Harvest",
+    save(bypopsz, file = paste(ps, HarvestType,"Harvest",
                                "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
                                "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),sp,
                                ".Rdata", sep=""))
