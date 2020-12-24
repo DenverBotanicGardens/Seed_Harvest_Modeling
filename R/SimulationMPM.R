@@ -2,11 +2,12 @@
 Nx_list <- Nx_all[grep(sp, unlist(Nx_names))]
 Nx <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
 
-SimSimple100 <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, FrB = 0, intG = 0, intB = 0, 
+# stop doing all species at once, just one at a time
+SimSimple <- function(HarvestType = "No", sppVector = sp, FrG = 0, FrB = 0, intG = 0, intB = 0, 
                          AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs,
                          Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
   lapply(sppVector, function(sp){
-    if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mx_sample))
+    if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mxs))
     if(stablestagestart == FALSE) Nx_start <- sample(Nxs,1)[[1]]
     if(generationspan == TRUE) {
       projlength <- floor(Simlength * gentim)
@@ -15,11 +16,11 @@ SimSimple100 <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0
     }
     bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
       outdf <- do.call(rbind,lapply(1:reps, function(repNow){
-        if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))]))
+        if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mxs))
         if(stablestagestart == FALSE) Nx_start <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
-        outSimulation <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
-                                        TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
-                                        Nx_list = Nx_all[grep(sp, unlist(Nx_names))],
+        outSimulation <- SeedHarvestSim(Mx_list = Mxs,
+                                        TMx_list = TMxs,
+                                        Nx_list = Nxs,
                                         Nx = Nx_start,
                                         StartPopSize = popsz,
                                         GoodBadTm = matrix(Cgg_gb_bg_bb, 
@@ -27,7 +28,7 @@ SimSimple100 <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0
                                                            dimnames = list(c("Good","Bad"),
                                                                            c("Good","Bad"))),
                                         Freq = c(FrG,FrB), Int = c(intG,intB), 
-                                        TotYrs = Simlength,
+                                        TotYrs = projlength,
                                         ClusteredColl = 1, # clust,
                                         ddceiling = FALSE)
         # Damping ratio
@@ -166,6 +167,7 @@ SimSimpleVirtual <- function(HarvestType = "No", MatrixType, FrG = 0, FrB = 0, i
           projlength <- Simlength
         }
         outSimulation <- SeedHarvestSim(Mx_list = Mx_sample,
+                                        # The TMx are transition matrices without fecundity, virtual species only have largest as fecundity
                                         TMx_list = lapply(Mx_sample, function(i){ 
                                           i[1,4] <- 0
                                           i
