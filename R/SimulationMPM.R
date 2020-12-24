@@ -2,11 +2,12 @@
 Nx_list <- Nx_all[grep(sp, unlist(Nx_names))]
 Nx <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
 
-# stop doing all species at once, just one at a time
-SimSimple <- function(HarvestType = "No", sppVector = sp, FrG = 0, FrB = 0, intG = 0, intB = 0, 
+# stop doing all species at once, just one at a time, sppVector should just be character of what the species is
+SimSimple <- function(HarvestType = "No", sppVector, FrG = 0, FrB = 0, intG = 0, intB = 0, 
                          AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs,
                          Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
   lapply(sppVector, function(sp){
+    gentim <- popbio::generation.time(mean(Mx_sample))
     if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mxs))
     if(stablestagestart == FALSE) Nx_start <- sample(Nxs,1)[[1]]
     if(generationspan == TRUE) {
@@ -53,7 +54,7 @@ SimSimple <- function(HarvestType = "No", sppVector = sp, FrG = 0, FrB = 0, intG
                           FreqG = FrG, FreqB = FrB, 
                           IntG = intG, IntB = intB,
                           SPP = sp, Clust = 1, StPopSz = popsz, 
-                          lifespan = floor(lifespan.sp$generationTime[lifespan.sp$SPP==sp]),
+                          generationtime = gentim,
                           Frequency = 0, IntRatio = 0)# Int[1]/Int[2])
         rm(outSimulation)
         out
