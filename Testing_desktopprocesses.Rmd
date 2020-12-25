@@ -62,21 +62,21 @@ lifespanMPM <- function(Mx, TMx, seedlingBin = 1){
 }
 
 # to test
-GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
-Freq <- c(0.1,0.3)
-Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
-Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
-TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
-Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
-StartPopSize <- 500
-TotYrs <- 100
-ClusteredColl <- 14
-Yr <- "Good"
-  f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum)
-  mn_f <- mean(f_all) 
-  above_f <- which(f_all >= mn_f)
-  below_f <- which(f_all < mn_f)
-    vec <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+# GoodBadTm <- matrix(c(0.45,0.55,0.35,0.65), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad")))
+# Freq <- c(0.1,0.3)
+# Int <- c(0.2,0.5)   # Collect 20% of seed (i.e. reduce fecundity by 20%) if a good year colleciton and by 50% if a bad year collection
+# Mx_list <- Mx_all[grep("DIFR", unlist(Nx_names))]
+# TMx_list <- TMx_all[grep("DIFR", unlist(Nx_names))]
+# Nx <- stable.stage(mean(Mx_all[grep("DIFR", unlist(Nx_names))]))
+# StartPopSize <- 500
+# TotYrs <- 100
+# ClusteredColl <- 14
+# Yr <- "Good"
+#   f_all <- apply(mapply(function(x,y) x-y, Mx_list, TMx_list), 2, sum)
+#   mn_f <- mean(f_all) 
+#   above_f <- which(f_all >= mn_f)
+#   below_f <- which(f_all < mn_f)
+#     vec <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
 # # 
 # rm(GoodBadTm); rm(Freq); rm(Int); rm(Mx_list); rm(TMx_list); rm(Nx); rm(StartPopSize); rm(TotYrs); rm(ClusteredColl); rm(vec); rm(nx); rm(fecundMx)
 
@@ -100,7 +100,7 @@ AnnualTransition <-function(){
   
   # Multiply N_t+1 = Matrix*N_t; vec comes from the SeedHarvestSim function
   vec <- floor(nx%*%vec)
-  list(vec, lambda(nx))
+  list(vec, lambda(nx), projmat = nx)
 }
 
 
@@ -134,6 +134,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
     Intens <- rep(NA,TotYrs)
     PopSize <- rep(NA, TotYrs)
     lambdas <- rep(NA, TotYrs)
+    mats <- list()
     yrs <- 1
 
   # if clustered collection then does not depend on good or bad, will collect during a bad year, all match the larger frequency
@@ -182,6 +183,7 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
 
       PopSize[yrs] <- floor(sum(vec))
       lambdas[yrs] <- onetransition[[2]] 
+      mats[[yrs]] <- onetransition[[3]]
       yrs <- yrs+1
       }
     } else {
@@ -210,11 +212,14 @@ SeedHarvestSim <- function(Mx_list, TMx_list, Nx, StartPopSize, GoodBadTm, Freq 
         
         PopSize[yrs] <- sum(vec)
         lambdas[yrs] <- onetransition[[2]]
+        mats[[yrs]] <- onetransition[[3]]
         yrs <- yrs+1
         }
       } # ends all annual transitions without clusters
-    SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs, lambdas = lambdas)
-    list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize)
+    SimDF <- data.frame(GB_yrs = GBs, Frequency = Freqs, Intensity = Intens, PopulationSize = PopSize, Year = 1:TotYrs, 
+                        lambdas = lambdas)
+    list(SimDF, FreqGB = Freq, IntGB = Int, GBMx = GoodBadTm, StartingPopSize = StartPopSize, 
+         LogGrowthRate = stoch.growth.rate(mats, verbose=FALSE)) # $approx is log stochastic growth rate by Tuljapukar's approximation; $sim and CI
     }
 
 
@@ -333,30 +338,163 @@ I think my clustered collections is wrong -> I still had stochastic selection of
 Why would some population max out at different values?  
 ```{r}
 
-sp <- unique(tm$SPP)[3]
-out <- do.call(rbind, lapply(1:10, function(x){
-  test_SPP <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
-                           TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
-                           Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
-                           StartPopSize = 100,
-                           GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), nrow=2, byrow = TRUE, dimnames = list(c("Good","Bad"), c("Good","Bad"))),
-                           Freq = c(.5,.1),
-                           Int = c(0.6,1),
-                           TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
-                           ClusteredColl = 5,
-                           ddceiling = TRUE)
-  test_SPP[[1]]$Rep <- x
-  test_SPP[[1]]
-  }))
+# sp <- unique(tm$SPP)[3]
+cores <- detectCores()-1
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
 
-ggplot(out, aes(Year, PopulationSize, colour= as.factor(Rep)))+
-  geom_line()+
-  theme_bw()+ 
-  theme(legend.position="none")
+##Aaaah, need to ahve random selection of intB and intG for each of the 500 runs, not the same for each1
+lapply(unique(tm$SPP)[-2], function(sp){ # [-2]CIPI has one population with different number of stages
+  lapply(seq(0.1,0.9,by=0.1), function(FrG){  # seq(0.1,0.4,by=0.1)
+    lapply(c(10, 50, 100, 500), function(popsz){ # commondeering for population size # c(1,3,5), function(clust)
+      lapply(seq(0.1,0.9,by=0.1), function(avgInt){ # seq(0.1,1,by=0.1)
+        cl <- makeCluster(cores)
+        registerDoParallel(cl)
+        out <- foreach(x = 1:500, .packages = c("popbio"),
+                       .export = c(ls(globalenv()),"FrG","sp","popsz"),
+                       # .combine = "c", .multicombine = FALSE) %dopar% {
+                       .combine = "rbind") %dopar% {
+                         intB <- round(runif(1, min = 0, max = min((2*avgInt),1)),2); intG <- 2*avgInt - intB; if(intG>1) intG <- 1
+                     
+                         test_SPP <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                                    TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                                    Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                                    StartPopSize = popsz, # 100,
+                                                    GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), 
+                                                                       nrow=2, byrow = TRUE, 
+                                                                       dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                                                    Freq = c(FrG,0), #c(0,0),
+                                                    Int = c(intG,intB), # c(0,0), # 
+                                                    TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
+                                                    ClusteredColl = 1, # clust,
+                                                    ddceiling = TRUE)
+                         test_SPP[[1]]$Rep <- x
+                                          Exterpated <- if(any(test_SPP[[1]]$PopulationSize==0)){
+                                            1
+                                          } else {
+                                            0
+                                          } 
+                                          out <- data.frame(Tulapprox = test_SPP$LogGrowthRate$approx, Exterpated, Rep = x, FreqG = FrG,
+                                                            FreqB = 0, IntG = intG, IntB = intB, SPP = sp, Clust = 1, # clust,
+                                                            Frequency = FrG, IntRatio = intG/intB) # 0)
+                                          # list(out, test_SPP[[1]])
+                                          out
+                                     }
+                                  on.exit(stopCluster(cl))
+                                  
+                                  #  save(out, file = paste(pathstart,"Harvest_",sp,"Cluster",clust,"AvgInt",avgInt,"Freq",FrG,".Rdata", sep="")) # got through HARA on this
+                                  save(out, file = paste(pathstart,"Harvest_",sp,"PopulationStart",popsz,"AvgInt",avgInt,"Freq",FrG,".Rdata", sep=""))
+                                  
+                                  }) # End across avg intensity
+      }) # End across cluster size
+    }) # End across Frequency
+  })
+# 
+# cl <- makeCluster(cores)
+# registerDoParallel(cl)
+
+ # need one set of 1000 replicates with no harvest per species
+  outNo <- foreach(x = 1:1000, .packages = c("popbio"),
+                   .export = c(ls(globalenv())),
+                   .combine = "rbind") %dopar% {
+                     noHarvest <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))],
+                                                 TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                                Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                                StartPopSize = 100,
+                                                GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), 
+                                                                  nrow=2, byrow = TRUE, 
+                                                                  dimnames = list(c("Good","Bad"), c("Good","Bad"))),
+                                                Freq = c(0,0),
+                                                Int = c(0,0),
+                                                TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
+                                                ClusteredColl = 1,
+                                                ddceiling = TRUE)
+                      noHarvest[[1]]$Rep <- x
+                      Exterpated <- if(any(noHarvest[[1]]$PopulationSize==0)){
+                        1
+                      } else {
+                        0
+                      } 
+                      out <- data.frame(Tulapprox = noHarvest$LogGrowthRate$approx, Exterpated, Rep = x, FreqG = 0,
+                                        FreqB = 0, IntG = 0, IntB = 0, SPP = sp, Clust = 1,
+                                        Frequency = FrG, IntRatio = Int[1]/Int[2])
+                      out
+                      }
+                on.exit(stopCluster(cl))
+                save(outNo, file(paste(pathstart,"noHarvest_",sp,".Rdata",sep="")))
 
 
+# 
+# simOut <- do.call(rbind,lapply(FUN=function(x) x[[2]], out))
+# table(simOut$GB_yrs, simOut$Rep)
+# 
+# aggregate(lambdas~Rep, mean, data=simOut)
+# aggregate(lambdas~Rep, var, data=simOut)
+# 
+# ggplot(simOut, aes(Year, PopulationSize, colour= as.factor(Rep)))+
+#   geom_line()+
+#   theme_bw()+
+#   theme(legend.position="none")
+# 
+# Lams <- do.call(rbind, lapply(out, function(x) x[[1]]))
+# 
+# hist(out$Tulapprox)
+# sum(out$Exterpated)/(length(out$Exterpated))
 ```
 
+
+# Start simple, save everything 
+```{r}
+
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
+# popsz <- 10
+lapply(seq(0.1,0.5,by=0.1), function(int){
+lapply(seq(0.1,1,by=0.1), function(FrG){
+lapply(unique(tm$SPP)[-2], function(sp){
+  bypopsz <- lapply(c(10,50,100,500), function(popsz){
+  # lapply(0, function(FrG){
+    # avgInt <- lapply(0, function(avgInt){
+      out <- lapply(1:100, function(rep){
+        outSimulation <- SeedHarvestSim(Mx_list = Mx_all[grep(sp, unlist(Nx_names))], 
+                                        TMx_list = TMx_all[grep(sp, unlist(Nx_names))],
+                                        Nx_list = Nx_all[grep(sp, unlist(Nx_names))],
+                                        Nx = stable.stage(mean(Mx_all[grep(sp, unlist(Nx_names))])),
+                                        StartPopSize = popsz,
+                                        GoodBadTm = matrix(c(0.5,0.5,0.5,0.5), 
+                                                           nrow=2, byrow = TRUE, 
+                                                           dimnames = list(c("Good","Bad"),
+                                                                           c("Good","Bad"))),
+                                        Freq = c(FrG,0), # c(FrG,0),
+                                        Int = c(int,int), # c(intG,intB),
+                                        TotYrs = 50*(floor(lifespan.sp$lifespan[lifespan.sp$SPP==sp])),
+                                        ClusteredColl = 1, # clust,
+                                        ddceiling = TRUE)
+        outSimulation[[1]]$Rep <- rep
+        outSimulation[[1]]$SPP <- sp
+        Exterpated <- if(any(outSimulation[[1]]$PopulationSize==0)){
+          1
+          } else {
+            0
+            } 
+        out <- data.frame(Tulapprox = outSimulation$LogGrowthRate$approx, 
+                          Exterpated, FreqG = 0,
+                          FreqB = Freq[2], IntG = 0, #intG, 
+                          IntB = 0, # intB,
+                          SPP = sp, Clust = 1, # clust,
+                          Frequency = 0, IntRatio = 0)# Int[1]/Int[2])
+        list(out, outSimulation[[1]])
+        }) # end replicates
+      out
+                           
+      # }) # end average intensity
+    # }) # end frequency of good
+  }) # end popsz 
+  save(bypopsz, file = paste(pathstart, "Harvestlistoflists",sp,"Freq",FrG,"SameInt",int,sep=""))
+  }) # end species
+}) # end Frequency
+}) # end intensity
+
+```
 
 
 ```{r}

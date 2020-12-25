@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
 output: html_notebook
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r}
@@ -285,22 +287,22 @@ v<-w/w[1] # reproductive value
 # first way that doesn't constrain f f <- rlnorm(1 ) # Poisson lambda: vector of (non-negative) means
 
 # Testing curves of fecundity and adult survival (s) 
-s <- seq(0,0.8,length.out = 100)
-f <- -12.5 * ((s + 0.1)^2) + 10.125 # This looks like Salguero-Gomez 2017 figure 2f for critically, endangered, vulnerable
-plot(s,f)
-f2 <- -1.25* ((s+4.6)^2) + 36.45 # Salguero-Gomez 2017 figure 2f for critically, endangered, vulnerable, straight line
-plot(s,f2)
-f3 <- 12.5 * ((s-0.9)^2) - 0.125
-plot(s, f3)
-rm(f);rm(s)
+# s <- seq(0,0.8,length.out = 100)
+# f <- -12.5 * ((s + 0.1)^2) + 10.125 # This looks like Salguero-Gomez 2017 figure 2f for critically, endangered, vulnerable
+# plot(s,f)
+# f2 <- -1.25* ((s+4.6)^2) + 36.45 # Salguero-Gomez 2017 figure 2f for critically, endangered, vulnerable, straight line
+# plot(s,f2)
+# f3 <- 12.5 * ((s-0.9)^2) - 0.125
+# plot(s, f3)
+# rm(f);rm(s)
 
   
 # should be able to set up structure with alpha
-a.mat <- cbind(1:10, 5, 10:1)
-a.mat
-rdirichlet(10, a.mat)
-rdirichlet(1, 1:4)
-rdirichlet(3, runif(4, min = 1, max = 20))
+# a.mat <- cbind(1:10, 5, 10:1)
+# a.mat
+# rdirichlet(10, a.mat)
+# rdirichlet(1, 1:4)
+# rdirichlet(3, runif(4, min = 1, max = 20))
 
 # Fast is when can progress to multiple steps larger, slow is when can only progress to next stage
 
@@ -311,13 +313,13 @@ Tmx_annual <- lapply(1:100, function(rep){
   f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
   t_ij <- matrix(0, nrow = 4, ncol = 4)
   t_ij[4,1:3] <- rlnorm(1, meanlog = s, sdlog = 0.5)
-  t_ij[1,4] <- f
   t_ij[2,1] <- t_ij[3,2] <- runif(1, min = 0, max = s)
   if(any(colSums(t_ij)>=1)){
     for(i in which(colSums(t_ij)>=1)){
       t_ij[,i] <- t_ij[,i]/ (sum(t_ij[,i]) + runif(1,0.01,0.1)) # make there be some death, 80-99% survival
       } 
   }
+  t_ij[1,4] <- f
   t_ij
   })
 
@@ -432,6 +434,62 @@ lambda(mean(Tmx_semelfast))
 damping.ratio(mean(Tmx_semelfast))
 
 ```
+
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_virtual/"
+
+
+# Mxs <- Tmx_annual
+# hist(unlist(lapply(1:length(Mxs), function(x) Mxs[[x]][1,4])))
+# Nxs_annual <- lapply(1:100, function(i){
+#   c(max(1,rpois(1,runif(1, 1,500))),NA,NA,max(1,rpois(1,runif(1, 1,500))))
+#   })
+
+SimSimpleVirtual(HarvestType = "NoneVirtual", MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 100, generationspan = FALSE, 
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+# 2020-12-23♪
+
+```
+2020-12-23  
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_10years/"
+
+Nxs_annual <- lapply(1:100, function(i){
+  c(max(1,rpois(1,runif(1, 1,500))),NA,NA,max(1,rpois(1,runif(1, 1,500))))
+  })
+
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+Nxs_othertypes <- lapply(1:100, function(i){
+  rpois(4,runif(4, 1,500))
+})
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+```
+
+
+
 
 
 

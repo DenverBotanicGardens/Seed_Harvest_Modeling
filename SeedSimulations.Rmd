@@ -282,7 +282,8 @@ TMx_all_AEVI <- list(lapply(AEVI, function(x) x$matU))
 
 
 # Thorpe and Kaye 2008 mean matrices for each year  
-# SEER parameter estimation (2) almost matches recruits/plant and recruits/seed but not quite
+# SEER parameter estimation (2) almost matches recruits/plant and recruits/seed but not quite  
+# P plants add to seedbank or next year germinate to new plants - see SEER manuscript outline
 Nx_names_SEER <- list("SEER 2004", "SEER 2005", "SEER 2006", "SEER 2007") 
 Nx_all_SEER <- list(c(NA,1),c(NA,1),c(NA,1),c(NA,1)) # I have the number per population and the average but don't need
 Mx_all_SEER <- list(matrix(c(0.409,10.667,0.026,1.47), ncol = 2, byrow = TRUE),
@@ -410,6 +411,43 @@ ggplot(all_summarydata, aes(f, lmbd, colour = Genus))+
   xlab("fecundity")
 ```
 
+# ---------------------------------------------- Simulations of empirical data --------------------------------
+2020-12-24
+```{r}
+pathstartempirical <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_10years/"
+
+
+# test
+# species <- unique(tm$SPP)[1]
+# rm(species)
+
+lapply(unique(tm$SPP), function(species){
+  Mxs_now <- Mx_all[grep(species, unlist(Nx_names))]
+  TMx_now <- TMx_all[grep(species, unlist(Nx_names))] 
+  Nx_now <- Nx_all[grep(species, unlist(Nx_names))]
+  SimSimple(HarvestType = "None", sppVector = species, FrG = 0, FrB = 0, intG = 0, intB = 0,
+            AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100,
+            Mxs = Mxs_now, TMxs = TMx_now, Nxs = Nx_now,
+            Simlength = 10, generationspan = FALSE, stablestagestart = TRUE, ps = pathstartempirical)
+})
+  
+pathstartempirical3gen <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_3gen/"
+
+
+lapply(unique(tm$SPP), function(species){
+  Mxs_now <- Mx_all[grep(species, unlist(Nx_names))]
+  TMx_now <- TMx_all[grep(species, unlist(Nx_names))] 
+  Nx_now <- Nx_all[grep(species, unlist(Nx_names))]
+  SimSimple(HarvestType = "None", sppVector = species, FrG = 0, FrB = 0, intG = 0, intB = 0,
+            AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100,
+            Mxs = Mxs_now, TMxs = TMx_now, Nxs = Nx_now,
+            Simlength = 3, generationspan = TRUE, stablestagestart = TRUE, ps = pathstartempirical3gen)
+})
+
+```
+
+
+
 
 # Simulations
 ## Test output for one species - Dicerandra frutescens (Ellis et al. 2012). Lamiaceae, short lived <10 years (lifespan function estimated 10 years),
@@ -486,6 +524,13 @@ SimSimple <- function(HarvestType = "No", sppVector = unique(tm$SPP), FrG = 0, F
 }
 
 ```
+
+# ---------------------- Figures 3 generations, 10 years, 100 years -------------------
+```{r}
+
+
+```
+
 
 
 

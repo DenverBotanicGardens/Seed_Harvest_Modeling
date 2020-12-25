@@ -1,13 +1,24 @@
 # testing
-Nx_list <- Nx_all[grep(sp, unlist(Nx_names))]
-Nx <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
+# Nx_list <- Nx_all[grep(sp, unlist(Nx_names))]
+# Nx <- sample(Nx_all[grep(sp, unlist(Nx_names))],1)[[1]]
+# species <- unique(tm$SPP)[1]
+# Mxs <- Mx_all[grep(species, unlist(Nx_names))]
+# TMxs <- TMx_all[grep(species, unlist(Nx_names))]
+# Fm <- (mean(Mxs)-mean(TMxs))
+# which(Fm > 0, arr.ind = TRUE)
+# rm(Mxs);rm(TMxs);rm(species);rm(Fm);rm(Nx_list)
 
 # stop doing all species at once, just one at a time, sppVector should just be character of what the species is
 SimSimple <- function(HarvestType = "No", sppVector, FrG = 0, FrB = 0, intG = 0, intB = 0, 
                          AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, TMxs, Nxs,
                          Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
   lapply(sppVector, function(sp){
-    gentim <- popbio::generation.time(mean(Mx_sample))
+    gentim <- popbio::generation.time(mean(Mxs))
+    if(is.infinite(gentim)){
+      Fm <- (mean(Mxs)-mean(TMxs))
+      gentim <-  popbio::generation.time(mean(Mxs), 
+                                         r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])), 
+                                         c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))}
     if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mxs))
     if(stablestagestart == FALSE) Nx_start <- sample(Nxs,1)[[1]]
     if(generationspan == TRUE) {
