@@ -317,7 +317,27 @@ TMx_all_SEER <- list(matrix(c(0.409,0,0.026,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.011,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.001,0), ncol = 2, byrow = TRUE))
 
-generationtimeAEVI <- 
+generationtimeAEVI <- mapply(function(Mx,Tx){
+  Fm <- Mx - Tx
+  popbio::generation.time(Mx,  
+                          r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+                          c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+}, Mx_all_AEVI[[1]], TMx_all_AEVI[[1]])
+
+mean(generationtimeAEVI)
+sd(generationtimeAEVI)
+
+
+generationtimeSEER <- mapply(function(Mx,Tx){
+  Fm <- Mx - Tx
+  popbio::generation.time(Mx,  
+                          r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+                          c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+}, Mx_all_SEER, TMx_all_SEER)
+
+mean(generationtimeSEER)
+sd(generationtimeSEER)
+
 ```
 
 
@@ -728,13 +748,17 @@ toplotEmp <- do.call(rbind, list(toplotEmp3,toplotEmp10,toplotEmp100))
 sp_infoCIPIone <- sp_info[-nrow(sp_info),]
 sp_infoCIPIone$SPP <- as.character(sp_infoCIPIone$SPP)
 sp_infoCIPIone$SPP[sp_infoCIPIone$SPP == "CIPI3"] <- "CIPI"
-sp_infotoplot <- merge(sp_infoCIPIone, gentimetable, by = "SPP")
+# Add two annuals
+gentimetable <- rbind(gentimetable, c("AEVI",mean(generationtimeAEVI), sd(generationtimeAEVI)))
+gentimetable <- rbind(gentimetable, c("SEER",mean(generationtimeSEER), sd(generationtimeSEER)))
+sp_infotoplot <- merge(sp_infoCIPIone, gentimetable, by = "SPP", all = TRUE)
 sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime > 5] <- c("Iteroparous slow") 
 sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime < 5] <- c("Iteroparous fast") 
 sp_infotoplot$Iteroparity[sp_infotoplot$SPP == "CIPI"] <- c("Semelparous fast") 
+sp_infotoplot$Iteroparity[sp_infotoplot$SPP %in% c("AEVI","SEER")] <- "Annual"
+toplotEmp1 <- merge(toplotEmp, sp_infotoplot, by = "SPP")
 
-
-simgenlengthEmp1 <- ggplot(toplotEmp[toplotEmp$StPopSz == 500 & toplotEmp$SimLengthtext == "3 generations",], 
+simgenlengthEmp1 <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500 & toplotEmp1$SimLengthtext == "3 generations",], 
        aes(MatrixType, generationtime*3))+ # , colour = MatrixType))+
   geom_boxplot()+
   theme_bw()+
