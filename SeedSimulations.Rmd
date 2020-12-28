@@ -317,6 +317,22 @@ TMx_all_SEER <- list(matrix(c(0.409,0,0.026,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.011,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.001,0), ncol = 2, byrow = TRUE))
 
+# Tillandsia brachycaulos is long lived semelparous threatened species
+Nx_all_TIBR <- list(rep(1,11),rep(1,11),rep(1,11),rep(1,11)) # no seedbank, NA - unobserved seedbank
+Mx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matA))
+TMx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matU))
+
+generationtimeTIBR <- mapply(function(Mx,Tx){
+  Fm <- Mx - Tx
+  popbio::generation.time(Mx,  
+                          r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+                          c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+}, Mx_all_TIBR[[1]], TMx_all_TIBR[[1]])
+
+mean(generationtimeTIBR)
+sd(generationtimeTIBR)
+
+
 generationtimeAEVI <- mapply(function(Mx,Tx){
   Fm <- Mx - Tx
   popbio::generation.time(Mx,  
@@ -602,13 +618,6 @@ toplotvirt3gen <- pullresults("Virtual3gen", pathstartVirtual, "3 gen")
 toplotvirt100yrs <- pullresults("Virtual100yrs", pathstartVirtual, "100 years")
 toplot <- do.call(rbind, list(toplotvirt10yrs,toplotvirt3gen,toplotvirt100yrs))
 
-# toplot <- do.call(rbind, list(toplot100yrs,toplot3gen,toplot10yrs))
-table(toplot$SimLength) 
-table(toplot$SimLengthtext)
-table(toplot$MatrixType)
-# toplot <- toplot[toplot$MatrixType != "",]
-
-
 toplot$SimLengthtext <- factor(toplot$SimLengthtext, levels = c("10 years", "3 gen", "100 years"))
 toplot$MatrixType <- factor(toplot$MatrixType, levels = c("Annual","SemelFast","IteroFast","SemelSlow","IteroSlow"))
 
@@ -622,8 +631,8 @@ simgenlength1 <- ggplot(toplot[toplot$StPopSz == 500 & toplot$SimLengthtext == "
                                "SemelFast" = "Semelparous\n fast",
                                "IteroFast" = "Iteroparous\n fast",
                                "SemelSlow" = "Semelparous\n slow",
-                               "IteroSlow" = "Iteroparous\n slow"))
-  # theme(axis.text.x = element_text(angle = 90))
+                               "IteroSlow" = "Iteroparous\n slow"))+
+  geom_hline(yintercept = 10, colour = "red", linetype="dashed")
 
 simgenlength2 <- ggplot(toplot[toplot$StPopSz == 500 & toplot$SimLengthtext == "3 gen",], 
        aes(MatrixType, generationtime))+ # , colour = MatrixType))+
@@ -634,7 +643,8 @@ simgenlength2 <- ggplot(toplot[toplot$StPopSz == 500 & toplot$SimLengthtext == "
                                "SemelFast" = "Semelparous\n fast",
                                "IteroFast" = "Iteroparous\n fast",
                                "SemelSlow" = "Semelparous\n slow",
-                               "IteroSlow" = "Iteroparous\n slow"))
+                               "IteroSlow" = "Iteroparous\n slow"))+
+  geom_hline(yintercept = 10, colour = "red", linetype="dashed")
 
 
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Virtual3generationspan.jpg",
@@ -652,7 +662,10 @@ stochLam <- ggplot(toplot[toplot$StPopSz == 500,], aes(MatrixType, exp(Tulapprox
   scale_colour_manual(name = "Simulation length",
                       values = c("orange","grey","blue"),
                       breaks = c("10 years", "3 gen", "100 years"),
-                      labels = c("10 years", "3 generations", "100 years"))
+                      labels = c("10 years", "3 generations", "100 years"))+
+    geom_hline(yintercept = 10, colour = "red", linetype="dashed")
+
+
 
 
 
@@ -735,13 +748,19 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
 
 Figures 10 years, 3 generations, 100 years for empirical data
 ```{r}
-pathstartVirtual3gen # "None
-pathstartVirtual10yrs # "None"
+pathstartVirtual3gen # "None" and "AnnualEmpericalNone"
+pathstartVirtual10yrs # "None"and "AnnualEmpericalNone"
+pathstart100 # "No10years
 pathstartVirtual100 # "No100years"
 
+pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
+pathstart100 # "AnnualEmpericalNone"
+
 toplotEmp3 <- pullresults("None", pathstartVirtual3gen, "3 generations")
+toplotEmp3ann <- pullresults("AnnualEmpericalNone", pathstartVirtual3gen, "3 generations")
 toplotEmp10 <- pullresults("None", pathstartVirtual10yrs, "10 years")
 toplotEmp100 <- pullresults("No100years", pathstartVirtual100, "100 years")
+toplotEmp100annuals <- pullresults("AnnualEmpericalNone", pathstart100, "100 years")
 toplotEmp <- do.call(rbind, list(toplotEmp3,toplotEmp10,toplotEmp100))
 
 # Label the empirical species by annual, fast and slow itero or semelparous
@@ -751,35 +770,46 @@ sp_infoCIPIone$SPP[sp_infoCIPIone$SPP == "CIPI3"] <- "CIPI"
 # Add two annuals
 gentimetable <- rbind(gentimetable, c("AEVI",mean(generationtimeAEVI), sd(generationtimeAEVI)))
 gentimetable <- rbind(gentimetable, c("SEER",mean(generationtimeSEER), sd(generationtimeSEER)))
+gentimetable <- rbind(gentimetable, c("TIBR", mean(generationtimeTIBR),sd(generationtimeTIBR)))
+
 sp_infotoplot <- merge(sp_infoCIPIone, gentimetable, by = "SPP", all = TRUE)
 sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime > 5] <- c("Iteroparous slow") 
 sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime < 5] <- c("Iteroparous fast") 
 sp_infotoplot$Iteroparity[sp_infotoplot$SPP == "CIPI"] <- c("Semelparous fast") 
+sp_infotoplot$Iteroparity[sp_infotoplot$SPP == "TIBR"] <- c("Semelparous fast") 
 sp_infotoplot$Iteroparity[sp_infotoplot$SPP %in% c("AEVI","SEER")] <- "Annual"
 toplotEmp1 <- merge(toplotEmp, sp_infotoplot, by = "SPP")
 
 simgenlengthEmp1 <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500 & toplotEmp1$SimLengthtext == "3 generations",], 
-       aes(MatrixType, generationtime*3))+ # , colour = MatrixType))+
+       aes(Iteroparity, generationtime*3))+ # , colour = MatrixType))+
   geom_boxplot()+
   theme_bw()+
   ylab("Simulation length\n years")+
+  xlab("Species type")+
   scale_x_discrete(labels = c("Annual" = "Annual",
-                               "SemelFast" = "Semelparous\n fast",
-                               "IteroFast" = "Iteroparous\n fast",
-                               "SemelSlow" = "Semelparous\n slow",
-                               "IteroSlow" = "Iteroparous\n slow"))
+                               "Semelparous fast" = "Semelparous\n fast",
+                               "Iteroparous fast" = "Iteroparous\n fast",
+                               "Semelparous slow" = "Semelparous\n slow",
+                               "Iteroparous slow" = "Iteroparous\n slow"))+
+  geom_hline(yintercept = 10, colour = "red", linetype="dashed")+
+  geom_hline(yintercept = 100, colour = "red", linetype="dashed")
 
-simgenlength2 <- ggplot(toplot[toplot$StPopSz == 500 & toplot$SimLengthtext == "3 gen",], 
-       aes(MatrixType, generationtime))+ # , colour = MatrixType))+
+simgenlength2 <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500 & toplotEmp1$SimLengthtext == "3 generations",], 
+       aes(Iteroparity, generationtime))+ # , colour = MatrixType))+
   geom_boxplot()+
   theme_bw()+
   ylab("Generation time\n years")+
+  xlab("Species type")+
   scale_x_discrete(labels = c("Annual" = "Annual",
-                               "SemelFast" = "Semelparous\n fast",
-                               "IteroFast" = "Iteroparous\n fast",
-                               "SemelSlow" = "Semelparous\n slow",
-                               "IteroSlow" = "Iteroparous\n slow"))
-ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Virtual3generationspan.jpg",
+                               "Semelparous fast" = "Semelparous\n fast",
+                               "Iteroparous fast" = "Iteroparous\n fast",
+                               "Semelparous slow" = "Semelparous\n slow",
+                               "Iteroparous slow" = "Iteroparous\n slow"))+
+  geom_hline(yintercept = 10, colour = "red", linetype="dashed")+
+  geom_hline(yintercept = 100, colour = "red", linetype="dashed")
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Empirical3generationspan.jpg",
        simgenlengthEmp1 + simgenlength2,
        width=250, height=90,units='mm', dpi=300)
 
