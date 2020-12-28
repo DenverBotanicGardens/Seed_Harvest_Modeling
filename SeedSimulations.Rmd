@@ -180,7 +180,29 @@ fecundity <- mapply(function(x,y){
   rowSums(fec)[1] #Only the first row is funcunity across classes (subtracted out survival by Mx-TMx)
   }, Mx_all, TMx_all)
 
-# x <- unique(tm$SPP)[3]
+
+# Test
+# Mx <- Mx_all[[16]]
+# Tx <- TMx_all[[16]]
+# rm(Mx); rm(Tx); rm(Fm)
+
+generationtime <- mapply(function(Mx,Tx){
+  Fm <- Mx - Tx
+  popbio::generation.time(Mx,  
+                          r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+                          c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+}, Mx_all, TMx_all)
+
+# sp <- unique(tm$SPP)[3]
+# rm(sp)
+gentimetable <- do.call(rbind,lapply(unique(tm$SPP), function(sp){
+  sp <- gsub('[[:digit:]]+', '', sp)
+  gentimes <- generationtime[grep(sp, names(generationtime))]
+  data.frame(SPP = sp, MeanGenTime = mean(gentimes[!is.infinite(gentimes)], na.rm = TRUE),
+             SDGenTime = sd(gentimes[!is.infinite(gentimes)], na.rm = TRUE))
+}))
+
+# add annuals after COMPADRE lines 270 on
 
 ```
 
@@ -295,7 +317,7 @@ TMx_all_SEER <- list(matrix(c(0.409,0,0.026,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.011,0), ncol = 2, byrow = TRUE),
                     matrix(c(0.409,0,0.001,0), ncol = 2, byrow = TRUE))
 
-
+generationtimeAEVI <- 
 ```
 
 
@@ -697,6 +719,45 @@ pathstartVirtual3gen # "None
 pathstartVirtual10yrs # "None"
 pathstartVirtual100 # "No100years"
 
+toplotEmp3 <- pullresults("None", pathstartVirtual3gen, "3 generations")
+toplotEmp10 <- pullresults("None", pathstartVirtual10yrs, "10 years")
+toplotEmp100 <- pullresults("No100years", pathstartVirtual100, "100 years")
+toplotEmp <- do.call(rbind, list(toplotEmp3,toplotEmp10,toplotEmp100))
+
+# Label the empirical species by annual, fast and slow itero or semelparous
+sp_infoCIPIone <- sp_info[-nrow(sp_info),]
+sp_infoCIPIone$SPP <- as.character(sp_infoCIPIone$SPP)
+sp_infoCIPIone$SPP[sp_infoCIPIone$SPP == "CIPI3"] <- "CIPI"
+sp_infotoplot <- merge(sp_infoCIPIone, gentimetable, by = "SPP")
+sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime > 5] <- c("Iteroparous slow") 
+sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime < 5] <- c("Iteroparous fast") 
+sp_infotoplot$Iteroparity[sp_infotoplot$SPP == "CIPI"] <- c("Semelparous fast") 
+
+
+simgenlengthEmp1 <- ggplot(toplotEmp[toplotEmp$StPopSz == 500 & toplotEmp$SimLengthtext == "3 generations",], 
+       aes(MatrixType, generationtime*3))+ # , colour = MatrixType))+
+  geom_boxplot()+
+  theme_bw()+
+  ylab("Simulation length\n years")+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"))
+
+simgenlength2 <- ggplot(toplot[toplot$StPopSz == 500 & toplot$SimLengthtext == "3 gen",], 
+       aes(MatrixType, generationtime))+ # , colour = MatrixType))+
+  geom_boxplot()+
+  theme_bw()+
+  ylab("Generation time\n years")+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"))
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Virtual3generationspan.jpg",
+       simgenlengthEmp1 + simgenlength2,
+       width=250, height=90,units='mm', dpi=300)
 
 ```
 
