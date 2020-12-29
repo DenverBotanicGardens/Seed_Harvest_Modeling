@@ -652,6 +652,8 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
        width=250, height=90,units='mm', dpi=300)
 
 toplot$SimLengthtext <- factor(toplot$SimLengthtext, levels = c("10 years", "3 gen", "100 years"))
+
+# Lambda
 stochLam <- ggplot(toplot[toplot$StPopSz == 500,], aes(MatrixType, exp(Tulapprox) , colour = SimLengthtext))+
   geom_boxplot()+
   theme_bw()+
@@ -663,26 +665,15 @@ stochLam <- ggplot(toplot[toplot$StPopSz == 500,], aes(MatrixType, exp(Tulapprox
                       values = c("orange","grey","blue"),
                       breaks = c("10 years", "3 gen", "100 years"),
                       labels = c("10 years", "3 generations", "100 years"))+
-    geom_hline(yintercept = 10, colour = "red", linetype="dashed")
+  theme(legend.position = "none")+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"))
 
-
-
-
-
-# Lambda
-# ggplot(toplot[toplot$StPopSz == 500,], aes(SimLengthtext, exp(Tulapprox)))+
-#   # geom_jitter(height = 0, width = 2, alpha = 0.4, shape = 20)+
-#   # geom_boxplot(x = as.factor(toplot$generationtime[toplot$StPopSz == 500]))+
-#   geom_boxplot()+
-#   theme_bw()+
-#   ylab(expression(lambda) )+ 
-#   # theme(axis.text.y = element_text(angle = 90))+
-#   xlab("Simulation length")+
-#   ggtitle("a)")+
-#   facet_wrap(~MatrixType) #, labeller = labeller(MatrixType = c("Annual","Semelparous Fast","Iteroparous Fast","Semelparous Slow","Iteroparous Slow")))
 
 # extinction risk
-
 toplotextinctionrisk <- as.data.frame(table(ER = toplot$Exterpated, 
                                             SimLength = toplot$SimLengthtext, 
                                             MatrixType = toplot$MatrixType, 
@@ -695,9 +686,9 @@ toplotextinctionrisk$SimLength <- factor(toplotextinctionrisk$SimLength,
 ERplot <- ggplot(toplotextinctionrisk[toplotextinctionrisk$ER == 1,], aes(MatrixType, Freq, colour = SimLength))+
   geom_boxplot()+
   facet_wrap(~PopSz)+
-  coord_flip()+
+  # coord_flip()+
   ylab("Extinction Probability")+
-  ggtitle("a)")+
+  ggtitle("b)")+
   theme_bw()+
   scale_colour_manual(name = "Simulation length",
                       values = c("orange","grey","blue"),
@@ -707,14 +698,16 @@ ERplot <- ggplot(toplotextinctionrisk[toplotextinctionrisk$ER == 1,], aes(Matrix
                                "SemelFast" = "Semelparous\n fast",
                                "IteroFast" = "Iteroparous\n fast",
                                "SemelSlow" = "Semelparous\n slow",
-                               "IteroSlow" = "Iteroparous\n slow"))
+                               "IteroSlow" = "Iteroparous\n slow"),
+                   guide = guide_axis(angle=90))+
+  theme(legend.position = "none")
   
 
 
 
 
 # time to extinction
-time2extplot <- ggplot(toplot, aes(SimLengthtext, Time2Ext, colour = as.factor(StPopSz)))+
+ ggplot(toplot, aes(SimLengthtext, Time2Ext, colour = as.factor(StPopSz)))+
   # geom_jitter(height = 0, width = 2, alpha = 0.4, shape = 20)+
   # geom_boxplot(x = as.factor(toplot$generationtime[toplot$StPopSz == 500]))+
   geom_boxplot()+
@@ -722,55 +715,63 @@ time2extplot <- ggplot(toplot, aes(SimLengthtext, Time2Ext, colour = as.factor(S
   ylab("Time to extinction" )+ 
   # theme(axis.text.x = element_text(angle = 90))+
   xlab("Simulation length")+
-  ggtitle("b) ")+
-  facet_wrap(~MatrixType, ncol = 2)+
+  ggtitle("c) ")+
+  facet_wrap(~MatrixType, nrow = 1)+
   scale_colour_discrete(name = "Initial\npopulation\nsize")
 
-
-
-ggplot(toplot[toplot$StPopSz == 500,], aes(as.factor(generationtime), exp(Tulapprox) , colour = as.factor(SimLength)))+
-  # geom_jitter(height = 0, width = 2, alpha = 0.4, shape = 20)+
-  # geom_boxplot(x = as.factor(toplot$generationtime[toplot$StPopSz == 500]))+
+# Alternative time to extinction
+time2extplot <- ggplot(toplot, aes(MatrixType, Time2Ext, colour = SimLengthtext))+
   geom_boxplot()+
   theme_bw()+
-  ylab(expression(lambda) )+ 
-  # theme(axis.text.y = element_text(angle = 90))+
-  xlab("Generation time")+
-  ggtitle("a) Stochastic lambda")+
-  facet_wrap(~MatrixType)
-
-
+  scale_colour_manual(name = "Simulation length",
+                      values = c("orange","grey","blue"),
+                      breaks = c("10 years", "3 gen", "100 years"),
+                      labels = c("10 years", "3 generations", "100 years"))+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"),
+                   guide = guide_axis(angle=90))+
+  ylab("Time to extinction" )+ 
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Matrix Type")+
+  ggtitle("c) ")+
+  facet_wrap(~as.factor(StPopSz))
 
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Virtualextinctionmetrics.jpg",
-       ERplot + time2extplot +plot_layout(widths = c(2,3)),
-       width=230, height=100,units='mm', dpi=300)
+       stochLam / (ERplot + time2extplot) +plot_layout(widths = c(2,1)),
+       width=210, height=180,units='mm', dpi=300)
 ```
 
 Figures 10 years, 3 generations, 100 years for empirical data
 ```{r}
 pathstartVirtual3gen # "None" and "AnnualEmpericalNone"
 pathstartVirtual10yrs # "None"and "AnnualEmpericalNone"
-pathstart100 # "No10years
-pathstartVirtual100 # "No100years"
-
-pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
-pathstart100 # "AnnualEmpericalNone"
+pathstart100 # "No10years and "No100years and "AnnualEmpericalNone"
 
 toplotEmp3 <- pullresults("None", pathstartVirtual3gen, "3 generations")
 toplotEmp3ann <- pullresults("AnnualEmpericalNone", pathstartVirtual3gen, "3 generations")
 toplotEmp10 <- pullresults("None", pathstartVirtual10yrs, "10 years")
-toplotEmp100 <- pullresults("No100years", pathstartVirtual100, "100 years")
+toplotEmp10ann <- pullresults("AnnualEmpericalNone", pathstartVirtual10yrs, "10 years")
+toplotEmp100 <- pullresults("No100years", pathstart100, "100 years")
 toplotEmp100annuals <- pullresults("AnnualEmpericalNone", pathstart100, "100 years")
-toplotEmp <- do.call(rbind, list(toplotEmp3,toplotEmp10,toplotEmp100))
+
+identical(names(toplotEmp3), names(toplotEmp3ann))
+identical(names(toplotEmp3), names(toplotEmp100))
+names(toplotEmp100) <- names(toplotEmp3)
+
+toplotEmp <- do.call(rbind, list(toplotEmp3,toplotEmp3ann,toplotEmp10,toplotEmp10ann,toplotEmp100,toplotEmp100annuals))
 
 # Label the empirical species by annual, fast and slow itero or semelparous
-sp_infoCIPIone <- sp_info[-nrow(sp_info),]
-sp_infoCIPIone$SPP <- as.character(sp_infoCIPIone$SPP)
-sp_infoCIPIone$SPP[sp_infoCIPIone$SPP == "CIPI3"] <- "CIPI"
+gentimetable$SPP[gentimetable$SPP == "CIPI"] <- c("CIPI3", "CIPI6")
+
 # Add two annuals
 gentimetable <- rbind(gentimetable, c("AEVI",mean(generationtimeAEVI), sd(generationtimeAEVI)))
 gentimetable <- rbind(gentimetable, c("SEER",mean(generationtimeSEER), sd(generationtimeSEER)))
 gentimetable <- rbind(gentimetable, c("TIBR", mean(generationtimeTIBR),sd(generationtimeTIBR)))
+
+# need to merge with CIPI3 and CIPI6
 
 sp_infotoplot <- merge(sp_infoCIPIone, gentimetable, by = "SPP", all = TRUE)
 sp_infotoplot$Iteroparity[sp_infotoplot$MeanGenTime > 5] <- c("Iteroparous slow") 
@@ -781,7 +782,7 @@ sp_infotoplot$Iteroparity[sp_infotoplot$SPP %in% c("AEVI","SEER")] <- "Annual"
 toplotEmp1 <- merge(toplotEmp, sp_infotoplot, by = "SPP")
 
 simgenlengthEmp1 <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500 & toplotEmp1$SimLengthtext == "3 generations",], 
-       aes(Iteroparity, generationtime*3))+ # , colour = MatrixType))+
+       aes(Iteroparity, generationtime*3))+
   geom_boxplot()+
   theme_bw()+
   ylab("Simulation length\n years")+
@@ -812,6 +813,110 @@ simgenlength2 <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500 & toplotEmp1$SimLen
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Empirical3generationspan.jpg",
        simgenlengthEmp1 + simgenlength2,
        width=250, height=90,units='mm', dpi=300)
+
+
+# Extinction metrics for empirical data  
+
+toplotEmp1$SimLengthtext <- factor(toplotEmp1$SimLengthtext, levels = c("10 years", "3 generations", "100 years"))
+table(toplotEmp1$SPP) # lost CIPI, have 800 of all but AEVI, SEER, and TIBR; still missing 100 years
+
+table(toplotEmp1[toplotEmp1$SPP == "AEVI",]$StPopSz,toplotEmp1[toplotEmp1$SPP == "AEVI",]$SimLengthtext) # 100 for 10 and 3, none for 100 years)
+table(toplotEmp1[toplotEmp1$SPP == "TIBR",]$StPopSz,toplotEmp1[toplotEmp1$SPP == "TIBR",]$SimLengthtext) # 100 for 10 and 3, none for 100 years)
+table(toplotEmp1[toplotEmp1$SPP == "ARFE",]$StPopSz,toplotEmp1[toplotEmp1$SPP == "ARFE",]$SimLengthtext) # 100 each for 10 and 3, none for 100 
+
+
+# Lambda
+stochLamEmp <- ggplot(toplotEmp1[toplotEmp1$StPopSz == 500,], aes(Iteroparity, exp(Tulapprox) , colour = SimLengthtext))+
+  geom_boxplot()+
+  theme_bw()+
+  ylab(expression(lambda) )+ 
+  # theme(axis.text.y = element_text(angle = 90))+
+  xlab("Matrix Type")+
+  ggtitle("a)")+
+  scale_colour_manual(name = "Simulation length",
+                      values = c("orange","grey","blue"),
+                      breaks = c("10 years", "3 generations", "100 years"),
+                      labels = c("10 years", "3 generations", "100 years"))+
+  theme(legend.position = "none")+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "Semelparous fast" = "Semelparous\n fast",
+                               "Iteroparous fast" = "Iteroparous\n fast",
+                               "Semelparous slow" = "Semelparous\n slow",
+                               "Iteroparous slow" = "Iteroparous\n slow"))
+
+
+
+
+
+# extinction risk
+toplotextinctionrisk <- as.data.frame(table(ER = toplotEmp1$Exterpated, 
+                                            SimLength = toplotEmp1$SimLengthtext, 
+                                            MatrixType = toplotEmp1$MatrixType, 
+                                            PopSz = toplotEmp1$StPopSz,
+                                            GenTime = toplotEmp1$generationtime)) 
+# to get unique runs, each has unique generation time
+toplotextinctionrisk$SimLength <- factor(toplotextinctionrisk$SimLength, 
+                                         levels = c("10 years", "3 gen", "100 years"))
+
+ERplot <- ggplot(toplotextinctionrisk[toplotextinctionrisk$ER == 1,], aes(MatrixType, Freq, colour = SimLength))+
+  geom_boxplot()+
+  facet_wrap(~PopSz)+
+  # coord_flip()+
+  ylab("Extinction Probability")+
+  ggtitle("b)")+
+  theme_bw()+
+  scale_colour_manual(name = "Simulation length",
+                      values = c("orange","grey","blue"),
+                      breaks = c("10 years", "3 gen", "100 years"),
+                      labels = c("10 years", "3 generations", "100 years"))+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"),
+                   guide = guide_axis(angle=90))+
+  theme(legend.position = "none")
+  
+
+
+
+
+# time to extinction
+ ggplot(toplotEmp1, aes(SimLengthtext, Time2Ext, colour = as.factor(StPopSz)))+
+  # geom_jitter(height = 0, width = 2, alpha = 0.4, shape = 20)+
+  # geom_boxplot(x = as.factor(toplotEmp1$generationtime[toplotEmp1$StPopSz == 500]))+
+  geom_boxplot()+
+  theme_bw()+
+  ylab("Time to extinction" )+ 
+  # theme(axis.text.x = element_text(angle = 90))+
+  xlab("Simulation length")+
+  ggtitle("c) ")+
+  facet_wrap(~MatrixType, nrow = 1)+
+  scale_colour_discrete(name = "Initial\npopulation\nsize")
+
+# Alternative time to extinction
+time2extplot <- ggplot(toplotEmp1, aes(MatrixType, Time2Ext, colour = SimLengthtext))+
+  geom_boxplot()+
+  theme_bw()+
+  scale_colour_manual(name = "Simulation length",
+                      values = c("orange","grey","blue"),
+                      breaks = c("10 years", "3 gen", "100 years"),
+                      labels = c("10 years", "3 generations", "100 years"))+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "SemelFast" = "Semelparous\n fast",
+                               "IteroFast" = "Iteroparous\n fast",
+                               "SemelSlow" = "Semelparous\n slow",
+                               "IteroSlow" = "Iteroparous\n slow"),
+                   guide = guide_axis(angle=90))+
+  ylab("Time to extinction" )+ 
+  theme(axis.text.x = element_text(angle = 90))+
+  xlab("Matrix Type")+
+  ggtitle("c) ")+
+  facet_wrap(~as.factor(StPopSz))
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Virtualextinctionmetrics.jpg",
+       stochLam / (ERplot + time2extplot) +plot_layout(widths = c(2,1)),
+       width=210, height=180,units='mm', dpi=300)
 
 ```
 
