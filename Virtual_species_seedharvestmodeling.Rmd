@@ -488,9 +488,150 @@ SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "IteroSlow", Mxs
 
 ```
 
+# 2020-12-25 
+ after adding matrix type and simulation length to output, not saving matrices
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_outvirtemp/"
+
+# 10 years
+NoHarvestVirtual <- "Virtual10yrs"
+
+Nxs_annual <- lapply(1:100, function(i){
+  c(max(1,rpois(1,runif(1, 1,500))),NA,NA,max(1,rpois(1,runif(1, 1,500))))
+  })
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+Nxs_othertypes <- lapply(1:100, function(i){
+  rpois(4,runif(4, 1,500))
+})
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+rm(NoHarvestVirtual)
+## 100 years
+NoHarvestVirtual <- "Virtual100yrs"
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+rm(NoHarvestVirtual)
+## 3 generations
+NoHarvestVirtual <- "Virtual3gen"
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+```
 
 
 
+# add some more semelparous
+```{r}
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+names(compadre[[1]])
+table(compadre[[1]]$OrganismType)
+# Where there is no surivval of reproductive individuals
+
+
+compadre[[1]][grep("Succulent", compadre[[1]]$OrganismType),]
+# semelparous <- 
+compadre[[2]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")]
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matA
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matF
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matU
+dim(compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matU)
+
+#test
+x <- compadre[[3]][[1]]
+semelparous <- compadre[[1]][(sapply(compadre[[3]], function(x){
+  x$matU[dim(x$matA)[1],dim(x$matA)[1]] == 0
+})),]
+
+semelparous[semelparous$OrganismType != "Annual",]
+# "Tillandsia brachycaulos" long-lived semelparous threatened species!
+# "Actaea elata" rare but iteroparous Mayberry-Ella 2010
+# "Anthyllis vulneraria" semel or itero depending on the environment Davison et al 2010
+# 2020-12-28 emperical to match 
+pathstartempirical <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_10years/"
+pathstartempirical3gen <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_3gen/"
+pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
+
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Tillandsia brachycaulos"]
+
+Nx_all_TIBR <- list(rep(1,11),rep(1,11),rep(1,11),rep(1,11)) # no seedbank, NA - unobserved seedbank
+Mx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matA))
+TMx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matU))
+
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 3, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 10, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 100, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstart100)
+
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 3, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 10, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 100, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstart100)
+
+
+```
 
 
 
