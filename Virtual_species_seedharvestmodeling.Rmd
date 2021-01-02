@@ -2,7 +2,7 @@
 title: "R Notebook"
 output: html_notebook
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 ```{r}
@@ -607,7 +607,7 @@ semelparous <- compadre[[1]][(sapply(compadre[[3]], function(x){
   x$matU[dim(x$matA)[1],dim(x$matA)[1]] == 0
 })),]
 
-semelparous[semelparous$OrganismType != "Annual",]
+semelparous[semelparous$OrganismType != "Annual" & semelparous$StudyDuration > 5 & !is.na(semelparous$StudyDuration),]
 # "Tillandsia brachycaulos" long-lived semelparous threatened species!
 # "Actaea elata" rare but iteroparous Mayberry-Ella 2010
 # "Anthyllis vulneraria" semel or itero depending on the environment Davison et al 2010
@@ -626,9 +626,198 @@ SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 3, Mxs = Mx_all
 SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 10, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstartempirical)
 SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 100, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstart100)
 
+# Doesn't seem to be semelparous either
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Cleistesiopsis bifaria"]
+
+Nx_all_CLBI <- lapply(1:17, function(x) c(NA,rep(1,11))) # no seedbank but 1st stage is dormant-ish, NA - unobserved seedbank
+Mx_all_CLBI <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Cleistesiopsis bifaria"], function(x) x$matA))
+TMx_all_CLBI <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Cleistesiopsis bifaria"], function(x) x$matU))
+
+
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 3, 
+          Mxs = Mx_all_CLBI[[1]], 
+          Txs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 10, 
+          Mxs = Mx_all_CLBI[[1]], 
+          TMxs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 100, 
+          Mxs = Mx_all_CLBI[[1]], 
+          TMxs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = FALSE, ps = pathstart100)
+```
+
+
+
+# Add a bunch from compadre don't worry about rarity  
+```{r}
+
+head(compadre$metadata)
+table(compadre$metadata$MatrixSplit)
+# test
+# x <- compadre$matrixClass[[100]]
+# which(grepl("seed",x))
+# rm(x)
+
+CompadreSPP <- compadre$metadata[compadre$metadata$AnnualPeriodicity == 1 &
+                                   compadre$metadata$MatrixTreatment == "Unmanipulated" &
+                                   compadre$metadata$MatrixSplit == "Divided" &
+                                   compadre$metadata$MatrixDimension,]
+
+SPP_compadre <- names(table(CompadreSPP$SpeciesAccepted)[table(CompadreSPP$SpeciesAccepted)>4])
+SPP_compadretable <- compadre$metadata[compadre$metadata$SpeciesAccepted %in% SPP_compadre,]
+
+# find seed stages; 
+taxaSeedStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted %in% SPP_compadre]
+
+# test
+# x <- taxaSeedStages[[1]]
+# nr(x)
+Nx_taxaCompadre <- lapply(taxaSeedStages, function(x){
+  nx <- rep(1,nrow(x))
+  nx[x[,1] == "prop"] <- NA
+  nx
+})
+
+Mx_all_taxaCompadre <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% SPP_compadre], function(x) x$matA)
+TMx_all_taxaCompadre <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% SPP_compadre], function(x) x$matU)
+
+# Generation time for each species, lapply over each species
+generationtimeCOMPADRE <- do.call(rbind,lapply(SPP_compadre[c(1:3,5:150)], function(x){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% x], function(x) x$matA)
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% x], function(x) x$matU)
+
+  generationtimeCOMPADRE <- mapply(function(Mx,Tx){
+    Fm <- Mx - Tx
+      popbio::generation.time(Mx, # r = Fm)
+      r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+      c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+    }, Mx_one_taxa, TMx_one_taxa)
+  data.frame(GT = generationtimeCOMPADRE, SPP = x)
+  }))
+# library(Rmisc)
+gensummary <- summarySE(generationtimeCOMPADRE[!is.infinite(generationtimeCOMPADRE$GT),], measurevar = "GT", groupvars = "SPP", na.rm = TRUE)
+
+longslow <- gensummary[gensummary$GT > 5,]
+
+pathstartRandomCompadre <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_COMPADRE/"
+# error in simulation longslow$SPP[13:39]
+sppnow <- "Actaea cordifolia"
+testStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted %in% sppnow]
+testA <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sppnow], function(x) x$matA)
+testU <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sppnow], function(x) x$matU)
+testNx_list <- Nx_taxaCompadre[compadre$metadata$SpeciesAccepted %in%  sppnow]
+lapply(testNx_list, function(x) length(x))
+lapply(testNx_list, function(x) length(x)==8)
+
+length(testNx_list)
+length(testA)
+length(testU)
+testStages[[1]]
+
+# mapply(function(s,A,U) , testStages, testA, testU)
+
+test[!sapply(test, function(x) any(is.na(x)))]
+rm(test)
+
+
+lapply(SPP_compadre[!(SPP_compadre %in% c("Antirrhinum subbaeticum", "Agrimonia eupatoria", "Actaea spicata"))][30:194], function(sp){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matA)
+  Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matU)
+  TMx_one_taxa <- TMx_one_taxa[!sapply(TMx_one_taxa, function(x) any(is.na(x)))]
+
+  Nx_one_taxa <- Nx_taxaCompadre[compadre$metadata$SpeciesAccepted %in% sp]
+  
+  SimSimple("COMPADREslow3gen", sppVector = sp, Simlength = 3, 
+          Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen10yrs", sppVector = sp, Simlength = 10, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen100yrs", sppVector = sp, Simlength = 100, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+
+})
+
+# find this list by see for which the largest reproductive to prop is zero?
+
+# Various matrix sizes, need to have ones that match
+#test
+# sp <- "Alliaria petiolata"
+# stages <- 3
+# rm(stages)
+# test
+# x <- taxaSeedStages[[1]]
+# nr(x)
+
+lapply(SPP_compadre, function(sp){
+  taxaSeedStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted == sp]
+  Nx_one_list <- lapply(taxaSeedStages, function(x){
+    nx <- rep(1,nrow(x))
+    nx[x[,1] == "prop"] <- NA
+    nx
+    })
+  stageNums <- unlist(lapply(Nx_one_list, function(x) length(x)))
+  # rle(stageNums)$values[rle(stageNums)$lengths >4] The stage numbers with at least 5 matrices of that size
+  lapply(rle(stageNums)$values[rle(stageNums)$lengths >4], function(stages){
+    Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sp], function(x) x$matA)[unlist(lapply(Nx_one_list, function(x) length(x) == stages))]
+    Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+    TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sp], function(x) x$matU)[unlist(lapply(Nx_one_list, function(x) length(x) == stages))]
+    TMx_one_taxa <- TMx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+    
+    SimSimple("COMPADREslow3gen", sppVector = paste(sp,stages,"stages",sep=""), Simlength = 3, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+    
+    SimSimple("COMPADREslow3gen10yrs", sppVector = paste(sp,stages,"stages",sep=""), Simlength = 10, 
+              Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+    
+    SimSimple("COMPADREslow3gen100yrs", sppVector = paste(sp,stages,"stages",sep=""),Simlength = 100, 
+              Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+    })
+})
+
+
+# Semelparous species in COMPADRE from Takada and Kawai 2020
+lapply(c("Genianella compestris","Rubus praecox","Rubus ursinus","Carlina vulgaris","Carum carvi","Digitalis purpurea","Picris hieracioides","Centaurea jacea","Cirsium dissectum","Cirsium palustre","Cirsium pitcheri","Cirsium scariosum","Cirsium tracyi","Dipsacus fullonum","Saussurea medusa","Tragapogon pratensis"), function(sp){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matA)
+  Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matU)
+  TMx_one_taxa <- TMx_one_taxa[!sapply(TMx_one_taxa, function(x) any(is.na(x)))]
+
+  Nx_one_taxa <- Nx_taxaCompadre[compadre$metadata$SpeciesAccepted %in% sp]
+  
+  SimSimple("COMPADREslow3gen", sppVector = sp, Simlength = 3, 
+          Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen10yrs", sppVector = sp, Simlength = 10, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen100yrs", sppVector = sp, Simlength = 100, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+
+})
+
+```
+
+
+
+```{r}
+# Skip for now, dormant and damaged stages. 
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Actaea elata"]
+
+Nx_all_ACEL <- list(rep(1,11),rep(1,11),rep(1,11),rep(1,11)) # no seedbank, NA - unobserved seedbank
+Mx_all_ACEL <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Actaea elata"], function(x) x$matA))
+TMx_all_ACEL <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matU))
+
+
 SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 3, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = TRUE, ps = pathstartempirical3gen)
 SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 10, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstartempirical)
 SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 100, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstart100)
+
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Centaurea corymbosa"] # might be semelparous but only one matrix
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Furcraea parmentieri"] # none
+compadre[[2]][compadre[[1]]$Genus == "Furcraea"] # none
 
 
 ```
