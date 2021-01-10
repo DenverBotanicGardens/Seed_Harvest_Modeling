@@ -164,8 +164,8 @@ SimSimple100new <- function(HarvestType = "No", sppVector = sp, FrG = 0, FrB = 0
 # rm(HarvestType);rm(MatrixType);rm(Mxs);rm(Nxs);rm(Simlength);rm(generationspan);rm(stablestagestart);rm(ps);rm(popsz)
 
 SimSimpleVirtual <- function(HarvestType = "No", MatrixType, FrG = 0, FrB = 0, intG = 0, intB = 0, 
-                         AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, Nxs,
-                         Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
+                             AvgInt = 0, Cgg_gb_bg_bb = c(0.5,0.5,0.5,0.5), reps = 100, Mxs, Nxs,
+                             Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
   lapply(1:100, function(sp){ # repeat for random number of matrices from each type
     Mx_sample <- sample(Mxs, size = max(5,rpois(1,10)))
     gentim <- popbio::generation.time(mean(Mx_sample))
@@ -195,10 +195,10 @@ SimSimpleVirtual <- function(HarvestType = "No", MatrixType, FrG = 0, FrB = 0, i
                                         TotYrs = projlength,
                                         ClusteredColl = 1, # clust,
                                         ddceiling = FALSE)
-        save(outSimulation, file = paste(ps, HarvestType,"Harvest",
-                                   "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
-                                   "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),"Virtual",MatrixType, sp,
-                                   ".Rdata", sep=""))
+        # save(outSimulation, file = paste(ps, HarvestType,"Harvest",
+        #                            "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
+        #                            "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),"Virtual",MatrixType, sp,
+        #                            ".Rdata", sep=""))
         
         # Damping ratio
         AMx <- mean(outSimulation[[6]])
@@ -221,8 +221,10 @@ SimSimpleVirtual <- function(HarvestType = "No", MatrixType, FrG = 0, FrB = 0, i
                           DampingRatio = as.numeric(dampR),
                           FreqG = FrG, FreqB = FrB, 
                           IntG = intG, IntB = intB,
-                          SPP = sp, Clust = 1, StPopSz = popsz, 
+                          SPP = MatrixType, Clust = 1, StPopSz = popsz, 
                           generationtime = gentim,
+                          SimLength = projlength,
+                          MatrixType = MatrixType,
                           Frequency = 0, IntRatio = 0)# Int[1]/Int[2])
         rm(outSimulation)
         out
@@ -232,8 +234,60 @@ SimSimpleVirtual <- function(HarvestType = "No", MatrixType, FrG = 0, FrB = 0, i
     # bypopsz
     save(bypopsz, file = paste(ps, HarvestType,"Harvest",
                                "Fr",FrG,"_",FrB,"In",intG,"_",intB,"AverageInt",AvgInt,
-                               "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),sp,
+                               "Climate",paste(Cgg_gb_bg_bb, collapse = "_"),MatrixType,sp,
                                ".Rdata", sep=""))
   }) # end species
 }
 
+
+# Test
+ps <- pathstart
+MatrixType <- "Iteroslow"
+Mxs <- Tmx_iteroslow
+Nxs <- Nxs_othertypes
+Simlength <- 100
+generationspan <- FALSE
+popsz <- 10
+reps <- 100
+stablestagestart <- TRUE
+rm(ps);rm(MatrixType);rm(Mxs);rm(Nxs);rm(Simlength);rm(generationspan);rm(popsz)
+
+SimVirtualNoHarvest <- function(MatrixType,reps = 100, Mxs, Nxs,
+                                Simlength = 100, generationspan = FALSE, stablestagestart = TRUE, ps = pathstart){  
+  lapply(1:100, function(sp){ # repeat for random number of matrices from each type
+    Mx_sample <- sample(Mxs, size = max(5,rpois(1,10)))
+    gentim <- popbio::generation.time(mean(Mx_sample))
+    bypopsz <- do.call(rbind,lapply(c(10,50,100,500), function(popsz){
+      outdf <- do.call(rbind,lapply(1:reps, function(repNow){
+        if(stablestagestart == TRUE) Nx_start <- stable.stage(mean(Mx_sample))
+        if(stablestagestart == FALSE) Nx_start <- sample(Nxs,1)[[1]]
+        if(generationspan == TRUE) {
+          projlength <- floor(Simlength * gentim)
+        } else {
+          projlength <- Simlength
+        }
+        outSimulation <- SeedHarvestSimple(Mx_list = Mx_sample,
+                                        # The TMx are transition matrices without fecundity, virtual species only have largest as fecundity
+                                        TMx_list = lapply(Mx_sample, function(i){ 
+                                          i[1,4] <- 0
+                                          i
+                                        }),
+                                        Nx_list = Nxs,
+                                        Nx = Nx_start,
+                                        StartPopSize = popsz,
+                                        TotYrs = projlength)
+        
+        out <- data.frame(outSimulation, SPP = MatrixType, StPopSz = popsz, 
+                          generationtime = gentim,
+                          SimLength = projlength,
+                          MatrixType = MatrixType)
+        rm(outSimulation)
+        out
+      })) # end replicates
+      outdf
+    })) # end bypopsz 
+    # bypopsz
+    save(bypopsz, file = paste(ps,"PVA","SimulationLength",projlength,MatrixType,sp,
+                               ".Rdata", sep=""))
+  }) # end species
+}
