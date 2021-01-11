@@ -11,6 +11,33 @@ rm(list=ls())
 library(popbio)
 library(ggplot2)
 library(patchwork)
+
+#automatic install of packages if they are not installed already
+# list.of.packages <- c(
+#   "foreach",
+#   "doParallel",
+#   "ranger",
+#   "palmerpenguins",
+#   "tidyverse",
+#   "kableExtra"
+#   )
+# 
+# new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+# 
+# if(length(new.packages) > 0){
+#   install.packages(new.packages, dep=TRUE)
+# }
+
+#loading packages
+for(package.i in list.of.packages){
+  suppressPackageStartupMessages(
+    library(
+      package.i, 
+      character.only = TRUE
+      )
+    )
+}
+
 ```
 
 # -------------------------------------------------------------------------------------------
@@ -19,27 +46,6 @@ library(patchwork)
 ## set seed within VirtualSepeciesTypes.R
 
 ```{r}
-
-# Fast is when can progress to multiple steps larger, slow is when can only progress to next stage
-
-Tmx_annual <- lapply(1:100, function(rep){
-  # three seed stages, 1 reproductive
-  # lower adult survival then reproduction is higher
-  s <- runif(1,0,0.8) # adult survival
-  f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-  t_ij <- matrix(0, nrow = 4, ncol = 4)
-  t_ij[4,1:3] <- rlnorm(1, meanlog = s, sdlog = 0.5)
-  t_ij[2,1] <- t_ij[3,2] <- runif(1, min = 0, max = s)
-  if(any(colSums(t_ij)>=1)){
-    for(i in which(colSums(t_ij)>=1)){
-      t_ij[,i] <- t_ij[,i]/ (sum(t_ij[,i]) + runif(1,0.01,0.1)) # make there be some death, 80-99% survival
-      } 
-  }
-  t_ij[1,4] <- f
-  t_ij
-  })
-
-
 generation.time(mean(sample(Tmx_annual,6)))
 
 x <- lapply(1:100, function(x)(lambda(mean(sample(Tmx_annual,2))))) 
@@ -52,74 +58,14 @@ boxplot(unlist(x))
 generation.time(mean(Tmx_annual))
 lambda(mean(Tmx_annual))
 damping.ratio(mean(Tmx_annual))
-```
-
-
-```{r}
-Tmx_iteroslow <- lapply(1:100, function(Mx){
-  s <- runif(1,0,0.8) # adult survival
-  f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-  t_ij <- matrix(0, nrow = 4, ncol = 4)
-  t_ij[2,1] <- runif(1, min = 0.01, max = 0.99)
-  t_ij[3,2] <- runif(1, min = 0.01, max = 0.99)
-  t_ij[4,3] <- runif(1, min = 0.01, max = 0.99)
-  # stasis or retrogression
-  t_ij[2,2:3] <- t_ij[3,3:4] <- t_ij[4,4] <- s
-  if(any(colSums(t_ij)>=1)){
-    for(i in which(colSums(t_ij)>=1)){
-      t_ij[,i] <- t_ij[,i]/(sum(t_ij[,i]))
-    } 
-  }
-  t_ij[1,4] <- f
-  t_ij
-})
 
 generation.time(mean(Tmx_iteroslow))
 lambda(mean(Tmx_iteroslow))
 damping.ratio(mean(Tmx_iteroslow))
 
-
-Tmx_semelslow <- lapply(1:100, function(Mx){
-  s <- runif(1,0,0.8) # adult survival
-  f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-  t_ij <- matrix(0, nrow = 4, ncol = 4)
-  t_ij[2,1] <- runif(1, min = 0.01, max = 0.99)
-  t_ij[3,2] <- runif(1, min = 0.01, max = 0.99)
-  t_ij[4,3] <- runif(1, min = 0.01, max = 0.99)
-  # stasis or retrogression
-  t_ij[2,2:3] <- t_ij[3,3:4] <- s
-  if(any(colSums(t_ij)>=1)){
-    for(i in which(colSums(t_ij)>=1)){
-      t_ij[,i] <- t_ij[,i]/(sum(t_ij[,i]))
-    } 
-  }
-  t_ij[1,4] <- f
-  t_ij
-})
-
 generation.time(mean(sample(Tmx_semelslow,6)))
 lambda(mean(Tmx_semelslow))
 damping.ratio(mean(Tmx_semelslow))
-
-```
-
-```{r}
-Tmx_iterofast <- lapply(1:100, function(Mx){
-  s <- runif(1,0,0.8) # adult survival
-  f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-  t_ij <- matrix(0, nrow = 4, ncol = 4)
-  t_ij[2:4,1:3] <- runif(9, min = 0.01, max = 0.99)
-  t_ij[2,3] <- 0
-  t_ij[2,2] <- t_ij[3,3] <-t_ij[4,4] <- s
-
-  if(any(colSums(t_ij)>=1)){
-    for(i in which(colSums(t_ij)>=1)){
-      t_ij[,i] <- t_ij[,i]/(sum(t_ij[,i]))
-    } 
-  }
-  t_ij[1,4] <- f
-  t_ij
-})
 
 generation.time(Tmx_iterofast[[1]])
 generation.time(mean(sample(Tmx_iterofast,6)))
@@ -127,23 +73,6 @@ generation.time(mean(Tmx_iterofast))
 lambda(mean(Tmx_iterofast))
 damping.ratio(mean(Tmx_iterofast))
 
-
-Tmx_semelfast <- lapply(1:100, function(Mx){
-  s <- runif(1,0,0.8) # adult survival
-  f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-  t_ij <- matrix(0, nrow = 4, ncol = 4)
-  t_ij[2:4,1:3] <- runif(9, min = 0.01, max = 0.99)
-  t_ij[2,3] <- 0
-  t_ij[2,2] <- t_ij[3,3] <- s
-
-  if(any(colSums(t_ij)>=1)){
-    for(i in which(colSums(t_ij)>=1)){
-      t_ij[,i] <- t_ij[,i]/(sum(t_ij[,i]))
-    } 
-  }
-  t_ij[1,4] <- f
-  t_ij
-})
 
 generation.time(mean(Tmx_semelfast))
 lambda(mean(Tmx_semelfast))
@@ -153,38 +82,104 @@ damping.ratio(mean(Tmx_semelfast))
 
 # Simulate stochastic projection with no perturbation
 ```{r}
+
+library(foreach)
+library(doParallel)
+library(parallel)
+
+
 # test
 # Mx_list <- sample(Tmx_iteroslow,5)
+Mx_list <- Tmx_annual
+Nxstages <- c(NA,NA,NA,1)
 # which(lapply(Mx_list, function(x) lambda(x))<1) # which in list are growth rates < 1
 # Nxs_annual <- lapply(1:100, function(i){
 #   c(NA,NA,NA,max(1,rpois(1,runif(1, 1,500))))
 #   })
-# stable.stage(mean(Mx_list))
 # StartPopSize <- 10
 # Nxstages <- c(NA,NA,NA,1)
 # vec <- rep(0,4)
 # rm(StartPopSize)
-# rm(Mx_list);rm(vec)
+MatrixType <- "Annual"
+Simlength <- 100
+# rm(Mx_list);rm(vec);rm(Mx_sample);rm(TMx_list)
+
+n.cores <- parallel::detectCores()-1
+my.cluster <- parallel::makeCluster(
+  n.cores, 
+  type = "PSOCK"
+  )
+#register it to be used by %dopar%
+doParallel::registerDoParallel(cl = my.cluster)
+
+
 
 # Nx should be the stable stage distribution
-virtualPVA <- function(Mx_list, Nxstages, StartPopSize, MatrixType){
-  Nx <- stable.stage(mean(Mx_list))
+# Nxstages: Only need to define seed stages in annuals, rest are not seed stages
+virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType, Simlength, generationspan = FALSE){
+  # Take a sample of size at least 5, remove fecundity for TMx_list 
+  Mx_sample <- sample(Mx_list, size = max(5,rpois(1,10)))
+  TMx_list <- lapply(Mx_sample, function(i){ 
+                                          i[1,4] <- 0
+                                          i
+                                        })
+  # calculate generation time to scale by generation time or set number of years for projection length
+  gentim <- popbio::generation.time(mean(Mx_sample))
+  if(generationspan == TRUE) {
+          projlength <- floor(Simlength * gentim)
+        } else {
+          projlength <- Simlength
+          }
+  # scale the above ground growth to the starting population size
+  Nx <- stable.stage(mean(Mx_sample))
   Nx_scale <- Nx[!is.na(Nxstages)]
   vec <- matrix(floor(Nx*(StartPopSize/sum(Nx_scale))), ncol = 1)
+  # Initilize for loop
   out <- c()
-  extant <- c()
-  for(i in 1:150){
-    vec <- floor( (sample(Mx_list,1))[[1]]  %*%vec)
-    out[i] <- sum(vec)
-    extant[i] <- if(sum(vec)<1) 0 else 1
+  Extant <- c()
+  yr <- c()
+  mats <- list()
+  popsz <- c()
+  Tulapprox <- c()
+  LogGrowthsim <- c()
+  LogGrowthSimLowerCI <- c()
+  LogGrowthSimUpperCI <- c()
+  Time2Ext <- NA
+  # PVA loop
+  dfout <- foreach(i = 1:projlength, .combine = 'c') %dopar% {
+    yr[i] <- i
+    mats[[i]] <- (sample(Mx_sample,1))[[1]]
+    vec <- floor(mats[[i]]%*%vec)
+    popsz[i] <- sum(vec) 
+    Extant[i] <- if(sum(vec)<1) 0 else 1
+    # A list of 2 or more, will be NA until second year
+    if(i == 1){
+      Tulapprox[i] <- NA
+      LogGrowthsim[i] <- NA
+      LogGrowthSimLowerCI[i] <- NA
+      LogGrowthSimUpperCI[i] <- NA
+    } else {
+      Tulapprox[i] <- popbio::stoch.growth.rate(mats, verbose = FALSE)$approx
+      LogGrowthsim[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim
+      LogGrowthSimLowerCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[1]
+      LogGrowthSimUpperCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[2]
+      }
+    if(Extant[i] == 0) Time2Ext <- i
+    if(sum(vec) == 0) break
   }
-  data.frame(PopSize = out, Year = 1:150, MatType = MatrixType, GenTime = generation.time(mean(Mx_list)),
-               Extant = extant, StPopSz = StartPopSize)
+  data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
+             Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext, Tulapprox = Tulapprox,
+             LogGrowthsim = LogGrowthsim, LogGrowthSimLowerCI = LogGrowthSimLowerCI, LogGrowthSimUpperCI = LogGrowthSimUpperCI)
 }
 ```
 
+```{r}
 
-## Try with simplified SeedHarvestSim function, set.seed with random generation of species types
+
+```
+
+## Try with simplified SeedHarvestSim function, set.seed with random generation of species types 
+# errors, just do virtualPVA first, then see if simplified or just old version works. 
 ```{r}
 pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
 Nxs_annual <- list(c(NA,NA,NA,1))
