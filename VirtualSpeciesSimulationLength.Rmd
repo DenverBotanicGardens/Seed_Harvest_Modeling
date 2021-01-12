@@ -163,7 +163,7 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
       mats[[i]] <- (sample(Mx_sample,1))[[1]]
       vec <- floor(mats[[i]]%*%vec)
       popsz[i] <- sum(vec[!is.na(Nxstages)])
-      Extant[i] <- if(sum(vec)<1) 0 else 1
+      Extant[i] <- if(popsz[i]<1) 0 else 1
       # A list of 2 or more, will be NA until second year
       if(i == 1){
         Tulapprox[i] <- NA
@@ -171,13 +171,14 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
         LogGrowthSimLowerCI[i] <- NA
         LogGrowthSimUpperCI[i] <- NA
       } else {
-        Tulapprox[i] <- popbio::stoch.growth.rate(mats, verbose = FALSE)$approx
-        LogGrowthsim[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim
-        LogGrowthSimLowerCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[1]
-        LogGrowthSimUpperCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[2]
+        stochLambda <- popbio::stoch.growth.rate(mats, verbose = FALSE)
+        Tulapprox[i] <- stochLambda$approx
+        LogGrowthsim[i] <-  stochLambda$sim
+        LogGrowthSimLowerCI[i] <-  stochLambda$sim.CI[1]
+        LogGrowthSimUpperCI[i] <-  stochLambda$sim.CI[2]
         }
       if(Extant[i] == 0) Time2Ext <- i
-      if(sum(vec) == 0) break
+      if(popsz[i] == 0) break
     }
     data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
              Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext, Tulapprox = Tulapprox,
@@ -193,8 +194,8 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
 # Just go the longer of 3 generations or 100 years to see the difference at each point.
 ```{r}
 
-
-annuals <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+c(10,50,100,500)
+annuals <- do.call(rbind,lapply(10, function(StPopSz){
   out <- virtualPVA(Mx_list = Tmx_annual, Nxstages = c(NA,NA,NA,1), StartPopSize = StPopSz, MatrixType = "Annual")
   save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/annuals",StPopSz,".Rdata", sep=""))
   out
