@@ -1,0 +1,47 @@
+---
+title: "Images from simulations"
+author: "Michelle DePrenger-Levin"
+date: "1/12/2021"
+output: html_document
+---
+
+```{r}
+rm(list=ls())
+```
+
+```{r}
+library(popbio)
+library(ggplot2)
+library(patchwork)
+
+pullresults <- function(MatrixType, pathstart){
+  files <- list.files(path = pathstart, pattern = MatrixType)
+  toplot <- do.call(rbind, lapply(files, function(x){
+    load(file = paste(pathstart,x,sep = ""))
+    MT <- gsub('[0-9]+', '', strsplit(strsplit(x, "0.5_0.5_0.5_0.5")[[1]][2], ".Rdata"))
+    # if(MT != ""){
+    out <- data.frame(out, MatrixType = MatrixType)
+    out
+    }))
+  toplot
+}
+
+```
+
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
+semelSlow <- pullresults("semelSlow", pathstart)
+table(semelSlow$Year[semelSlow$Extant==0])
+
+# ,"annuals"
+virtMPM <- do.call(rbind,lapply(c("semelSlow","semelFast","IteroSlow","IteroFast"), function(MT){
+  pullresults(MT, pathstart)
+}))
+
+table(virtMPM$Year[virtMPM$Extant==0],virtMPM$MatrixType[virtMPM$Extant==0])
+
+```
+
+
+

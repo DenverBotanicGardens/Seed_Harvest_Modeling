@@ -92,31 +92,27 @@ library(parallel)
 # Mx_list <- sample(Tmx_iteroslow,5)
 Mx_list <- Tmx_annual
 Nxstages <- c(NA,NA,NA,1)
-# which(lapply(Mx_list, function(x) lambda(x))<1) # which in list are growth rates < 1
+which(lapply(Mx_list, function(x) lambda(x))<1) # which in list are growth rates < 1
+## Should pick out random that have above and below 1 growth rates, not concerned if all above 1, well, maybe are with perturbations, if you're worried about extinction risk, you'd have at least some annual lambdas under 1
+length(which(lapply(Tmx_annual, function(x) lambda(x))<1)) # 7
+length(which(lapply(Tmx_semelfast, function(x) lambda(x))<1)) # 10
+length(which(lapply(Tmx_semelslow, function(x) lambda(x))<1)) # 55
+length(which(lapply(Tmx_iterofast, function(x) lambda(x))<1)) # 2
+length(which(lapply(Tmx_iteroslow, function(x) lambda(x))<1)) # 31
+
+
 # Nxs_annual <- lapply(1:100, function(i){
 #   c(NA,NA,NA,max(1,rpois(1,runif(1, 1,500))))
 #   })
-# StartPopSize <- 10
-# Nxstages <- c(NA,NA,NA,1)
+StartPopSize <- 10
 # vec <- rep(0,4)
-# rm(StartPopSize)
 MatrixType <- "Annual"
-Simlength <- 100
-# rm(Mx_list);rm(vec);rm(Mx_sample);rm(TMx_list)
-
-n.cores <- parallel::detectCores()-1
-my.cluster <- parallel::makeCluster(
-  n.cores, 
-  type = "PSOCK"
-  )
-#register it to be used by %dopar%
-doParallel::registerDoParallel(cl = my.cluster)
-
-
+lapply(Mx_sample, function(x) lambda(x))
+rm(Mx_list);rm(vec);rm(Mx_sample);rm(TMx_list); rm(StartPopSize); rm(vec); rm(Nxstages); rm(gentim); rm(projlength)
 
 # Nx should be the stable stage distribution
 # Nxstages: Only need to define seed stages in annuals, rest are not seed stages
-virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType, Simlength, generationspan = FALSE){
+virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
   # Take a sample of size at least 5, remove fecundity for TMx_list 
   Mx_sample <- sample(Mx_list, size = max(5,rpois(1,10)))
   TMx_list <- lapply(Mx_sample, function(i){ 
@@ -125,11 +121,7 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType, S
                                         })
   # calculate generation time to scale by generation time or set number of years for projection length
   gentim <- popbio::generation.time(mean(Mx_sample))
-  if(generationspan == TRUE) {
-          projlength <- floor(Simlength * gentim)
-        } else {
-          projlength <- Simlength
-          }
+  projlength <- max(gentim, 100)
   # scale the above ground growth to the starting population size
   Nx <- stable.stage(mean(Mx_sample))
   Nx_scale <- Nx[!is.na(Nxstages)]
@@ -146,37 +138,110 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType, S
   LogGrowthSimUpperCI <- c()
   Time2Ext <- NA
   # PVA loop
-  dfout <- foreach(i = 1:projlength, .combine = 'c') %dopar% {
-    yr[i] <- i
-    mats[[i]] <- (sample(Mx_sample,1))[[1]]
-    vec <- floor(mats[[i]]%*%vec)
-    popsz[i] <- sum(vec) 
-    Extant[i] <- if(sum(vec)<1) 0 else 1
-    # A list of 2 or more, will be NA until second year
-    if(i == 1){
-      Tulapprox[i] <- NA
-      LogGrowthsim[i] <- NA
-      LogGrowthSimLowerCI[i] <- NA
-      LogGrowthSimUpperCI[i] <- NA
-    } else {
-      Tulapprox[i] <- popbio::stoch.growth.rate(mats, verbose = FALSE)$approx
-      LogGrowthsim[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim
-      LogGrowthSimLowerCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[1]
-      LogGrowthSimUpperCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[2]
-      }
-    if(Extant[i] == 0) Time2Ext <- i
-    if(sum(vec) == 0) break
-  }
-  data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
+  # i: 100 replicates
+  n.cores <- parallel::detectCores()-1
+  my.cluster <- parallel::makeCluster(
+    n.cores, 
+    type = "PSOCK"
+    )
+  #register it to be used by %dopar%
+  doParallel::registerDoParallel(cl = my.cluster)
+  dfout <- foreach(i = 1:100, .combine = rbind, .packages = "popbio") %dopar% {
+      # Initilize for loop
+        out <- c()
+        Extant <- c()
+        yr <- c()
+        mats <- list()
+        popsz <- c()
+        Tulapprox <- c()
+        LogGrowthsim <- c()
+        LogGrowthSimLowerCI <- c()
+        LogGrowthSimUpperCI <- c()
+        Time2Ext <- NA
+    for(i in 1:projlength){
+      yr[i] <- i
+      mats[[i]] <- (sample(Mx_sample,1))[[1]]
+      vec <- floor(mats[[i]]%*%vec)
+      popsz[i] <- sum(vec[!is.na(Nxstages)])
+      Extant[i] <- if(sum(vec)<1) 0 else 1
+      # A list of 2 or more, will be NA until second year
+      if(i == 1){
+        Tulapprox[i] <- NA
+        LogGrowthsim[i] <- NA
+        LogGrowthSimLowerCI[i] <- NA
+        LogGrowthSimUpperCI[i] <- NA
+      } else {
+        Tulapprox[i] <- popbio::stoch.growth.rate(mats, verbose = FALSE)$approx
+        LogGrowthsim[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim
+        LogGrowthSimLowerCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[1]
+        LogGrowthSimUpperCI[i] <-  popbio::stoch.growth.rate(mats, verbose = FALSE)$sim.CI[2]
+        }
+      if(Extant[i] == 0) Time2Ext <- i
+      if(sum(vec) == 0) break
+    }
+    data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
              Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext, Tulapprox = Tulapprox,
-             LogGrowthsim = LogGrowthsim, LogGrowthSimLowerCI = LogGrowthSimLowerCI, LogGrowthSimUpperCI = LogGrowthSimUpperCI)
+             LogGrowthsim = LogGrowthsim, LogGrowthSimLowerCI = LogGrowthSimLowerCI, LogGrowthSimUpperCI = LogGrowthSimUpperCI,
+             ProjectionLength = projlength)
+  }
+  parallel::stopCluster(cl = my.cluster)
+  gc()
+  dfout
 }
 ```
 
+# Just go the longer of 3 generations or 100 years to see the difference at each point.
 ```{r}
 
 
+annuals <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_annual, Nxstages = c(NA,NA,NA,1), StartPopSize = StPopSz, MatrixType = "Annual")
+  save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/annuals",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+iterofast <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_iterofast, StartPopSize = StPopSz, MatrixType = "IteroFast")
+  save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/IteroFast",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+iteroslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_iteroslow, StartPopSize = StPopSz, MatrixType = "IteroSlow")
+  save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/IteroSlow",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+semelfast <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_semelfast, StartPopSize = StPopSz, MatrixType = "semelFast")
+  save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/semelFast",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+semelslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_semelslow, StartPopSize = StPopSz, MatrixType = "semelSlow")
+  save(out, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/semelSlow",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+
+
+# mapply(function(Type, Matrices){
+#   Typeout <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+#     out <- virtualPVA(Mx_list = Matrices, StartPopSize = StPopSz, MatrixType = Type)
+#     out
+#     }))
+#   save(Typeout, file =  paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/",Matrices,StPopSz,".Rdata",sep=""))
+#   },  c("IteroFast","IteroSlow","SemelFast","SemelSlow"), list(Tmx_iterofast,Tmx_iteroslow,Tmx_semelfast,Tmx_semelslow))
+
 ```
+
+```{r}
+head(annuals)
+
+```
+
+
 
 ## Try with simplified SeedHarvestSim function, set.seed with random generation of species types 
 # errors, just do virtualPVA first, then see if simplified or just old version works. 
