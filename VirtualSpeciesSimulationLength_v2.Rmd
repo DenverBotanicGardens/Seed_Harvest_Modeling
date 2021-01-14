@@ -143,21 +143,21 @@ virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
       if(Extant[i] == 0) Time2Ext <- i
       if(popsz[i] == 0) break
     }
-    print(which(lapply(mats, function(x) is.square.matrix(x))==FALSE))
-    print(repl)
-    # A list of 2 or more, will be NA until second year
-    if(length(popsz) < 6){
-      lambdas <- do.call(rbind,lapply(seq(2,length(popsz)), function(x){
-        stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
-        data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
-                   LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
-      }))
-    } else {
-      lambdas <- do.call(rbind,lapply(seq(5,length(popsz),by = 10), function(x){
-        stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
-        data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
-                   LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
+      # A list of 2 or more, will be NA until second year
+    if(length(popsz) > 1){
+      if(length(popsz) < 6){
+        lambdas <- do.call(rbind,lapply(seq(2,length(mats)), function(x){
+          stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
+          data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
+                     LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
         }))
+      } else {
+        lambdas <- do.call(rbind,lapply(seq(5,length(popsz),by = 10), function(x){
+          stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
+          data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
+                     LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
+          }))
+      }
     }
     dfMPM <- data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
                Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext, 
@@ -187,7 +187,8 @@ iterofast <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
   out
   }))
 
-# error eigen(Abar) : non-square matrix in 'eigen'; Abar likely means mean(A) = 
+# error eigen(Abar) : non-square matrix in 'eigen'; Abar likely means mean(A) 
+# When first thing went extinct, then mats[2:1] gave the one matrix and NULL 
 iteroslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
   out <- virtualPVA(Mx_list = Tmx_iteroslow, StartPopSize = StPopSz, MatrixType = "IteroSlowvirtual")
   save(out, file =  paste(pathstart,"iteroSlow",StPopSz,".Rdata", sep=""))
@@ -207,6 +208,25 @@ semelslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
   }))
 
 ```
+
+
+# matrices <- matrix(unlist(mats), ncol = length(mats))
+    #   s <- sqrt(dim(matrices)[1])
+    #   n <- dim(matrices)[2]
+    #   prob <- rep(1/n, n)
+    #   Abar <- numeric(s^2)
+    #   Exy <- numeric(s^4)
+    #   for (i in 1:n) {
+    #     A <- matrices[, i]
+    #     Exy <- Exy + prob[i] * kronecker(A, A)
+    #     Abar <- Abar + prob[i] * A
+    #     }
+    #   C <- (Exy - kronecker(Abar, Abar)) * n/(n - 1)
+    #   C <- matrix(C, nrow = s^2)
+    #   Abar <- matrix(Abar, nrow = s)
+    #   if(is.square.matrix(Abar) == FALSE){ 
+    #     print(mats)
+    #   }
 
 # stoch.growth.rate()
 function (matrices, prob = NULL, maxt = 50000, verbose = TRUE) 
