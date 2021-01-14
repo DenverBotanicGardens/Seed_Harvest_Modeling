@@ -1,0 +1,785 @@
+---
+title: "VirtualSpecies"
+author: "Michelle DePrenger-Levin"
+date: "1/4/2021"
+output: html_document
+---
+
+
+```{r}
+rm(list=ls())
+library(popbio)
+library(ggplot2)
+library(patchwork)
+
+#automatic install of packages if they are not installed already
+# list.of.packages <- c(
+#   "foreach",
+#   "doParallel",
+#   "ranger",
+#   "palmerpenguins",
+#   "tidyverse",
+#   "kableExtra"
+#   )
+# 
+# new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+# 
+# if(length(new.packages) > 0){
+#   install.packages(new.packages, dep=TRUE)
+# }
+
+#loading packages
+for(package.i in list.of.packages){
+  suppressPackageStartupMessages(
+    library(
+      package.i, 
+      character.only = TRUE
+      )
+    )
+}
+
+```
+
+# -------------------------------------------------------------------------------------------
+# 2020-12-22    
+# randomly generated MPM, then determine generation span  
+## set seed within VirtualSepeciesTypes.R
+
+```{r}
+generation.time(mean(sample(Tmx_annual,6)))
+
+x <- lapply(1:100, function(x)(lambda(mean(sample(Tmx_annual,2))))) 
+boxplot(unlist(x))
+x <- lapply(1:100, function(x)(generation.time(mean(sample(Tmx_annual,2))))) 
+boxplot(unlist(x))
+x <- lapply(1:100, function(x)(damping.ratio(mean(sample(Tmx_annual,2))))) 
+boxplot(unlist(x))
+
+generation.time(mean(Tmx_annual))
+lambda(mean(Tmx_annual))
+damping.ratio(mean(Tmx_annual))
+
+generation.time(mean(Tmx_iteroslow))
+lambda(mean(Tmx_iteroslow))
+damping.ratio(mean(Tmx_iteroslow))
+
+generation.time(mean(sample(Tmx_semelslow,6)))
+lambda(mean(Tmx_semelslow))
+damping.ratio(mean(Tmx_semelslow))
+
+generation.time(Tmx_iterofast[[1]])
+generation.time(mean(sample(Tmx_iterofast,6)))
+generation.time(mean(Tmx_iterofast))
+lambda(mean(Tmx_iterofast))
+damping.ratio(mean(Tmx_iterofast))
+
+
+generation.time(mean(Tmx_semelfast))
+lambda(mean(Tmx_semelfast))
+damping.ratio(mean(Tmx_semelfast))
+
+```
+
+# Simulate stochastic projection with no perturbation
+```{r}
+
+# library(foreach)
+# library(doParallel)
+# library(parallel)
+## Should pick out random that have above and below 1 growth rates, not concerned if all above 1, well, maybe are with perturbations, if you're worried about extinction risk, you'd have at least some annual lambdas under 1
+length(which(lapply(Tmx_annual, function(x) lambda(x))<1)) # 7
+length(which(lapply(Tmx_semelfast, function(x) lambda(x))<1)) # 11
+length(which(lapply(Tmx_semelslow, function(x) lambda(x))<1)) # 41
+length(which(lapply(Tmx_iterofast, function(x) lambda(x))<1)) # 3
+length(which(lapply(Tmx_iteroslow, function(x) lambda(x))<1)) # 27
+
+# square matrix is invertible, nonsingular or nondegenerate if there is a matrix B where 
+## AB = BA = I, where I is an n x n identify matrix
+# test if invertible
+# f_invert <- function(m) "matirx" %in% class(try(solve(m), silent=TRUE))
+# which(lapply(Tmx_iterofast, function(x) f_invert(x))==TRUE)
+# install.packages("matrixcalc")
+library(matrixcalc)
+lapply(Tmx_iteroslow, function(x) determinant(x)$modulus)
+lapply(Tmx_iteroslow, function(x) det(x)) # will 'underflow' and return 0 even if matrix is invertible
+which(lapply(Tmx_iteroslow, function(x) determinant(x)$modulus)==0)
+which(lapply(Tmx_iteroslow, function(x) is.singular.matrix(x))==TRUE) # For when singular/non-invertible
+
+# test
+Mx_list <- Tmx_iteroslow
+StartPopSize <- 10
+Nxstages <- rep(1,4)
+repl <- 1
+# Nxstages <- c(NA,NA,NA,1)
+which(lapply(Mx_list, function(x) lambda(x))<1) # which in list are growth rates < 1
+lapply(Mx_list, function(x) lambda(x))
+# rm(Mx_list);rm(vec);rm(Mx_sample);rm(TMx_list); rm(StartPopSize); rm(vec1); rm(Nxstages); rm(gentim); rm(projlength); rm(repl)
+
+# Nx should be the stable stage distribution
+# Nxstages: Only need to define seed stages in annuals, rest are not seed stages
+virtualPVA <- function(Mx_list, Nxstages = rep(1,4), StartPopSize, MatrixType){
+  dfout <- do.call(rbind,lapply(1:100, function(repl){
+    # Take a sample of size at least 5, remove fecundity for TMx_list 
+    Mx_sample <- sample(Mx_list, size = max(5,rpois(1,10)))
+    # calculate generation time to scale by generation time or set number of years for projection length
+    gentim <- popbio::generation.time(mean(Mx_sample), r=1, c=4)
+    projlength <- max(gentim, 100)
+    # scale the above ground growth to the starting population size
+    Nx <- stable.stage(mean(Mx_sample))
+    Nx_scale <- Nx[!is.na(Nxstages)]
+    vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx_scale))), ncol = 1)
+    # Initilize for loop
+    Extant <- c()
+    yr <- c()
+    mats <- list()
+    popsz <- c()
+    Time2Ext <- NA
+    for(i in 1:projlength){
+      yr[i] <- i
+      mats[[i]] <- (sample(Mx_sample,1))[[1]]
+      vec1 <- floor(mats[[i]]%*%vec1)
+      popsz[i] <- sum(vec1[!is.na(Nxstages)])
+      Extant[i] <- if(popsz[i]<1) 0 else 1
+      if(Extant[i] == 0) Time2Ext <- i
+      if(popsz[i] == 0) break
+    }
+    print(which(lapply(mats, function(x) is.square.matrix(x))==FALSE))
+    print(repl)
+    # A list of 2 or more, will be NA until second year
+    if(length(popsz) < 6){
+      lambdas <- do.call(rbind,lapply(seq(2,length(popsz)), function(x){
+        stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
+        data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
+                   LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
+      }))
+    } else {
+      lambdas <- do.call(rbind,lapply(seq(5,length(popsz),by = 10), function(x){
+        stochLambda <- popbio::stoch.growth.rate(mats[1:x], verbose = FALSE)
+        data.frame(Year = x, Tulapprox = stochLambda$approx, LogGrowthsim = stochLambda$sim,
+                   LogGrowthSimLowerCI = stochLambda$sim.CI[1], LogGrowthSimUpperCI = stochLambda$sim.CI[2])
+        }))
+    }
+    dfMPM <- data.frame(PopSize = popsz, Year = yr, MatType = MatrixType, GenTime = gentim,
+               Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext, 
+               ProjectionLength = projlength, Replicate = repl)
+    out <- merge(dfMPM, lambdas, by = "Year", all = TRUE)
+    out
+    }))
+  dfout
+}
+
+
+```
+
+# Just go the longer of 3 generations or 100 years to see the difference at each point.
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_virtual2021/"
+
+annuals <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_annual, Nxstages = c(NA,NA,NA,1), StartPopSize = StPopSz, MatrixType = "Annualvirtual")
+  save(out, file =  paste(pathstart,"annuals",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+iterofast <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_iterofast, StartPopSize = StPopSz, MatrixType = "IteroFastvirtual")
+  save(out, file =  paste(pathstart,"iteroFast",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+# error eigen(Abar) : non-square matrix in 'eigen'; Abar likely means mean(A) = 
+iteroslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_iteroslow, StartPopSize = StPopSz, MatrixType = "IteroSlowvirtual")
+  save(out, file =  paste(pathstart,"iteroSlow",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+semelfast <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_semelfast, StartPopSize = StPopSz, MatrixType = "semelFastvirtual")
+  save(out, file =  paste(pathstart,"semelFast",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+semelslow <- do.call(rbind,lapply(c(10,50,100,500), function(StPopSz){
+  out <- virtualPVA(Mx_list = Tmx_semelslow, StartPopSize = StPopSz, MatrixType = "semelSlowvirtual")
+  save(out, file =  paste(pathstart,"semelSlow",StPopSz,".Rdata", sep=""))
+  out
+  }))
+
+```
+
+# stoch.growth.rate()
+function (matrices, prob = NULL, maxt = 50000, verbose = TRUE) 
+{
+  if (is.list(matrices)) {
+    matrices <- matrix(unlist(matrices), ncol = length(matrices))
+  }
+  s <- sqrt(dim(matrices)[1])
+  n <- dim(matrices)[2]
+  if (is.null(prob)) {
+    prob <- rep(1/n, n)
+  }
+  Abar <- numeric(s^2)
+  Exy <- numeric(s^4)
+  for (i in 1:n) {
+    A <- matrices[, i]
+    Exy <- Exy + prob[i] * kronecker(A, A)
+    Abar <- Abar + prob[i] * A
+  }
+  C <- (Exy - kronecker(Abar, Abar)) * n/(n - 1)
+  C <- matrix(C, nrow = s^2)
+  Abar <- matrix(Abar, nrow = s)
+  ev <- eigen(Abar)
+  lmax <- which(Re(ev$values) == max(Re(ev$values)))
+  lambda <- Re(ev$values[lmax])
+  W <- ev$vectors
+  w <- abs(Re(W[, lmax]))
+  V <- Conj(solve(W))
+  v <- abs(Re(V[lmax, ]))
+  S <- v %o% w
+  r <- numeric(maxt)
+  n0 <- w
+  for (t in 1:maxt) {
+    if (verbose) {
+      if (t == 1 || t%%10000 == 0) {
+        message("Calculating stochastic growth at time ", 
+          t)
+      }
+    }
+    col <- sample(1:n, 1, prob = prob)
+    A <- matrix(matrices[, col], nrow = s)
+    n0 <- A %*% n0
+    N <- sum(n0)
+    r[t] <- log(N)
+    n0 <- n0/N
+  }
+  loglsim <- mean(r)
+  dse <- 1.96 * sqrt(var(r)/maxt)
+  CI <- c(loglsim - dse, loglsim + dse)
+  Svec <- matrix(S, ncol = 1)
+  tau2 <- t(Svec) %*% C %*% Svec
+  loglams <- log(lambda) - tau2/(2 * lambda^2)
+  stoch <- list(approx = as.numeric(loglams), sim = loglsim, 
+    sim.CI = CI)
+  stoch
+}
+
+
+```{r}
+head(annuals)
+
+```
+
+
+
+## Try with simplified SeedHarvestSim function, set.seed with random generation of species types 
+# errors, just do virtualPVA first, then see if simplified or just old version works. 
+```{r}
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+Nxs_annual <- list(c(NA,NA,NA,1))
+Nxs_othertypes # would be same as c(1,1,1,1)
+# Test
+# Mxs <- Tmx_annual
+# rm(Mxs)
+
+SimVirtualNoHarvest(ps = pathstart, MatrixType = "Annual", Mxs = Tmx_annual, Nxs = Nxs_annual, Simlength = 10, stablestagestart = TRUE, generationspan = FALSE)
+SimVirtualNoHarvest(ps = pathstart, MatrixType = "Annual", Mxs = Tmx_annual, Nxs = Nxs_annual, Simlength = 100, stablestagestart = TRUE, generationspan = FALSE)
+SimVirtualNoHarvest(ps = pathstart, MatrixType = "Annual", Mxs = Tmx_annual, Nxs = Nxs_annual, Simlength = 3, stablestagestart = TRUE, generationspan = TRUE)
+
+mapply(function(TMx, MT){
+  SimVirtualNoHarvest(ps = pathstart, MatrixType = MT, Mxs = TMx, Nxs = Nxs_othertypes, Simlength = 10, stablestagestart = TRUE, generationspan = FALSE)
+  SimVirtualNoHarvest(ps = pathstart, MatrixType = MT, Mxs = TMx, Nxs = Nxs_othertypes, Simlength = 100, stablestagestart = TRUE, generationspan = FALSE)
+  SimVirtualNoHarvest(ps = pathstart, MatrixType = MT, Mxs = TMx, Nxs = Nxs_othertypes, Simlength = 3, stablestagestart = TRUE, generationspan = TRUE)
+  }, list(Tmx_iterofast,Tmx_iteroslow, Tmx_semelfast, Tmx_semelslow), c("IteroFast","IteroSlow","SemelFast","SemelSlow"))
+
+
+
+```
+  
+
+
+
+
+```{r}
+# sample(Tmx_annual[which(lapply(Tmx_annual, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE)
+alltracks <- do.call(rbind, lapply(c(10,50,100,500), function(StPopSz){
+    annualtrack <- do.call(rbind, lapply(1:100, function(i){
+      # virtualPVA(sample(Tmx_annual[which(lapply(Tmx_annual, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE),
+      virtualPVA(sample(Tmx_annual,max(5,rpois(1,10))),
+                 Nxstages = c(NA,NA,NA,1),
+                 StartPopSize = StPopSz, paste("Annual",i,sep="_"))
+    }))
+    iteroslowtrack <- do.call(rbind, lapply(1:100, function(i){
+      # virtualPVA(sample(Tmx_iteroslow[which(lapply(Tmx_iteroslow, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE), 
+      virtualPVA(sample(Tmx_iteroslow,max(5,rpois(1,10))),
+                 Nxstages = rep(1,4),
+                 StartPopSize = StPopSz, paste("IteroSlow",i,sep="_"))
+    }))
+    iterofasttrack <- do.call(rbind, lapply(1:100, function(i){
+      # virtualPVA(sample(Tmx_iterofast[which(lapply(Tmx_iterofast, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE),
+      virtualPVA(sample(Tmx_iterofast,max(5,rpois(1,10))),
+                 Nxstages = rep(1,4),
+                 StartPopSize = StPopSz, paste("IteroFast",i,sep="_"))
+    }))
+    semelslowtrack <- do.call(rbind, lapply(1:100, function(i){
+      # virtualPVA(sample(Tmx_semelslow[which(lapply(Tmx_semelslow, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE),
+      virtualPVA(sample(Tmx_semelslow,max(5,rpois(1,10))),
+                 Nxstages = rep(1,4),
+                 StartPopSize = StPopSz, paste("SemelSlow",i,sep="_"))
+      }))
+    semelfasttrack <- do.call(rbind, lapply(1:100, function(i){
+      # virtualPVA(sample(Tmx_semelfast[which(lapply(Tmx_semelfast, function(x) lambda(x))<1.5) ],max(5,rpois(1,10)), replace = TRUE),
+      virtualPVA(sample(Tmx_semelfast,max(5,rpois(1,10))),
+                 Nxstages = rep(1,4),
+                 StartPopSize = StPopSz, paste("SemelFast",i,sep="_"))
+      }))
+    alltracks <- do.call(rbind, list(annualtrack,iteroslowtrack,iterofasttrack,semelslowtrack,semelfasttrack))
+    alltracks
+}))
+
+table(alltracks$MatType, alltracks$StPopSz)
+alltracks$MatrixType <- unlist(lapply(alltracks$MatType, function(x) strsplit(x, "_")[[1]][1]))
+alltracks$MatrixType <- factor(alltracks$MatrixType, levels = c("Annual","SemelFast","IteroFast","SemelSlow","IteroSlow"))
+
+# x <- split(alltracks, alltracks$MatType)[[1]]
+# rm(x)
+untilextirpated <- do.call(rbind,lapply(split(alltracks, alltracks$MatType), function(x){
+  if(min(which(x$PopSize == 0)) <= 150){
+    x[1:min(which(x$PopSize == 0)),]
+    } else {
+      x
+      }
+  }))
+ggplot(untilextirpated[untilextirpated$Extant ==  0,], aes(MatrixType, Year))+ #, colour = MatrixType))+
+  facet_wrap(~StPopSz)+
+  geom_jitter(alpha = 0.5, aes(colour = MatrixType))+
+  geom_violin(alpha = .1)+
+  theme_bw()+
+  coord_flip()+
+  xlab("Matrix Type")+
+  ylab("Time to extinction")+
+  theme(legend.position = "none")
+```
+
+
+```{r}
+# [untilextirpated$GenTime <= 5,]
+ggplot(untilextirpated, aes(Year, Extant, group = MatType, colour = GenTime))+
+  geom_line(alpha=0.75)+
+  # scale_color_gradient2(low = "red", mid = "green", high = "blue", midpoint = 3)+
+  scale_colour_continuous(type = "viridis")+
+  theme_bw()+
+  geom_jitter(width = 0.01, height = 0.01, alpha = 0.5, shape = 16)
+
+ggplot(untilextirpated[untilextirpated$GenTime > 5,], aes(Year, Extant, group = MatType, colour = GenTime))+
+  geom_line(alpha=0.75)+
+  scale_color_gradient2(low = "blue", mid = "yellow", high = "red", midpoint = 10)+
+  theme_bw()+
+  geom_jitter(width = 0.01, height = 0.01, alpha = 0.5, shape = 16)
+  
+table(alltracks$Extant, alltracks$MatType)
+```
+
+
+
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_virtual/"
+
+
+SimSimpleVirtual(HarvestType = "NoneVirtual", MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 100, generationspan = FALSE, 
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+# 2020-12-23
+
+```
+2020-12-23  
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_10years/"
+
+Nxs_annual <- lapply(1:100, function(i){
+  # c(max(1,rpois(1,runif(1, 1,500))),NA,NA,max(1,rpois(1,runif(1, 1,500))))
+  c(NA,NA,NA,max(1,rpois(1,runif(1, 1,500))))
+  })
+
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+Nxs_othertypes <- lapply(1:100, function(i){
+  rpois(4,runif(4, 1,500))
+})
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = "NoneVirtual50Gen", MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+```
+
+# 2020-12-25 
+ after adding matrix type and simulation length to output, not saving matrices
+```{r}
+pathstartVirtual <-  "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_outvirtemp/"
+
+# 10 years
+NoHarvestVirtual <- "Virtual10yrs"
+
+Nxs_annual <- lapply(1:100, function(i){
+  c(max(1,rpois(1,runif(1, 1,500))),NA,NA,max(1,rpois(1,runif(1, 1,500))))
+  })
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+Nxs_othertypes <- lapply(1:100, function(i){
+  rpois(4,runif(4, 1,500))
+})
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 10, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+rm(NoHarvestVirtual)
+## 100 years
+NoHarvestVirtual <- "Virtual100yrs"
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 100, generationspan = FALSE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+rm(NoHarvestVirtual)
+## 3 generations
+NoHarvestVirtual <- "Virtual3gen"
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "Annual", Mxs = Tmx_annual,
+                 Nxs = Nxs_annual, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelFast", Mxs = Tmx_semelfast,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "SemelSlow", Mxs = Tmx_semelslow,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroFast", Mxs = Tmx_iterofast,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+SimSimpleVirtual(HarvestType = NoHarvestVirtual, MatrixType = "IteroSlow", Mxs = Tmx_iteroslow,
+                 Nxs = Nxs_othertypes, Simlength = 3, generationspan = TRUE,
+                 stablestagestart = TRUE, ps = pathstartVirtual)
+
+```
+
+
+
+# add some more semelparous
+```{r}
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+names(compadre[[1]])
+table(compadre[[1]]$OrganismType)
+# Where there is no surivval of reproductive individuals
+
+
+compadre[[1]][grep("Succulent", compadre[[1]]$OrganismType),]
+# semelparous <- 
+compadre[[2]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")]
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matA
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matF
+compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matU
+dim(compadre[[3]][compadre[[1]]$SpeciesAccepted %in% c("Agave marmorata")][[1]]$matU)
+
+#test
+x <- compadre[[3]][[1]]
+semelparous <- compadre[[1]][(sapply(compadre[[3]], function(x){
+  x$matU[dim(x$matA)[1],dim(x$matA)[1]] == 0
+})),]
+
+semelparous[semelparous$OrganismType != "Annual" & semelparous$StudyDuration > 5 & !is.na(semelparous$StudyDuration),]
+# "Tillandsia brachycaulos" long-lived semelparous threatened species!
+# "Actaea elata" rare but iteroparous Mayberry-Ella 2010
+# "Anthyllis vulneraria" semel or itero depending on the environment Davison et al 2010
+# 2020-12-28 emperical to match 
+pathstartempirical <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_10years/"
+pathstartempirical3gen <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Sim_out_3gen/"
+pathstart100 <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_100years/"
+
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Tillandsia brachycaulos"]
+
+Nx_all_TIBR <- list(rep(1,11),rep(1,11),rep(1,11),rep(1,11)) # no seedbank, NA - unobserved seedbank
+Mx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matA))
+TMx_all_TIBR <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matU))
+
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 3, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 10, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "TIBR", Simlength = 100, Mxs = Mx_all_TIBR[[1]], TMxs = TMx_all_TIBR[[1]], Nxs = Nx_all_TIBR, generationspan = FALSE, ps = pathstart100)
+
+# Doesn't seem to be semelparous either
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Cleistesiopsis bifaria"]
+
+Nx_all_CLBI <- lapply(1:17, function(x) c(NA,rep(1,11))) # no seedbank but 1st stage is dormant-ish, NA - unobserved seedbank
+Mx_all_CLBI <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Cleistesiopsis bifaria"], function(x) x$matA))
+TMx_all_CLBI <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Cleistesiopsis bifaria"], function(x) x$matU))
+
+
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 3, 
+          Mxs = Mx_all_CLBI[[1]], 
+          Txs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 10, 
+          Mxs = Mx_all_CLBI[[1]], 
+          TMxs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "CLBI", Simlength = 100, 
+          Mxs = Mx_all_CLBI[[1]], 
+          TMxs = TMx_all_CLBI[[1]], Nxs = Nx_all_CLBI, generationspan = FALSE, ps = pathstart100)
+```
+
+
+
+# Add a bunch from compadre don't worry about rarity  
+```{r}
+
+head(compadre$metadata)
+table(compadre$metadata$MatrixSplit)
+# test
+# x <- compadre$matrixClass[[100]]
+# which(grepl("seed",x))
+# rm(x)
+
+CompadreSPP <- compadre$metadata[compadre$metadata$AnnualPeriodicity == 1 &
+                                   compadre$metadata$MatrixTreatment == "Unmanipulated" &
+                                   compadre$metadata$MatrixSplit == "Divided" &
+                                   compadre$metadata$MatrixDimension,]
+
+SPP_compadre <- names(table(CompadreSPP$SpeciesAccepted)[table(CompadreSPP$SpeciesAccepted)>4])
+SPP_compadretable <- compadre$metadata[compadre$metadata$SpeciesAccepted %in% SPP_compadre,]
+
+# find seed stages; 
+taxaSeedStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted %in% SPP_compadre]
+
+# test
+# x <- taxaSeedStages[[1]]
+# nr(x)
+Nx_taxaCompadre <- lapply(taxaSeedStages, function(x){
+  nx <- rep(1,nrow(x))
+  nx[x[,1] == "prop"] <- NA
+  nx
+})
+
+Mx_all_taxaCompadre <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% SPP_compadre], function(x) x$matA)
+TMx_all_taxaCompadre <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% SPP_compadre], function(x) x$matU)
+
+# Generation time for each species, lapply over each species
+generationtimeCOMPADRE <- do.call(rbind,lapply(SPP_compadre[c(1:3,5:150)], function(x){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% x], function(x) x$matA)
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% x], function(x) x$matU)
+
+  generationtimeCOMPADRE <- mapply(function(Mx,Tx){
+    Fm <- Mx - Tx
+      popbio::generation.time(Mx, # r = Fm)
+      r = c(unique(which(Fm > 0, arr.ind = TRUE)[,1])),
+      c = c(unique(which(Fm > 0, arr.ind = TRUE)[,2])))
+    }, Mx_one_taxa, TMx_one_taxa)
+  data.frame(GT = generationtimeCOMPADRE, SPP = x)
+  }))
+# library(Rmisc)
+gensummary <- summarySE(generationtimeCOMPADRE[!is.infinite(generationtimeCOMPADRE$GT),], measurevar = "GT", groupvars = "SPP", na.rm = TRUE)
+
+longslow <- gensummary[gensummary$GT > 5,]
+
+pathstartRandomCompadre <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_COMPADRE/"
+# error in simulation longslow$SPP[13:39]
+sppnow <- "Actaea cordifolia"
+testStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted == sppnow]
+testA <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sppnow], function(x) x$matA)
+testU <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sppnow], function(x) x$matU)
+ taxaSeedStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted == sppnow]
+  testNx_list <- lapply(taxaSeedStages, function(x){
+    nx <- rep(1,nrow(x))
+    nx[x[,1] == "prop"] <- NA
+    nx
+    })
+lapply(testNx_list, function(x) length(x))
+
+length(testNx_list)
+length(testA)
+length(testU)
+testStages[[1]]
+
+# mapply(function(s,A,U) , testStages, testA, testU)
+
+test[!sapply(test, function(x) any(is.na(x)))]
+rm(test)
+
+
+lapply(SPP_compadre[!(SPP_compadre %in% c("Antirrhinum subbaeticum", "Agrimonia eupatoria", "Actaea spicata"))][30:194], function(sp){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matA)
+  Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matU)
+  TMx_one_taxa <- TMx_one_taxa[!sapply(TMx_one_taxa, function(x) any(is.na(x)))]
+
+  Nx_one_taxa <- Nx_taxaCompadre[compadre$metadata$SpeciesAccepted %in% sp]
+  
+  SimSimple("COMPADREslow3gen", sppVector = sp, Simlength = 3, 
+          Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen10yrs", sppVector = sp, Simlength = 10, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen100yrs", sppVector = sp, Simlength = 100, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+
+})
+
+# find this list by see for which the largest reproductive to prop is zero?
+
+# Various matrix sizes, need to have ones that match
+#test
+# sp <- SPP_compadre[[1]] "Alliaria petiolata"
+# stages <- 6 3
+# rm(stages)
+# test
+# x <- taxaSeedStages[[1]]
+# nr(x)
+rm(taxaSeedStages)
+rm(Nx_one_taxa)
+rm(sp)
+
+lapply(SPP_compadre, function(sp){
+  taxaSeedStages <- compadre$matrixClass[compadre$metadata$SpeciesAccepted == sp]
+  Nx_one_taxa <- lapply(taxaSeedStages, function(x){
+    nx <- rep(1,nrow(x))
+    nx[x[,1] == "prop"] <- NA
+    nx
+    })
+  stageNums <- unlist(lapply(Nx_one_taxa, function(x) length(x)))
+  # rle(stageNums)$values[rle(stageNums)$lengths >4] The stage numbers with at least 5 matrices of that size
+  lapply(rle(stageNums)$values[rle(stageNums)$lengths >4], function(stages){
+    Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sp], function(x) x$matA)[unlist(lapply(Nx_one_taxa, function(x) length(x) == stages))]
+    Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+    TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted == sp], function(x) x$matU)[unlist(lapply(Nx_one_taxa, function(x) length(x) == stages))]
+    TMx_one_taxa <- TMx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+    
+    SimSimple("COMPADREslow3gen", sppVector = paste(sp,stages,"stages",sep=""), Simlength = 3, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+    
+    SimSimple("COMPADREslow3gen10yrs", sppVector = paste(sp,stages,"stages",sep=""), Simlength = 10, 
+              Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+    
+    SimSimple("COMPADREslow3gen100yrs", sppVector = paste(sp,stages,"stages",sep=""),Simlength = 100, 
+              Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+    })
+})
+
+
+# Semelparous species in COMPADRE from Takada and Kawai 2020
+lapply(c("Genianella compestris","Rubus praecox","Rubus ursinus","Carlina vulgaris","Carum carvi","Digitalis purpurea","Picris hieracioides","Centaurea jacea","Cirsium dissectum","Cirsium palustre","Cirsium pitcheri","Cirsium scariosum","Cirsium tracyi","Dipsacus fullonum","Saussurea medusa","Tragapogon pratensis"), function(sp){
+  Mx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matA)
+  Mx_one_taxa <- Mx_one_taxa[!sapply(Mx_one_taxa, function(x) any(is.na(x)))]
+
+  TMx_one_taxa <- lapply(compadre$mat[compadre$metadata$SpeciesAccepted %in% sp], function(x) x$matU)
+  TMx_one_taxa <- TMx_one_taxa[!sapply(TMx_one_taxa, function(x) any(is.na(x)))]
+
+  Nx_one_taxa <- Nx_taxaCompadre[compadre$metadata$SpeciesAccepted %in% sp]
+  
+  SimSimple("COMPADREslow3gen", sppVector = sp, Simlength = 3, 
+          Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = TRUE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen10yrs", sppVector = sp, Simlength = 10, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+  
+  SimSimple("COMPADREslow3gen100yrs", sppVector = sp, Simlength = 100, 
+            Mxs = Mx_one_taxa,TMxs = TMx_one_taxa, Nxs = Nx_one_taxa, generationspan = FALSE, ps = pathstartRandomCompadre)
+
+})
+
+```
+
+
+
+```{r}
+# Skip for now, dormant and damaged stages. 
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Actaea elata"]
+
+Nx_all_ACEL <- list(rep(1,11),rep(1,11),rep(1,11),rep(1,11)) # no seedbank, NA - unobserved seedbank
+Mx_all_ACEL <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Actaea elata"], function(x) x$matA))
+TMx_all_ACEL <- list(lapply(compadre$mat[compadre$metadata$SpeciesAccepted == "Tillandsia brachycaulos"], function(x) x$matU))
+
+
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 3, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = TRUE, ps = pathstartempirical3gen)
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 10, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstartempirical)
+SimSimple("AnnualEmpericalNone", sppVector = "SEER", Simlength = 100, Mxs = Mx_all_SEER, TMxs = TMx_all_SEER, Nxs = Nx_all_SEER, generationspan = FALSE, ps = pathstart100)
+
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Centaurea corymbosa"] # might be semelparous but only one matrix
+compadre[[2]][compadre[[1]]$SpeciesAccepted == "Furcraea parmentieri"] # none
+compadre[[2]][compadre[[1]]$Genus == "Furcraea"] # none
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
