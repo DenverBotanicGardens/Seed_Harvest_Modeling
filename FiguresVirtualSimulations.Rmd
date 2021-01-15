@@ -14,13 +14,13 @@ library(popbio)
 library(ggplot2)
 library(patchwork)
 
+x <- files[1]
+table(out$Replicate)
+
 pullresults <- function(MatrixType, pathstart){
   files <- list.files(path = pathstart, pattern = MatrixType)
   toplot <- do.call(rbind, lapply(files, function(x){
     load(file = paste(pathstart,x,sep = ""))
-    MT <- gsub('[0-9]+', '', strsplit(strsplit(x, "0.5_0.5_0.5_0.5")[[1]][2], ".Rdata"))
-    # if(MT != ""){
-    out <- data.frame(out, MatrixType = MatrixType)
     out
     }))
   toplot
@@ -28,18 +28,152 @@ pullresults <- function(MatrixType, pathstart){
 
 ```
 
+# 2021.01.13 VirtualSpeciesSimulationLength_v2.Rmd 
+New calculation of stochastic lambda only every 10 years  - so much faster! unless there were fewer than 5 years before extinction, then every year 2:length of simulation (until extinction) was used
+Done with set.seed(1234) before each random matrix creation and double checking that it makes the same output
+```{r}
+length(which(lapply(Tmx_annual, function(x) lambda(x))<1)) # 7
+length(which(lapply(Tmx_semelfast, function(x) lambda(x))<1)) # 11
+length(which(lapply(Tmx_semelslow, function(x) lambda(x))<1)) # 41
+length(which(lapply(Tmx_iterofast, function(x) lambda(x))<1)) # 3
+length(which(lapply(Tmx_iteroslow, function(x) lambda(x))<1)) # 27
+?stoch.growth.rate
+```
+
+```{r}
+
+pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output_virtual2021/"
+
+virtualout <-  do.call(rbind,lapply(c("annuals","semel","itero"), function(MT){
+  pullresults(MT, pathstart)
+}))
+
+table(virtualout$StPopSz, virtualout$MatType) # 100 year projections for each of four starting pop sizes
+table(virtualout$Replicate, virtualout$MatType) # Should be 400 each
+
+# sort matrix types
+virtualout$MatType <- factor(virtualout$MatType, levels = c("Annualvirtual",
+                                                            "semelFastvirtual",
+                                                            "IteroFastvirtual",
+                                                            "semelSlowvirtual",
+                                                            "IteroSlowvirtual"))
+levels(virtualout$MatType) <- c("Annuals",
+                                "Semelparous fast","Iteroparous fast",
+                                "Semelparous slow", "Iteroparous slow")
+
+table(virtualout$MatType[!is.na(virtualout$Tulapprox)],virtualout$Time2Extinction[!is.na(virtualout$Tulapprox)])
+tail(virtualout[!is.na(virtualout$Tulapprox),]) # every 5 years get stochastic lambda, every year up to 2 years just calculate deterministic lambda
+
+# x <- split(virtualout, virtualout$MatType)[[1]]
+# rm(x)
+Gen3Table <- do.call(rbind, lapply(split(virtualout, virtualout$MatType), function(x){
+  data.frame(MatType = unique(x$MatType), xmin = min(x$GenTime*3), xmax = max(x$GenTime*3),
+             ymin = min(exp(x$Tulapprox), na.rm = TRUE), ymax = max(exp(x$Tulapprox), na.rm = TRUE))
+  }))
+
+ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/VirtualLambda.jpg",
+       ggplot(virtualout[!is.na(virtualout$Tulapprox) & !is.na(virtualout$MatType),], 
+              aes(Year, exp(Tulapprox), group = interaction(Replicate, StPopSz), colour =
+                    Time2Extinction))+
+         geom_rug(sides = "b", aes(Time2Extinction))+
+         geom_line()+
+         theme_bw()+
+         geom_vline(data = Gen3Table, aes(xintercept = xmin), linetype="dotted")+
+         geom_vline(data = Gen3Table, aes(xintercept = xmax), linetype="dotted")+
+         ylab(expression(lambda))+
+         geom_vline(xintercept = 10)+
+         geom_vline(xintercept = 100)+
+         xlab("Projection length")+
+         scale_colour_gradientn(name = "Time to\n extinction",
+                                colours = rainbow(10), na.value = rgb(0.1,0.1,0.1,0.10))+
+         facet_wrap(~MatType + StPopSz, nrow = 5),
+       width=200, height=200,units='mm', dpi=300)
+
+
+# Change to 100 years with new calculations
+yr <- 100
+sim100 <- virtualout[virtualout$Year == yr,]
+sim100$SimLength <- "100 years"
+sim10 <- virtualout[virtualout$Year == 10,] # Change to 10 later
+sim10$SimLength <- "10 years"
+# lambda at 2,5,10,20...90,100
+sim3gen <- virtualout[virtualout$Year > (virtualout$GenTime*3)-3 &
+                        virtualout$Year < (virtualout$GenTime*3)+2 &
+                        !is.na(virtualout$Tulapprox),]
+sim3gen$SimLength <- "3 generations"
+toplot <- do.call(rbind, list(sim10,sim100,sim3gen))
+toplot$SimLength <- factor(toplot$SimLength, 
+                           levels = c("10 years", "3 generations", "100 years"))
+table(toplot$SimLength, toplot$MatType)  # Extinction risk, of the 400 started, how many extinctions were detected by 10 yeras, 3 generations, and 100 years
+fig2alambda <- ggplot(toplot[!is.na(toplot$MatType),], aes(MatType, exp(Tulapprox), colour = SimLength))+
+  geom_boxplot()+
+  ggtitle("a)")+
+  theme_bw()+
+  ylab(expression(lambda))+ #"Simulation length\n years")
+  xlab("Species type")+
+  scale_colour_manual(name = "Simulation length",
+                      values = c("red","orange","darkblue"),
+                      breaks = c("10 years", "3 generations", "100 years"),
+                      labels = c("10 years", "3 generations", "100 years"))+
+  scale_x_discrete(labels = c("Annual" = "Annual",
+                               "Semelparous fast" = "Semelparous\n fast",
+                               "Iteroparous fast" = "Iteroparous\n fast",
+                               "Semelparous slow" = "Semelparous\n slow",
+                               "Iteroparous slow" = "Iteroparous\n slow"))
+#  Extinction Risk
+sim100 <- virtualout[virtualout$Year == 100,]
+sim100$SimLength <- "100 years"
+sim10 <- virtualout[virtualout$Year == 10,] 
+sim10$SimLength <- "10 years"
+sim3gen <- virtualout[virtualout$Year == floor((virtualout$GenTime*3)),]
+sim3gen$SimLength <- "3 generations"
+toplotER <- do.call(rbind, list(sim10,sim100,sim3gen))
+toplotER$SimLength <- factor(toplotER$SimLength, 
+                           levels = c("10 years", "3 generations", "100 years"))
+table(toplotER$SimLength, toplotER$MatType)  # Extinction risk, of the 400 started, how many extinctions were detected by 10 yeras, 3 generations, and 100 years
+
+table(toplotER$SimLength)
+ER <- aggregate(Extant ~ SimLength + MatType + StPopSz, function(x) sum(x)/100,
+                data = toplotER)
+ggplot(ER, aes(MatType, Extant, colour=SimLength))+
+  geom_point(position = position_dodge(width = 0.5), shape=2)+
+  facet_wrap(~StPopSz)+
+  theme_bw()
+
+
+fig2bEP <- 
+
+```
+
+
+
 ```{r}
 pathstart <- "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Simulation_output/"
+
+MatrixType <- "semel"
 
 semelSlow <- pullresults("semelSlow", pathstart)
 table(semelSlow$Year[semelSlow$Extant==0])
 
 # ,"annuals"
-virtMPM <- do.call(rbind,lapply(c("semelSlow","semelFast","IteroSlow","IteroFast"), function(MT){
+virtMPM <- do.call(rbind,lapply(c("annuals","semel","Itero"), function(MT){
   pullresults(MT, pathstart)
 }))
-
 table(virtMPM$Year[virtMPM$Extant==0],virtMPM$MatrixType[virtMPM$Extant==0])
+
+virtMPM <- lapply(c("IteroSlow","IteroFast",
+                                  "annuals50","annuals100","annuals500"), function(MT){
+  pullresults(MT, pathstart)
+})
+head(virtMPM[[3]])
+table(virtMPM$Year[virtMPM$Extant==0],virtMPM$MatrixType[virtMPM$Extant==0])
+
+ggplot(virtMPM[[1]], aes(Year, exp(Tulapprox), group = Replicate, colour = Time2Extinction))+
+  geom_line()+
+  theme_bw()+
+  ylab(expression(lambda))+
+  xlab("Projection length")+
+  scale_colour_gradient2(low = "red", mid = "green", high = "blue", na.value = rgb(1,1,1,0.5))
 
 ```
 
