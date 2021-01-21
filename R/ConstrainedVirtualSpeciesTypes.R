@@ -1,7 +1,7 @@
 # install.packages("PACLasso")
 # library(PACLasso)
 library(popbio)
-
+library(ggplot2)
 rm(list=ls())
 
 #Trade-off between survival and fecundity from Takada and Kawai (2020) 
@@ -27,19 +27,6 @@ hazard <- function(alpha2, beta2, x){
   alpha2 * exp(beta2*x)
 }
 
-##
-s <- runif(1,0,0.8) # adult survival
-f <- -1.25 * ((s + 4.6)^2) + 36.45 + rnorm(1, mean = 0, sd = 0.1) # add some variance around the line
-t_ij <- matrix(0, nrow = 4, ncol = 4)
-t_ij[4,1:3] <- rlnorm(1, meanlog = s, sdlog = 0.5)
-t_ij[2,1] <- t_ij[3,2] <- runif(1, min = 0, max = s)
-if(any(colSums(t_ij)>=1)){
-  for(i in which(colSums(t_ij)>=1)){
-    t_ij[,i] <- t_ij[,i]/ (sum(t_ij[,i]) + runif(1,0.01,0.1)) # make there be some death, 80-99% survival
-  } 
-}
-t_ij[1,4] <- f
-t_ij
 
 # <https://rushinglab.github.io/WILD3810/articles/lab7_tree_harvest.html> 
 eigen(t_ij)
@@ -72,8 +59,14 @@ survivalTypeIII <- function(alpha1,x,alpha3,beta3){
   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
 }
 
-
-Euler_Lotka(1:4, fecunditysurvival(0.8))
+# Find lambda ????????
+# Euler-Lotka equation; solve for 1!! 
+# Euler_Lotka <- function(x, fecund){
+#   fun <- l^(-x) * fecund *  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
+#   f <- expression(fun)
+#   D(f, 'l')
+# }
+# Euler_Lotka(1:4, fecunditysurvival(0.8))
 
 # Constant Hazard and Increasing fecundity
 surv <- survivalTypeIII(0.5, 1:4, 0,0.4)
@@ -101,9 +94,21 @@ ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/
          theme_bw(), 
        width=300, height=300,units='mm', dpi=300)
 # a3 0.2 and b3 
+ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalCurveParameters2.jpg",
+       ggplot(toplot[toplot$b3 < 0.7 &
+                       toplot$a1 < 0.5 &
+                       toplot$a3 < 0.3,], aes(stage, survival, colour = as.factor(a3), group = interaction(a1,a3)))+
+         geom_point()+
+         geom_line()+
+         facet_wrap(~as.factor(b3)+as.factor(a1))+
+         theme_bw(), 
+       width=300, height=300,units='mm', dpi=300)
+head(toplot)
+aggregate(survival ~ a1+a3+b3, sum, data=toplot)
+aggregate(survival ~ a1+a3+b3, min, data=toplot)
 
 # range of iteroparaty as in larger survival of older ones when b3 < 0.5 & a1 < 0.4
- ggplot(toplot[toplot$a1==0.4 & toplot$a3 < 0.5,], aes(stage, survival, colour = as.factor(a3), group = interaction(a1,a3)))+
+ ggplot(toplot[toplot$a1 < 0.2 & toplot$a3 < 0.3 & toplot$b3 < 0.5,], aes(stage, survival, colour = as.factor(a3), group = interaction(a1,a3)))+
    geom_point()+
    geom_line()+
    facet_wrap(~as.factor(b3)+as.factor(a1))+
@@ -113,51 +118,98 @@ ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/
         aes(stage, survival, colour = as.factor(a3)))+
    geom_point()+
    facet_grid(~as.factor(b3))
- 
- 
-# Increasing hazard
-plot(1:4, survivalTypeIII(alpha1 = 0.9, 1:4, alpha3 = 0.5, beta3 = 0.4), type="l")
 
-# Find lambda ????????
-# Euler-Lotka equation; solve for 1!! 
-Euler_Lotka <- function(x, fecund){
-  fun <- l^(-x) * fecund *  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
-  f <- expression(fun)
-  D(f, 'l')
-}
+# which combinations of parameters needed to keep survival of adults above 0.2
+paramsSurv <- unique(toplot[toplot$stage == "x4" & toplot$survival > 0.2,c("a1","a3","b3")])
 
-library(DirichletReg)
 
 # ------------------ Iteroparous fast ------------------------
-MPM_iterofast <- function(s,g,r){
+MPM_iterofast <- function(){
   # three juvenile stages, one reproductive
-  # s <- runif(1,0,0.8) # survival of smallest stage
-  s_s <- survivalTypeIII(alpha1 = runif(1,0,0.1), 1:4, alpha3 = runif(1, 0,.3), beta3 = runif(1, 0,1))
-  plot(1:4, s_s, type = "l")
+  s_s <- survivalTypeIII(alpha1 = runif(1,0,0.1), 1:4, alpha3 = runif(1, 0,0.2), beta3 = runif(1, 0,0.4))
   f <- fecunditysurvival(s_s[4])
-  g_i <- runif(1, 0.7,1) # transitions of growth equal across rows but has to add to 1, no more than 1, Dirichlet??
-  r_i <- survivalTypeIII(alpha1 = 0.9, 1:4, alpha3 = 0.5, beta3 = 0.4) # transitions of retrogressive growth decrease
-  t_ij <- matrix(c(0, s_s[1]*(g/3), s_s[1]*(g/3), s_s[1]*(g/3),
-                   0, s_s[2]*(1-g),       s_s[2]*(g/2), s_s[2]*(g/2),
-                   0, 0,            s_s[3]*(1-g),       s_s[3]*g,
-                   f, 0,            0,            s_s[4]), nrow = 4)
-                   # 0, s_s[3]*r[3], s_s[3],   s_s[3]*g,
-                   # f, s_s[4]*r[4], s_s[4]*r[4], s_s[4]), nrow = 4, ncol = 4)
-  colSums(t_ij)
-  print(paste("lambda initial",lambda(t_ij)))
-  while(lambda(t_ij)>1.2 | lambda(t_ij)<0.8){ # allow more or less variability by speed of life, more variable for fastest
+  g_j <- s_s/sum(s_s) # scale to 1, transitions follow same pattern as survival most likely to climb one stage; same for dropping in 
+  r_j <- s_s/sum(s_s) 
+  t_ij <- matrix(c(0, s_s[1]*sum(g_j[1:2]), s_s[1]*g_j[3],       s_s[1]*g_j[4],
+                   0, s_s[2]*sum(g_j[1:2]), s_s[2]*g_j[3],       s_s[2]*g_j[4],
+                   0, 0,                    s_s[3]*sum(g_j[1:3]),s_s[3]*g_j[4],
+                   f, 0,                    0,                   s_s[4]*sum(g_j[1:4])), nrow = 4)
+  lambda1 <- lambda(t_ij)
+  while(lambda1>1.2){ # allow more or less variability by speed of life, more variable for fastest
     i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    print(i)
-    while(i == mostelastic){
-      for(i in seq(0.9,0.5)){
-        t_ij[mostelastic] <- i * t_ij[mostelastic]
-        print(t_ij)
+    while(i == mostelastic){ # What if the most elastic stage changes? 
+      for(i in seq(0.1,0.5, by = 0.1)){
+        t_ij[mostelastic] <- (1-i) * t_ij[mostelastic]
+        lambda1 <- lambda(t_ij)
+        if(lambda1 <= 1.2) break
         mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-        print(paste("most elastic is ",mostelastic))
-        print(paste("lambda",lambda(t_ij)))
+        } # end reduction by i for loop of that element
+      } # end while same element is most elastic
+    } # end while lambda is too big
+  while(lambda(t_ij)<0.8){
+    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
+    while(i == mostelastic){
+      for(i in seq(1.1,1.5, by=0.1)){
+        t_ij[mostelastic] <- i * t_ij[mostelastic]
+        lambda1 <- lambda(t_ij)
+        if(lambda1 >= 0.8) break
+        mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
+        } # end reduction by i for loop of that element
+    } # end while same element is most elastic
+  } # end while lambda is too small
+  return(t_ij)
+}
+
+MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast())
+hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))))
+
+# ------------------------- just one, cover them all ------------------
+MPM_virtual <- function(speed = "fast", parity = "iteroparous", annual = FALSE){
+  # three juvenile stages, one reproductive
+  
+  s_s <- survivalTypeIII(alpha1 = runif(1,0,0.1), 1:4, alpha3 = runif(1, 0,0.2), beta3 = runif(1, 0,0.4))
+  f <- fecunditysurvival(s_s[4])
+  g_j <- s_s/sum(s_s) # scale to 1, transitions follow same pattern as survival most likely to climb one stage; same for dropping in 
+  r_j <- s_s/sum(s_s) 
+  # Make the matrix
+  if(grepl(parity, "iteroparous")){
+    t_ij <- matrix(c(0, s_s[1]*sum(g_j[1:2]), s_s[1]*g_j[3],       s_s[1]*g_j[4],
+                     0, s_s[2]*sum(g_j[1:2]), s_s[2]*g_j[3],       s_s[2]*g_j[4],
+                     0, 0,                    s_s[3]*sum(g_j[1:3]),s_s[3]*g_j[4],
+                     f, 0,                    0,                   s_s[4]*sum(g_j[1:4])), nrow = 4)
+    lambda1 <- lambda(t_ij)
+  }
+  if(grepl(parity, "semelparous")){
+    t_ij <- matrix(c(0, s_s[1]*sum(g_j[1:2]), s_s[1]*g_j[3],       s_s[1]*g_j[4],
+                     0, s_s[2]*sum(g_j[1:2]), s_s[2]*g_j[3],       s_s[2]*g_j[4],
+                     0, 0,                    s_s[3]*sum(g_j[1:3]),s_s[3]*g_j[4],
+                     f, 0,                    0,                   s_s[4]*sum(g_j[1:4])), nrow = 4)
+    lambda1 <- lambda(t_ij)    
+  }
+  
+  while(lambda1>1.2){ # allow more or less variability by speed of life, more variable for fastest
+    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
+    while(i == mostelastic){ # What if the most elastic stage changes? 
+      for(i in seq(0.1,0.5, by = 0.1)){
+        t_ij[mostelastic] <- (1-i) * t_ij[mostelastic]
+        lambda1 <- lambda(t_ij)
+        if(lambda1 <= 1.2) break
+        mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
       } # end reduction by i for loop of that element
     } # end while same element is most elastic
-  } # end while lambda is too big or small
+  } # end while lambda is too big
+  while(lambda(t_ij)<0.8){
+    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
+    while(i == mostelastic){
+      for(i in seq(1.1,1.5, by=0.1)){
+        t_ij[mostelastic] <- i * t_ij[mostelastic]
+        lambda1 <- lambda(t_ij)
+        if(lambda1 >= 0.8) break
+        mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
+      } # end reduction by i for loop of that element
+    } # end while same element is most elastic
+  } # end while lambda is too small
+  return(t_ij)
 }
 
 
