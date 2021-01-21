@@ -2,19 +2,17 @@
 # library(PACLasso)
 library(popbio)
 library(ggplot2)
+library(dplyr)
 rm(list=ls())
 
 #Trade-off between survival and fecundity from Takada and Kawai (2020) 
 # f=-1.25(s+4.6)^2+36.45+ error
 
-#   s <- runif(1,0,0.8) # adult survival
-fecundity <- function(s, errorSD = 0.1){ 
+#   s <- runif(1,0,0.8) for adult survival in Takada and Kawai 2020 
+fecundity <- function(s, errorSD = 0.01){ 
   out <- -1.25*((s+4.6)^2) + 36.45 + rnorm(1, 0 ,errorSD)  
   out
   }
-
-fecundity(0.5,0.1)
-
 
 survivorship <- function(alpha1, x, alpha3, beta3){
   out <- exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
@@ -59,21 +57,12 @@ survivalTypeIII <- function(alpha1,x,alpha3,beta3){
   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
 }
 
-# Find lambda ????????
-# Euler-Lotka equation; solve for 1!! 
-# Euler_Lotka <- function(x, fecund){
-#   fun <- l^(-x) * fecund *  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
-#   f <- expression(fun)
-#   D(f, 'l')
-# }
-# Euler_Lotka(1:4, fecunditysurvival(0.8))
-
 # Constant Hazard and Increasing fecundity
 surv <- survivalTypeIII(0.5, 1:4, 0,0.4)
 plot(1:4,surv, type="l")
 abline(lm(surv ~ c(1:4)), col="red")
 
-
+# Visualize what the survivalTypeIII equation is doing
 toplot <- do.call(rbind, lapply(seq(0.1,0.9,by=0.1), function(a1){
   outa3 <- do.call(rbind, lapply(seq(0.1,0.9,by=0.1), function(a3){
     outb3 <- do.call(rbind, lapply(seq(0.1,0.9,by=0.1), function(b3){
@@ -107,20 +96,52 @@ head(toplot)
 aggregate(survival ~ a1+a3+b3, sum, data=toplot)
 aggregate(survival ~ a1+a3+b3, min, data=toplot)
 
-# range of iteroparaty as in larger survival of older ones when b3 < 0.5 & a1 < 0.4
- ggplot(toplot[toplot$a1 < 0.2 & toplot$a3 < 0.3 & toplot$b3 < 0.5,], aes(stage, survival, colour = as.factor(a3), group = interaction(a1,a3)))+
-   geom_point()+
-   geom_line()+
-   facet_wrap(~as.factor(b3)+as.factor(a1))+
-   theme_bw()
- 
- ggplot(toplot[toplot$a1==0.1 & toplot$a3<0.3 & toplot$b3 < 0.4,], 
-        aes(stage, survival, colour = as.factor(a3)))+
-   geom_point()+
-   facet_grid(~as.factor(b3))
+# SLOW
+# which combinations of parameters needed to keep survival of adults above 0.2 - this would be slow, get to adult and stay adult a while
+slowparameters <- do.call(rbind, lapply(seq(0,0.19,by=0.01), function(a1){
+  outa3 <- do.call(rbind, lapply(seq(0,0.29,by=0.03), function(a3){
+    outb3 <- do.call(rbind, lapply(seq(0,0.59,by=0.05), function(b3){
+      surv <- survivalTypeIII(alpha1 = a1, 1:4, alpha3 = a3, beta3 = b3)
+      data.frame(a1, a3, b3, stage = c("x1","x2","x3","x4"), survival = surv)#x1 = surv[1], x2 = surv[2], x3 = surv[3], x4 = surv[4])
+    }))
+    outb3
+  }))
+  outa3
+}))
+paramsSurv <- unique(slowparameters[slowparameters$stage == "x4" & slowparameters$survival > 0.2,c("a1","a3","b3")])
+boxplot(paramsSurv$a1, paramsSurv$a3, paramsSurv$b3,
+        main = "Survival parameters Type III",
+        at = c(1,2,3),
+        names = c("a1","a3","b3"),
+        col = c("orange","red","gold"),
+        horizontal = TRUE,
+        notch = TRUE)
 
-# which combinations of parameters needed to keep survival of adults above 0.2
-paramsSurv <- unique(toplot[toplot$stage == "x4" & toplot$survival > 0.2,c("a1","a3","b3")])
+plot(1:3, paramsSurv[2,], type = "l", xaxt='n', xlab = "parameters", ylab = "parameter value combinations",
+     ylim = c(0,0.6))
+axis(1, at = c(1,2,3),labels = c("a1","a3","b3"))
+for(i in 3:nrow(paramsSurv)){
+  lines(1:3, paramsSurv[i,], col = i)
+}
+
+slow <- merge(slowparameters, paramsSurv, by = c("a1","a3","b3"))
+min(slow$survival[slow$stage == "x1"])
+max(slow$survival[slow$stage == "x1"])
+
+
+
+# range of iteroparaty as in greater survival of older ones when b3 < 0.5 & a1 < 0.4
+ggplot(merge(toplot, paramsSurv, by = c("a1","a3","b3")), aes(stage, survival, colour = as.factor(a3), group = interaction(a1,a3)))+
+ geom_point()+
+ geom_line()+
+ facet_wrap(~as.factor(b3)+as.factor(a1))+
+ theme_bw()
+ 
+# FAST
+# which combinations of parameters needed to keep survival of adults below 0.2 - this would be fast, get to adult and are likely to die, 
+# lower iteroparity, but should have higher output of seed
+paramsSurv <- unique(toplot[toplot$stage == "x4" & toplot$survival <= 0.2,c("a1","a3","b3")])
+# What is the minimum stage 1 can be with these parameters?
 
 
 # ------------------ Iteroparous fast ------------------------
