@@ -1,6 +1,11 @@
 library(popbio)
 rm(list=ls())
 
+# Rare plants from Salguero-Gomez et al. 2016
+# Keyfitz' entropy < 1, Type I, K-selected species, low juvenile mortality with most individuals living to an old age. 
+
+
+
 #Trade-off between survival and fecundity from Takada and Kawai (2020) 
 # f=-1.25(s+4.6)^2+36.45+ error
 
@@ -12,11 +17,23 @@ fecunditysurvival <- function(s, errorSD = 0.01){
   out
 }
 
+# Convex for semelparous - see Farrell 2020 and Takada and Kawai 2020
+semel_fecundsurv <- function(s){
+  f <- -1.25*((s + 4.6)^2) + 36.45
+}
+
+# Concave for iteroparous from Takada and Kawai 2020
+itero_fecundsurv <- function(s){
+  f = 12.5*((s - 0.9)^2) - 0.125
+}
+
+#Hazard
+# h(x) <- alpha3*exp((-beta3 * x))
+
 # Fujiwara and Diaz-Lopez 2017 
 # Do the x's represent the median age of the stage class??? I think yes
 survivalTypeIII <- function(alpha1,x,alpha3,beta3){
-  #Hazard
-  # h(x) <- alpha3*exp((-beta3 * x))
+
   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
 }
 
@@ -268,14 +285,25 @@ generation.time(mean(MPMs_seslow))
 hist(unlist(lapply(MPMs_seslow, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Slow")
 
 
-
-
+#--------------------- Parameters for annuals --------------------
+paramlist_annuals <- do.call(rbind, lapply(seq(0.0,0.6,by=0.1), function(a1){ # a1 < 0.2
+  outa3 <- do.call(rbind, lapply(seq(0.05,0.6,by=0.1), function(a3){ # a3 < 0.3
+    outb3 <- do.call(rbind, lapply(seq(0.05,0.3,by=0.1), function(b3){ # b3 < 0.6
+      surv <- survivalTypeIII(alpha1 = a1, c(1,2,3,7), alpha3 = a3, beta3 = b3)
+      data.frame(a1, a3, b3, stage = c("x1","x2","x3","x4"), survival = surv)#x1 = surv[1], x2 = surv[2], x3 = surv[3], x4 = surv[4])
+    }))
+    outb3
+  }))
+  outa3
+}))
 # --------------------- Annuals ------------------------
 MPM_annual <- function(){
   # three juvenile stages, one reproductive
   i <- sample(1:nrow(paramlist_fast),1)
   s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
   f <- fecunditysurvival(s_s[4])
+  t_t <- survivalTypeI(alpha2 = 0.3,beta2 = 0.1, 1:4)
+  t_t <- t_t/sum(t_t)
   t_ij <- matrix(c(0, s_s[1]*(2/3), 0,             s_s[1]*(1/3),
                    0, 0,            s_s[2]*(2/3),  s_s[2]*(1/3),
                    0, 0,            0,             s_s[3],
