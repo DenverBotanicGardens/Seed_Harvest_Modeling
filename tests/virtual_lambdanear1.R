@@ -1,4 +1,5 @@
 library(popbio)
+library(ggplot2)
 rm(list=ls())
 
 # Rare plants from Salguero-Gomez et al. 2016
@@ -33,7 +34,6 @@ itero_fecundsurv <- function(s){
 # Fujiwara and Diaz-Lopez 2017 
 # Do the x's represent the median age of the stage class??? I think yes
 survivalTypeIII <- function(alpha1,x,alpha3,beta3){
-
   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
 }
 
@@ -41,6 +41,25 @@ survivalTypeIII <- function(alpha1,x,alpha3,beta3){
 survivalTypeI <- function(alpha2, beta2, x){
   exp((alpha2/beta2)*(1-(exp(beta2*x))))
 }
+
+params <- do.call(rbind, lapply(seq(0.1,.5, by=0.01), function(a2){
+  outb2 <- do.call(rbind, lapply(seq(0.1,.7, by=0.01), function(b2){
+    surv <- survivalTypeI(a2, b2, 1:4)
+    data.frame(a2, b2, stage = c("x1","x2","x3","x4"), survival = surv)
+  }))
+}))
+
+paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.1,]
+paramsitero <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]
+slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),])
+slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),])
+
+
+
+ggplot(params, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
+  geom_line()+
+  geom_point()+
+  facet_wrap(~b2)
 
 hazard <- function(alpha2,beta2,x){
   alpha2*exp(beta2*x)
@@ -102,9 +121,27 @@ paramlist_slow2 <- parametersslow2[parametersslow2$stage == "x4" & parametersslo
 slowmin <- aggregate(survival ~ stage, min, data = parametersslow2[interaction(parametersslow2[,1:3]) %in% interaction(paramlist_slow2[,1:3]),])
 slowmax <- aggregate(survival ~ stage, max, data = parametersslow2[interaction(parametersslow2[,1:3]) %in% interaction(paramlist_slow2[,1:3]),])
 
+### Set the SD of rnorm for variability in part of the function
+### spit out the most elastic as a check
+## ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to teh managment of plant populations for conservation"
+generic_mat <- matrix(c("L","G","G","G",
+         " ","L","G","G",
+         " "," ","L","G",
+         "F"," "," ","L"), nrow = 4)
+# Survival
+which(generic_mat == "L")
+# Growth
+which(generic_mat == "G")
+# Fecundity
+which(generic_mat == "F")
+
+# Semelparous elasticities:            growth > 0.5, survival < 0.5, fecundity > 0.5
+# Iteroparous elasticities:            growth [0,1], survival [0,1], fecundity < 0.5
+# trees and shrubs (slow iteroparous): growth < 0.5, survival [0.25,1], fecundity < 0.25
+
 # ------------------ Iteroparous fast ------------------------
 # only progressive, no retrogressive growth; r_ij = 0
-MPM_iterofast <- function(){
+MPM_iterofast <- function(StDev = 0.1){
   # three juvenile stages, one reproductive
   i <- sample(1:nrow(paramlist_fast),1)
   s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
@@ -117,7 +154,8 @@ MPM_iterofast <- function(){
                    f, 0,            0,             s_s[4]), 
                  nrow = 4)
   lambda1 <- lambda(t_ij)
-  lambdarange <- abs(1-rnorm(1, 1, 0.1))
+  lambdarange <- abs(1-rnorm(1, 1, StDev))
+  e_ij <- popbio:elasticity(t_ij)
   # plot(seq(0.51,1.5,by=0.01), dnorm(seq(0.51,1.5,by=0.01), 1, 0.1))
   if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
     i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
@@ -139,10 +177,10 @@ MPM_iterofast <- function(){
       if(mostelastic !=i) break
     } # end reduction by i for loop of that element
   } # end if lambda is too small
-  return(t_ij)
+  return(list(t_ij,e_ij))
 }
 
-MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast())
+MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[1]])
 generation.time(mean(MPMs_itfast))
 hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Fast")
 
