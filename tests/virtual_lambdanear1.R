@@ -1,7 +1,17 @@
 library(popbio)
 library(ggplot2)
 library(devtools)
-install_github('ms609/Ternary')
+# install_github('ms609/Ternary')
+library(Ternary)
+Ternary::TernaryPlot(point = "up", atip = 'G', btip = 'L', ctip = "F",
+                     alab = 'growth', blab = 'survival', clab = "fecundity",
+                     grid.lines = 4)
+
+# library(Rcompadre)
+library(popdemo)
+library(Rage)
+library(ggtern)
+
 rm(list=ls())
 
 # Rare plants from Salguero-Gomez et al. 2016
@@ -191,16 +201,19 @@ MPM_iterofast <- function(StDev = 0.1){
   s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], 1:4)
   f <- itero_fecundsurv(s_s[4])
   # transitions for fast should be fairly flat
-  t_t <- survivalTypeI(alpha2 = 0.9,beta2 = 0.1, 1:4)
-  t_t <- t_t/sum(t_t)
-  t_ij <- matrix(c(0, s_s[1]*sum(t_t[1:2]), s_s[1]*sum(t_t[3]),  s_s[1]*sum(t_t[4]),
-                   0, s_s[2]*sum(t_t[1:2]), s_s[2]*sum(t_t[3]),  s_s[2]*sum(t_t[4]),
-                   0, 0,            s_s[3]*sum(t_t[1:3]),  s_s[3]*sum(t_t[4]),
-                   f, 0,            0,             s_s[4]), 
+  t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
+  # t_t <- t_t/sum(t_t)
+  t_ij <- matrix(c(0, s_s[1]*sum(t_t[1]), s_s[1]*sum(t_t[2]),  s_s[1]*sum(t_t[3]),
+                   0, s_s[2]*sum(t_t[1]), s_s[2]*sum(t_t[2]),  s_s[2]*sum(t_t[3]),
+                   0, 0,                  s_s[3]*sum(t_t[1:2]),s_s[3]*sum(t_t[3]),
+                   f, 0,                  0,                   s_s[4]), 
                  nrow = 4)
-  lambda1 <- lambda(t_ij)
-  lambdarange <- abs(1-rnorm(1, 1, StDev))
-  e_ij <- popbio:elasticity(t_ij)
+  (lambda1 <- lambda(t_ij))
+  (lambdarange <- abs(1-rnorm(1, 1, StDev)))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
   # plot(seq(0.51,1.5,by=0.01), dnorm(seq(0.51,1.5,by=0.01), 1, 0.1))
   if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
     i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
@@ -222,12 +235,21 @@ MPM_iterofast <- function(StDev = 0.1){
       if(mostelastic !=i) break
     } # end reduction by i for loop of that element
   } # end if lambda is too small
-  return(list(t_ij,e_ij))
+  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
 MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[1]])
 generation.time(mean(MPMs_itfast))
 hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Fast")
+
+#Elasticities
+Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[3]]))
+ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
+  geom_point()+
+  scale_color_viridis_c()+
+  theme_showarrows()+
+  theme_clockwise()
+
 
 
 # --------------------- Iteroparous slow -------------------
