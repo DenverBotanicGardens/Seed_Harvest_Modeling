@@ -1,5 +1,7 @@
 library(popbio)
 library(ggplot2)
+library(devtools)
+install_github('ms609/Ternary')
 rm(list=ls())
 
 # Rare plants from Salguero-Gomez et al. 2016
@@ -23,10 +25,14 @@ semel_fecundsurv <- function(s){
   f <- -1.25*((s + 4.6)^2) + 36.45
 }
 
+plot(seq(0,1,by=0.1), semel_fecundsurv(seq(0,1,by=0.1)))
+
 # Concave for iteroparous from Takada and Kawai 2020
 itero_fecundsurv <- function(s){
   f = 12.5*((s - 0.9)^2) - 0.125
 }
+
+plot(seq(0,1,by=0.1), itero_fecundsurv(seq(0,1,by=0.1)))
 
 #Hazard
 # h(x) <- alpha3*exp((-beta3 * x))
@@ -49,21 +55,50 @@ params <- do.call(rbind, lapply(seq(0.1,.5, by=0.01), function(a2){
   }))
 }))
 
-paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.1,]
+
+transitions <- function(b1, b2, x){
+  b1*exp((x*-b2))
+}
+
+plot(seq(0,1,0.1),seq(0,1,0.1),type = "n", ylim = c(0,.25), xlab = "Stage", ylab = "transition probability")
+for(b1 in seq(0,1,by=0.25)){
+  for(b2 in seq(0,1,by=0.25)){
+      lines(seq(0,1,0.1), transitions(b1,b2,seq(0,1,0.1))/sum(transitions(b1,b2,seq(0,1,0.1))), col = rgb(b1,b2,.2,1))
+}}
+
+#Flat when b1 = 1 and b2 = 0
+plot(1:4, transitions(.9,0.1,1:4)/sum(transitions(.9,0.1,1:4)))
+plot(1:2, transitions(.9,0.1,1:2)/sum(transitions(.9,0.1,1:2)))
+
+# decreasing 
+plot(1:4, transitions(0.1,.9,1:4)/sum(transitions(0.1,.9,1:4)))
+plot(1:2, transitions(0.1,.9,1:2)/sum(transitions(0.1,.9,1:2)))
+
+
+# transitions equal ??? for fast
+(paramstransitions <- params[params$stage == "x4" & params$survival > 0.6,])
+plot(2:4, survivalTypeI(0.1,0.1,2:4))
+
+paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.3,]
 paramsitero <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]
-slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),])
-slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),])
+(slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
+(slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
 
 
+ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalCurveTypeIParams.jpg",
+       ggplot(params, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
+         geom_line()+
+         geom_point()+
+         theme_bw()+
+         facet_wrap(~b2),width=300, height=300,units='mm', dpi=300)
+  
 
-ggplot(params, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
-  geom_line()+
-  geom_point()+
-  facet_wrap(~b2)
 
 hazard <- function(alpha2,beta2,x){
   alpha2*exp(beta2*x)
 }
+
+plot(1:4, hazard(alpha2 = 1.2, beta2 = -.3, 1:4))
 
 ## ------------------ Fast as years 1:4 where reproductive when age 4------------------
 parametersfast <- do.call(rbind, lapply(seq(0.0,0.6,by=0.1), function(a1){ # a1 < 0.2
@@ -88,11 +123,19 @@ parametersslow <- do.call(rbind, lapply(seq(0.0,0.6,by=0.1), function(a1){ # a1 
   outa3
 }))
 
+# Plot a decrease for slow, concave for high transions until get to stage 4 and drop off
+transions <- function(x,a1,a2,b1){
+  x^a1-0.2*x^a2+b1
+}
+
+plot(1:4,transions(1:4, a1 = 2,a2 = 3,b1 = 12))
+
+# slow = longer lived so decreasing transition rates as they approach the larger/older stages, more individuals fall within the span
 paramlist_slow <- parametersslow[parametersslow$stage == "x4" & parametersslow$survival > 0.1,]
 slowmin <- aggregate(survival ~ stage, min, data = parametersslow[interaction(parametersslow[,1:3]) %in% interaction(paramlist_slow[,1:3]),])
 slowmax <- aggregate(survival ~ stage, max, data = parametersslow[interaction(parametersslow[,1:3]) %in% interaction(paramlist_slow[,1:3]),])
 
-# Fast should have lower adult survival to increase fecundity
+# Fast is flat transition rates, should have lower adult survival to increase fecundity
 paramlist_fast <- parametersfast[parametersfast$stage == "x4" & parametersfast$survival > 0.01 & !is.na(parametersfast$survival) &
                                    parametersfast$survival < 0.2,]
 fastmin <- aggregate(survival ~ stage, min, data = parametersfast[interaction(parametersfast[,1:3]) %in% interaction(paramlist_fast[,1:3]),])
@@ -143,10 +186,12 @@ which(generic_mat == "F")
 # only progressive, no retrogressive growth; r_ij = 0
 MPM_iterofast <- function(StDev = 0.1){
   # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_fast),1)
-  s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
-  f <- fecunditysurvival(s_s[4])
-  t_t <- survivalTypeI(alpha2 = 0.3,beta2 = 0.1, 1:4)
+  i <- sample(1:nrow(paramlist_type1),1)
+  # s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
+  s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], 1:4)
+  f <- itero_fecundsurv(s_s[4])
+  # transitions for fast should be fairly flat
+  t_t <- survivalTypeI(alpha2 = 0.9,beta2 = 0.1, 1:4)
   t_t <- t_t/sum(t_t)
   t_ij <- matrix(c(0, s_s[1]*sum(t_t[1:2]), s_s[1]*sum(t_t[3]),  s_s[1]*sum(t_t[4]),
                    0, s_s[2]*sum(t_t[1:2]), s_s[2]*sum(t_t[3]),  s_s[2]*sum(t_t[4]),
