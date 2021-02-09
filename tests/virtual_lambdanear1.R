@@ -89,10 +89,14 @@ plot(1:2, transitions(0.1,.9,1:2)/sum(transitions(0.1,.9,1:2)))
 (paramstransitions <- params[params$stage == "x4" & params$survival > 0.6,])
 plot(2:4, survivalTypeI(0.1,0.1,2:4))
 
-paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.3,]
+paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.5,]
 paramsitero <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]
 (slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
 (slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
+
+paramlist_type1_semel <- params[params$stage == "x4" & params$survival < 0.2,]
+paramssemel <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]
+
 
 
 ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalCurveTypeIParams.jpg",
@@ -202,11 +206,11 @@ MPM_iterofast <- function(StDev = 0.1){
   f <- itero_fecundsurv(s_s[4])
   # transitions for fast should be fairly flat
   t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
-  # t_t <- t_t/sum(t_t)
+  t_t2 <- transitions(b1 = 0.9,b2 = 0.1, x = 1:2)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:2))
   t_ij <- matrix(c(0, s_s[1]*sum(t_t[1]), s_s[1]*sum(t_t[2]),  s_s[1]*sum(t_t[3]),
-                   0, s_s[2]*sum(t_t[1]), s_s[2]*sum(t_t[2]),  s_s[2]*sum(t_t[3]),
-                   0, 0,                  s_s[3]*sum(t_t[1:2]),s_s[3]*sum(t_t[3]),
-                   f, 0,                  0,                   s_s[4]), 
+                   0, s_s[2]*sum(t_t[3]), s_s[2]*sum(t_t[1]),  s_s[2]*sum(t_t[2]),
+                   0, 0,                  s_s[3]*sum(t_t2[2]),s_s[3]*sum(t_t2[1]),
+                   f, 0,                  0,                   s_s[4]),
                  nrow = 4)
   (lambda1 <- lambda(t_ij))
   (lambdarange <- abs(1-rnorm(1, 1, StDev)))
@@ -255,12 +259,10 @@ ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
 # --------------------- Iteroparous slow -------------------
 MPM_iteroslow <- function(){
   # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_slow2),1)
-  s_s <- survivalTypeIII(alpha1 = paramlist_slow2[i,1],c(1:3,7), alpha3 = paramlist_slow2[i,2], beta3 = paramlist_slow2[i,3] )
-  t_t <- survivalTypeI(alpha2 = 0.2, beta2 = .01, 1:4)
-  # plot(1:4, t_t)
+  i <- sample(1:nrow(paramlist_type1_semel),1)
+  s_s <- survivalTypeI(alpha2 = paramlist_type1_semel[i,1],beta2 = paramlist_type1_semel[i,2],1:4)
+  t_t <- survivalTypeI(alpha2 = 0.1, beta2 = .9, 1:4)
   t_t <- t_t/sum(t_t)
-  # t_t <- s_s/sum(s_s)
   f <- fecunditysurvival(s_s[4])
   t_ij <- matrix(c(0, s_s[1]*(sum(t_t[1:3])),0,                    0,
                    0, s_s[2]*sum(t_t[1:2]),  s_s[2]*sum(t_t[3:4]),0,
