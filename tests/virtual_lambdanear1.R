@@ -2,10 +2,10 @@ library(popbio)
 library(ggplot2)
 library(devtools)
 # install_github('ms609/Ternary')
-library(Ternary)
-Ternary::TernaryPlot(point = "up", atip = 'G', btip = 'L', ctip = "F",
-                     alab = 'growth', blab = 'survival', clab = "fecundity",
-                     grid.lines = 4)
+# library(Ternary)
+# Ternary::TernaryPlot(point = "up", atip = 'G', btip = 'L', ctip = "F",
+#                      alab = 'growth', blab = 'survival', clab = "fecundity",
+#                      grid.lines = 4)
 
 # library(Rcompadre)
 library(popdemo)
@@ -36,6 +36,7 @@ semel_fecundsurv <- function(s){
 }
 
 plot(seq(0,1,by=0.1), semel_fecundsurv(seq(0,1,by=0.1)))
+lines(c(0,1), c(10,-2.75))
 
 # Concave for iteroparous from Takada and Kawai 2020
 itero_fecundsurv <- function(s){
@@ -257,48 +258,75 @@ ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
 
 
 # --------------------- Iteroparous slow -------------------
-MPM_iteroslow <- function(){
+MPM_iteroslow <- function(StDev = 0.05){
   # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_type1_semel),1)
-  s_s <- survivalTypeI(alpha2 = paramlist_type1_semel[i,1],beta2 = paramlist_type1_semel[i,2],1:4)
-  t_t <- survivalTypeI(alpha2 = 0.1, beta2 = .9, 1:4)
-  t_t <- t_t/sum(t_t)
-  f <- fecunditysurvival(s_s[4])
-  t_ij <- matrix(c(0, s_s[1]*(sum(t_t[1:3])),0,                    0,
-                   0, s_s[2]*sum(t_t[1:2]),  s_s[2]*sum(t_t[3:4]),0,
-                   0, 0,                      s_s[3]*sum(t_t[1:2]),s_s[3]*sum(t_t[3:4]),
-                   f, 0,            0,             s_s[4]), 
+  i <- sample(1:nrow(paramlist_type1),1)
+  s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1],beta2 = paramlist_type1[i,2],1:4)
+  t_t2 <- transitions(b1 = 0.1,b2 = 0.9, x = 1:2)/sum( transitions(b1 = 0.1,b2 = 0.9, x = 1:2))
+  f <- semel_fecundsurv(s_s[4])
+  t_ij <- matrix(c(0, s_s[1],          0,              0,
+                   0, s_s[2]*t_t2[1],  s_s[2]*t_t2[2], 0,
+                   0, 0,               s_s[3]*t_t2[1], s_s[3]*t_t2[2],
+                   f, 0,               0,              s_s[4]), 
                  nrow = 4)
-  lambda1 <- lambda(t_ij)
-  lambdarange <- abs(1-rnorm(1, 1, 0.05))
-  if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    for(k in seq(0.1,0.5, by = 0.01)){
-      t_ij[mostelastic] <- (1-k) * t_ij[mostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 <= (1+lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic != i) break
-    } # end reduction by k for loop of that element
-  } # end while lambda is too big
-  if(lambda(t_ij) < (1-lambdarange)){
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    print(i)
-    for(k in seq(1.1,1.5, by=0.01)){
-      t_ij[mostelastic] <- k * t_ij[mostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 >= (1-lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic !=i) break
-    } # end reduction by i for loop of that element
-  } # end if lambda is too small
-  return(t_ij)
+  (lambda1 <- lambda(t_ij))
+  (lambdarange <- abs(1-rnorm(1, 1, StDev)))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  
+  # center and move to around 1
+  # if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
+  #   i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
+  #   for(k in seq(0.1,0.5, by = 0.01)){
+  #     t_ij[mostelastic] <- (1-k) * t_ij[mostelastic]
+  #     lambda1 <- lambda(t_ij)
+  #     if(lambda1 <= (1+lambdarange)) break
+  #     mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
+  #     if(mostelastic != i) break
+  #   } # end reduction by k for loop of that element
+  # } # end while lambda is too big
+  # if(lambda(t_ij) < (1-lambdarange)){
+  #   i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
+  #   for(k in seq(1.1,1.5, by=0.01)){
+  #     t_ij[mostelastic] <- k * t_ij[mostelastic]
+  #     lambda1 <- lambda(t_ij)
+  #     if(lambda1 >= (1-lambdarange)) break
+  #     mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
+  #     if(mostelastic !=i) break
+  #   } # end reduction by i for loop of that element
+  # } # end if lambda is too small
+  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
-MPMs_itslow <- lapply(1:100, function(x) MPM_iteroslow())
+MPMs_itslow <- lapply(1:100, function(x) MPM_iteroslow(StDev = 0.05)[[1]])
 generation.time(mean(MPMs_itslow))
 hist(unlist(lapply(MPMs_itslow, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Slow")
 
+#Elasticities
+Elasts_itslow <- do.call(rbind,lapply(1:100, function(x) MPM_iteroslow(StDev = 0.1)[[3]]))
+# Elasts_itslowfinal <- do.call(rbind, lapply(MPMs_itslow, function(x){
+#   e_ij <- popbio::elasticity(x)
+#   lambda1 <- lambda(x)
+#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
+#   growthElast <- sum(e_ij[which(generic_mat == "G")])
+#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+#   data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1, Type = "constrained")
+# }))
+# Elasts_itslowall <- rbind(data.frame(Elasts_itslow, Type = "initial"), Elasts_itslowfinal)
+ggtern::ggtern(Elasts_itslow, aes(R, G, S, colour = lam))+ #, shape = Type))+
+  geom_point()+
+  scale_color_viridis_c(name = expression(lambda))+
+  theme_showarrows()+
+  theme_clockwise()
+
+# Elasticities final
+ggplot(Elasts_itslowall, aes(lam, fill = Type))+
+  geom_density(alpha = 0.5)+
+  theme_bw()
+
+str(Elasts_itslowall)
 
 # --------------------- semelparous fast  ------------------------
 MPM_semelfast <- function(){
@@ -317,6 +345,10 @@ MPM_semelfast <- function(){
                  nrow = 4)
   lambda1 <- lambda(t_ij)
   lambdarange <- abs(1-rnorm(1, 1, 0.1))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
   # plot(seq(0.51,1.5,by=0.01), dnorm(seq(0.51,1.5,by=0.01), 1, 0.1))
   if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
     i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
