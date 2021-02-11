@@ -197,6 +197,7 @@ which(generic_mat == "F")
 # trees and shrubs (slow iteroparous): growth < 0.5, survival [0.25,1], fecundity < 0.25
 
 # ------------------ Iteroparous fast ------------------------
+# keep between 0.8 < lambda < 1.2
 # only progressive, no retrogressive growth; r_ij = 0
 MPM_iterofast <- function(){
   # three juvenile stages, one reproductive
@@ -217,22 +218,87 @@ MPM_iterofast <- function(){
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
   t_ij_norm <- t_ij
   
-  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
+  (targetlam <- rnorm(1, 1, 0.1))
+  if(lambda1 > targetlam) { # allow more or less variability by speed of life, more variable for fastest
+    (i <- mostelastic <- which(e_ij == max(e_ij)))
+    for(k in seq(0.01,0.5, by = 0.01)){
+      t_ij_norm[mostelastic] <- (1-k) * t_ij_norm[mostelastic]
+      if(t_ij_norm[13] < 0) t_ij_norm[13] <- 0
+      lambda_norm <- lambda(t_ij_norm)
+      if(lambda_norm <= targetlam) break
+      mostelastic <- which(popbio::elasticity(t_ij_norm) == max(popbio::elasticity(t_ij_norm))) # check if still same element
+      if(mostelastic != i) break
+    } # end reduction by k for loop of that element
+  } # end while lambda is too big
+  if(lambda1 < targetlam){
+    i <- mostelastic <- which(e_ij == max(e_ij))
+    for(k in seq(1.01,1.5, by=0.01)){
+      t_ij_norm[mostelastic] <- k * t_ij_norm[mostelastic]
+      lambda_norm <- lambda(t_ij_norm)
+      if(lambda_norm >= targetlam) break
+      mostelastic <- which(popbio::elasticity(t_ij_norm) == max(popbio::elasticity(t_ij_norm))) # check if still same element
+      if(mostelastic !=i) break
+    } # end reduction by i for loop of that element
+  } # end if lambda is too small
+  e_ij_norm <- popbio::elasticity(t_ij_norm)
+  survivalElast_norm <- sum(e_ij_norm[which(generic_mat == "L")])
+  growthElast_norm <- sum(e_ij_norm[which(generic_mat == "G")])
+  fecundElast_norm <- sum(e_ij_norm[which(generic_mat == "F")])
+  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1), 
+              t_ij_norm, e_ij_norm, data.frame(S = survivalElast_norm, G = growthElast_norm, R = fecundElast_norm, lam_norm = lambda_norm)))
 }
 
-MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast()[[1]])
+# get 100 runs
+itfast <- lapply(1:100, function(x) MPM_iterofast())
+
+MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(lam = unlist(lapply(MPMs_itfast, function(x) lambda(x))), parity = "itero", speed = "fast") 
-gentimitfast <- data.frame(gentim = unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))), parity = "itero", speed = "fast")
+gentimitfast <- data.frame(gentim = unlist(lapply(MPMs_itfast, function(x) generation.time(x))), parity = "itero", speed = "fast")
+
+MPMs_itfast_norm <- lapply(itfast, function(x) x[[4]])
+lamitfast_norm <-data.frame(lam = unlist(lapply(MPMs_itfast_norm, function(x) lambda(x))), parity = "itero", speed = "fast") 
+gentimitfast_norm <- data.frame(gentim = unlist(lapply(MPMs_itfast_norm, function(x) generation.time(x))), parity = "itero", speed = "fast")
+
 generation.time(mean(MPMs_itfast))
 hist(gentimitfast$gentim, xlab = "Generation time", main = "Iteroparous Fast")
 hist(lamitfast$lam, xlab = "lambda", main = "Iteroparous Fast")
 
+
+# ---------------------------------------------
+
+layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
+
+  # Plot 1 density generation time
+    den <- density(gentimitfast_norm$gentim)
+    par(mar=c(0,4,0,0))
+    plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n")
+  # Plot 2 scatter plot
+    par(mar=c(4,4,0,0))
+    plot(gentimitfast_norm$gentim,lamitfast_norm$lam, ylab = expression(lambda), xlab = "generation time",
+         main = "", pch = 16, col = "red")
+  # Plot 3 blank
+    frame()
+  # Plot 4 lambda density
+    den <- density(lamitfast_norm$lam)
+    par(mar=c(4,0,0,0))
+    plot(den$y, den$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n")
+
+    dev.off()
+      
+# ---------------------------------------------
+dev.off() # to reset par
+            
 plot(density(gentimitfast$gentim),  main = "Iteroparous Fast", xlab = "Generation time")
 plot(density(lamitfast$lam), main = "Iteroparous Fast", xlab = expression(lambda))
 
 #Elasticities
+
 Elasts_itfast <- data.frame(do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[3]])), 
                             GenTime = unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))))
+
+Elasts_itfast_norm <- data.frame(do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[4]])), 
+                            GenTime = unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))))
+
 tern_itfast <- ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+ #, size = as.factor(floor(GenTime))))+ #lam))+
                   geom_point()+
                   scale_color_viridis_c(name = expression(lambda))+
