@@ -5,7 +5,7 @@ library(devtools)
 library(popdemo)
 library(Rage)
 library(ggtern)
-
+library(patchwork)
 rm(list=ls())
 
 # Rare plants from Salguero-Gomez et al. 2016
@@ -152,49 +152,30 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
 dev.off()
 
 # Elasticity space, survival of the reproductive stage
-# need to sum to one
-## No make this after making lots of matrices
-elast_type <- do.call(rbind,lapply(1:20, function(x){
-  S <- runif(1,0.61,0.77)
-  G <- runif(1,0.3,0.4)
-  R <- itero_fecundsurv(S)
-  itero <- data.frame(R = R/(R+S+G), G = G/(R+S+G), S = S/(R+S+G), parity = "iteroparous", speed = "fast")
-  
-  S <- runif(1,0.61, 0.77)
-  R <- semel_fecundsurv(S)
-  G <- runif(1,0.2,0.3) 
-  iteroslow <- data.frame(R = R/(R+S+G), G = G/(R+S+G), S = S/(R+S+G), parity = "iteroparous", speed = "slow")
-  
-  # Semel
-  G <- runif(1,0.3,0.4)
-  S <- runif(1,0.11,0.2)
-  R <- semel_fecundsurv(S)
-  semelfast <- data.frame(R = R/(R+S+G), G = G/(R+S+G), S = S/(R+S+G), parity = "semelparous", speed = "fast")
-  
-  S <- runif(1,0.11, 0.2)
-  R <- semel_fecundsurv(S)
-  G <- runif(1,0.2,0.3)
-  semelslow <- data.frame(R = R/(R+S+G), G = G/(R+S+G), S = S/(R+S+G), parity = "semelparous", speed = "slow")
-  
-  out <- rbind(itero,iteroslow,semelfast,semelslow)
-  }))
+elast_type <- data.frame(R = c(0.3, 0.2, 0.7, 0.025, 0.2, 0.01, 0.25, 0.05, 0.9,  0.4, 0.05, 0.6, 0.49, 0.01, 0.98, 0.4),
+                         G = c(0.5, 0.4, 0.29, 0.025, 0.7, 0.6,  0.7,  0.65,0.05, 0.5, 0.7,  0.5, 0.49, 0.01, 0.01, 0.4),
+                         S = c(0.2, 0.5, 0.01, 0.95,  0.1, 0.39, 0.05, 0.3, 0.05, 0.6, 0.25, 0.4, 0.02, 0.98, 0.01, 0.2),
+                         Type = c("semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous",
+                                  "semelparous","iteroparous"))
 
-elast_type <- data.frame(R = c(runif(20, 0.01,0.1),
-                               runif(20, 0.85, 0.99)),
-                         G = c(runif(20, 0.1, 0.12),
-                               runif(20, 0.1, 0.12)),
-                         S = c(runif(20, 0.71, 0.97),
-                               runif(20, 0.01, 0.1)), Type = c(rep("iteroparous",20),rep("semelparous",20)))
-elast_type[1:3] <- apply(elast_type[1:3], 1, function(x) x/sum(x))
-
-# ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TernaryPlotConceptual.jpg",
-       ggtern::ggtern(elast_type, aes(R, G, S, colour = Type))+ # colour = parity, shape = speed))+
-         geom_point()+
+ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TernaryPlotConceptual.jpg",
+       ggtern::ggtern(elast_type, aes(R, G, S, colour = Type, fill = Type))+ # colour = parity, shape = speed))+label = Type, 
+         # geom_point(size = 30, shape = 2)+
          # scale_color_viridis_c()+
-         # geom_polygon_closed()+
+         # geom_text(size=3.5)+
+         # geom_polygon()+
+         geom_mean_ellipse()+
          theme_showarrows()+
-         theme_clockwise()
-       # , width=100, height = 100, units = 'mm', dpi = 300)
+         theme_clockwise()+
+         ggtitle("d)")
+         # theme(legend.position = "none")
+       , width=100, height = 70, units = 'mm', dpi = 300)
       
 
 ### Set the SD of rnorm for variability in part of the function
@@ -239,15 +220,19 @@ MPM_iterofast <- function(){
 
 MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast()[[1]])
 generation.time(mean(MPMs_itfast))
+hist(unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))))
 hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Fast")
 
 #Elasticities
 Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[3]]))
-ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
-  geom_point()+
-  scale_color_viridis_c()+
-  theme_showarrows()+
-  theme_clockwise()
+tern_itfast <- ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
+                  geom_point()+
+                  scale_color_viridis_c(name = expression(lambda))+
+                  theme_showarrows()+
+                  theme_clockwise()+
+                  stat_mean_ellipse()
+
+
 
 
 # ---------------------------- Iteroparous Slow ---------------------
@@ -324,7 +309,7 @@ hist(unlist(lapply(MPMs_sefast, function(x) lambda(x))), xlab = "lambda", main =
 Elasts_sefast <- do.call(rbind,lapply(1:100, function(x) MPM_semelfast()[[3]]))
 ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam))+
   geom_point()+
-  scale_color_viridis_c()+
+  scale_color_viridis_c(name = expression(lambda))+
   theme_showarrows()+
   theme_clockwise()
 
@@ -335,9 +320,8 @@ MPM_semelslow <- function(){
   # three juvenile stages, one reproductive
   i <- sample(1:nrow(paramlist_type1_semel),1)
   s_s <- survivalTypeI(alpha2 = paramlist_type1_semel[i,1], beta2 = paramlist_type1_semel[i,2], 1:4)
-  s_s <- s_s - s_s[4]
-  f <- semel_fecundsurv(s_s[3])  
-  t_t2 <- transitions(b1 = 0.1,b2 = 0.9, x = 1:3)/sum( transitions(b1 = 0.1,b2 = 0.9, x = 1:3))
+  f <- semel_fecundsurv((s_s[4]-.1))  
+  t_t2 <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
   t_ij <- matrix(c(0, s_s[1],              0,                  0,
                    0, s_s[2]*sum(t_t2[c(1,3)]),  s_s[2]*t_t2[2],     0,
                    0, 0,                   s_s[3]*sum(t_t2[1:2]), s_s[3]*t_t2[3],
@@ -348,6 +332,9 @@ MPM_semelslow <- function(){
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  
+  print(which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))))
+  
   return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
@@ -364,7 +351,7 @@ ggtern::ggtern(Elasts_seslow, aes(R, G, S, colour = lam))+ #, shape = Type))+
   theme_clockwise()
 
 # Elasticities final
-ggplot(Elasts_itslowall, aes(lam, fill = Type))+
+ggplot(Elasts_semelall, aes(lam, fill = Type))+
   geom_density(alpha = 0.5)+
   theme_bw()
 
