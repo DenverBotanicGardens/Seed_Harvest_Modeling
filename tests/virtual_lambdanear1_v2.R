@@ -270,18 +270,24 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
   # Plot 1 density generation time
     den <- density(gentimitfast_norm$gentim)
+    den2 <- density(gentimitfast$gentim)
     par(mar=c(0,4,0,0))
-    plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n")
+    plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red", ylim=c(0,max(c(den$y,den2$y))))
+    lines(den2$x, den2$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "lightcoral", lty = 5)
   # Plot 2 scatter plot
     par(mar=c(4,4,0,0))
     plot(gentimitfast_norm$gentim,lamitfast_norm$lam, ylab = expression(lambda), xlab = "generation time",
          main = "", pch = 16, col = "red")
+    points(gentimitfast$gentim, lamitfast$lam, col = "lightcoral", pch = 1)
   # Plot 3 blank
     frame()
   # Plot 4 lambda density
     den <- density(lamitfast_norm$lam)
+    den2 <- density(lamitfast$lam)
     par(mar=c(4,0,0,0))
-    plot(den$y, den$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n")
+    plot(den$y, den$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red", xlim=c(0,max(c(den$y,den2$y))))
+    lines(den2$y, den2$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", bty="n", col = "lightcoral", lty = 5)
+    
 
     dev.off()
       
