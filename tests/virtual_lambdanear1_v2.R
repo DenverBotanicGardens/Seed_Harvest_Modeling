@@ -219,19 +219,28 @@ MPM_iterofast <- function(){
 }
 
 MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast()[[1]])
+lam <-unlist(lapply(MPMs_itfast, function(x) lambda(x))) 
+gentim <- unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]])))
 generation.time(mean(MPMs_itfast))
-hist(unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))))
-hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Fast")
+hist(gentim, xlab = "Generation time", main = "Iteroparous Fast")
+hist(lam, xlab = "lambda", main = "Iteroparous Fast")
+lines(seq(min(lam), max(lam), length.out = 10),dnorm(seq(min(lam), max(lam), length.out = 10), mean = mean(lam), sd = sd(lam)))
+
+plot(density(gentim),  main = "Iteroparous Fast", xlab = "Generation time")
+plot(density(lam), main = "Iteroparous Fast", xlab = expression(lambda))
 
 #Elasticities
-Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[3]]))
-tern_itfast <- ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
+Elasts_itfast <- data.frame(do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[3]])), 
+                            GenTime = unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))))
+tern_itfast <- ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+ #, size = as.factor(floor(GenTime))))+ #lam))+
                   geom_point()+
                   scale_color_viridis_c(name = expression(lambda))+
                   theme_showarrows()+
-                  theme_clockwise()+
-                  stat_mean_ellipse()
+                  theme_clockwise()
+                  # stat_mean_ellipse()
 
+ggplot(Elasts_itfast)+
+  geom_density(aes(GenTime))
 
 
 
