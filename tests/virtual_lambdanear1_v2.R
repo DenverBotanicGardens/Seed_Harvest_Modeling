@@ -215,6 +215,8 @@ MPM_iterofast <- function(){
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  t_ij_norm <- t_ij
+  
   return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
@@ -312,7 +314,7 @@ ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = interaction(speed,pa
 # only progressive, no retrogressive growth; r_ij = 0
 MPM_semelfast <- function(){
   # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_type1),1)
+  i <- sample(1:nrow(paramlist_type1_semel),1)
   s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], 1:4)
   s_s <- s_s - s_s[4]
   f <- semel_fecundsurv(s_s[3])
@@ -426,7 +428,8 @@ MPM_semelslow <- function(){
 
 MPMs_seslow <- lapply(1:100, function(x) MPM_semelslow()[[1]])
 generation.time(mean(MPMs_seslow))
-lamseslow <- data.frame(lam = unlist(lapply(MPMs_seslow, function(x) lambda(x))), parity = "itero", speed = "slow")
+lamseslow <- data.frame(lam = unlist(lapply(MPMs_seslow, function(x) lambda(x))), parity = "semel", speed = "slow")
+gentimseslow <- data.frame(lam = unlist(lapply(MPMs_seslow, function(x) generation.time(x))), parity = "semel", speed = "slow")
 
 #Elasticities
 Elasts_seslow <- do.call(rbind,lapply(1:100, function(x) MPM_semelslow()[[3]]))
@@ -436,124 +439,48 @@ ggtern::ggtern(Elasts_seslow, aes(R, G, S, colour = lam))+ #, shape = Type))+
   theme_showarrows()+
   theme_clockwise()
 
+# Figure 1 -
+plot(density(lamitslow$lam), col = "red", xlab = expression(lambda), xlim = c(min(rbind(lamitslow,lamitfast,lamsefast,lamseslow)$lam)-0.05,
+                                                                              max(rbind(lamitslow,lamitfast,lamsefast,lamseslow)$lam)+0.05),
+     main="")
+lines(density(lamitfast$lam), col = "blue")
+lines(density(lamsefast$lam), col = "blue", lty = 3)
+lines(density(lamseslow$lam), col = "red", lty = 3)
+# text(1.025,30, "slow")
+# text(0.9,6,"fast")
+legend(0.73,35, legend = c("iteroparous","semelparous"),
+       lty = c(1,3), cex = 0.73)
+legend(0.73,27, legend = c("fast","slow"), col = c("blue","red"), cex = 0.73, lty=1)
+# ----------
+
+# Figure 2 - 
+plot(density(gentimitslow$gentim), col = "red", xlab = "Generation time", 
+     xlim = c(min(rbind(gentimitslow,gentimitfast,gentimsefast,gentimseslow)$gentim)-1,
+              max(rbind(gentimitslow,gentimitfast,gentimsefast,gentimseslow)$gentim)+1),
+     ylim = c(0,0.8),
+     main = "")
+lines(density(gentimitfast$gentim), col = "blue")
+polygon(density(gentimsefast$gentim), col = rgb(0,0,1,0.2), lty = 3)
+lines(density(gentimseslow$gentim), col = rgb(1,0,0,0.2), lty = 3, lwd = 2)
+legend(7.27,.8, legend = c("iteroparous","semelparous"),
+       lty = c(1,3), cex = 0.8)
+legend(10,0.6, legend = c("fast","slow"), col = c("blue","red"), cex = 0.8, lty=1)
+# ------------
+
 # Elasticities final
-ggplot(Elasts_semelall, aes(lam, fill = Type))+
-  geom_density(alpha = 0.5)+
-  theme_bw()
+SemelIteroAll <- rbind(SemelIteroAll, data.frame(Elasts_seslow, parity = "semelparous", speed = "slow"))
+table(SemelIteroAll$parity,SemelIteroAll$speed)
+ggtern::ggtern(SemelIteroAll, aes(R, G, S, colour = lam, shape = interaction(speed,parity)))+
+  geom_point(size = 2)+
+  scale_color_viridis_c(name = expression(lambda))+
+  scale_shape_manual(name = "Speed and\n parity", values = 1:4)+
+  theme_showarrows()+
+  theme_clockwise()
 
-str(Elasts_itslowall)
-
-# --------------------- semelparous fast  ------------------------
-MPM_semelfast <- function(){
-  # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_fast),1)
-  s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
-  # let the same Type III decay happen in transitions; first is most likely, sharp drop off
-  t_t <- survivalTypeI(alpha2 = 0.2, beta2 = .01, 1:4)
-  # plot(1:4, t_t)
-  t_t <- t_t/sum(t_t)
-  f <- fecunditysurvival(s_s[4])
-  t_ij <- matrix(c(0, s_s[1]*(sum(t_t[1:2])),s_s[1]*t_t[3],       s_s[1]*t_t[4],
-                   0, s_s[2]*sum(t_t[1:2]),  s_s[2]*sum(t_t[3]),  s_s[2]*t_t[4],
-                   0, 0,                      s_s[3]*sum(t_t[1:3]),s_s[3]*sum(t_t[4]),
-                   f, 0,            0,             0), 
-                 nrow = 4)
-  lambda1 <- lambda(t_ij)
-  lambdarange <- abs(1-rnorm(1, 1, 0.1))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  # plot(seq(0.51,1.5,by=0.01), dnorm(seq(0.51,1.5,by=0.01), 1, 0.1))
-  if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    # secondmostelastic <- which(popbio::elasticity(t_ij) == sort(popbio::elasticity(t_ij), TRUE)[2])
-    for(k in seq(0.1,0.5, by = 0.1)){
-      t_ij[mostelastic] <- (1-k) * t_ij[mostelastic]
-      # t_ij[secondmostelastic] <- (1-k) * t_ij[secondmostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 <= (1+lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic != i) break
-    } # end reduction by k for loop of that element
-  } # end while lambda is too big
-  if(lambda(t_ij) < (1-lambdarange)){
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    for(k in seq(1.1,1.5, by=0.1)){
-      t_ij[mostelastic] <- k * t_ij[mostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 >= (1-lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic !=i) break
-    } # end reduction by i for loop of that element
-  } # end if lambda is too small
-  return(t_ij)
-}
-
-MPMs_sefast <- lapply(1:100, function(x) MPM_semelfast())
-generation.time(mean(MPMs_sefast))
-hist(unlist(lapply(MPMs_sefast, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Fast")
-
-
-# --------------------- Semelparous slow -------------------
-MPM_semelslow <- function(){
-  # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_slow2),1)
-  s_s <- survivalTypeIII(alpha1 = paramlist_slow2[i,1],c(1:3,7), alpha3 = paramlist_slow2[i,2], beta3 = paramlist_slow2[i,3] )
-  f <- fecunditysurvival(s_s[4]) # remove retrogressive growth
-  t_t <- survivalTypeI(alpha2 = 0.001, beta2 = .001, 1:4)
-  # plot(1:4, t_t)
-  t_t <- t_t/sum(t_t)
-  t_ij <- matrix(c(0, s_s[1],                     0,                    0,
-                   0, s_s[2]*sum(t_t[c(1:2,4)]),  s_s[2]*sum(t_t[3]),   0,
-                   0, 0,                          s_s[3]*sum(t_t[1:3]), s_s[3]*sum(t_t[4]),
-                   f, 0,            0,             0),
-                 nrow = 4)
-  (lambda1 <- lambda(t_ij))
-  lambdarange <- abs(1-rnorm(1, 1, 0.05))
-  if(lambda1 > (1+lambdarange)) { # allow more or less variability by speed of life, more variable for fastest
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    for(k in seq(0.1,0.5, by = 0.1)){
-      t_ij[mostelastic] <- (1-k) * t_ij[mostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 <= (1+lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic != i) break
-    } # end reduction by k for loop of that element
-  } # end while lambda is too big
-  if(lambda(t_ij) < (1-lambdarange)){
-    i <- mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij)))
-    for(k in seq(1.1,1.5, by=0.1)){
-      t_ij[mostelastic] <- k * t_ij[mostelastic]
-      lambda1 <- lambda(t_ij)
-      if(lambda1 >= (1-lambdarange)) break
-      mostelastic <- which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))) # check if still same element
-      if(mostelastic !=i) break
-    } # end reduction by i for loop of that element
-  } # end if lambda is too small
-  return(t_ij)
-}
-
-MPMs_seslow <- lapply(1:100, function(x) MPM_semelslow())
-generation.time(mean(MPMs_seslow))
-hist(unlist(lapply(MPMs_seslow, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Slow")
-
-
-#--------------------- Parameters for annuals --------------------
-paramlist_annuals <- do.call(rbind, lapply(seq(0.0,0.6,by=0.1), function(a1){ # a1 < 0.2
-  outa3 <- do.call(rbind, lapply(seq(0.05,0.6,by=0.1), function(a3){ # a3 < 0.3
-    outb3 <- do.call(rbind, lapply(seq(0.05,0.3,by=0.1), function(b3){ # b3 < 0.6
-      surv <- survivalTypeIII(alpha1 = a1, c(1,2,3,7), alpha3 = a3, beta3 = b3)
-      data.frame(a1, a3, b3, stage = c("x1","x2","x3","x4"), survival = surv)#x1 = surv[1], x2 = surv[2], x3 = surv[3], x4 = surv[4])
-    }))
-    outb3
-  }))
-  outa3
-}))
 # --------------------- Annuals ------------------------
 MPM_annual <- function(){
-  # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_fast),1)
+  # three seed stages, one reproductive
+  i <- sample(1:nrow(paramlist_type1_semel),1)
   s_s <- survivalTypeIII(alpha1 = paramlist_fast[i,1],1:4, alpha3 = paramlist_fast[i,2], beta3 = paramlist_fast[i,3] )
   f <- fecunditysurvival(s_s[4])
   t_t <- survivalTypeI(alpha2 = 0.3,beta2 = 0.1, 1:4)
