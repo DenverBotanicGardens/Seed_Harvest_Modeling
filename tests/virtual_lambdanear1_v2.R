@@ -46,12 +46,9 @@ transitions <- function(b1, b2, x){
 
 #Flat when b1 = 1 and b2 = 0
 plot(1:4, transitions(.9,0.1,1:4)/sum(transitions(.9,0.1,1:4)))
-plot(1:2, transitions(.9,0.1,1:2)/sum(transitions(.9,0.1,1:2)))
 
 # decreasing 
 plot(1:4, transitions(0.1,.9,1:4)/sum(transitions(0.1,.9,1:4)))
-plot(1:2, transitions(0.1,.9,1:2)/sum(transitions(0.1,.9,1:2)))
-
 
 params <- do.call(rbind, lapply(seq(0,.1, by=0.01), function(a2){
   outb2 <- do.call(rbind, lapply(seq(0.5,.7, by=0.01), function(b2){
@@ -59,7 +56,6 @@ params <- do.call(rbind, lapply(seq(0,.1, by=0.01), function(a2){
     data.frame(a2, b2, stage = c("x1","x2","x3","x4"), survival = surv)
   }))
 }))
-
 
 (paramstransitions <- params[params$stage == "x4" & params$survival > 0.6 & params$survival < 0.8,])
 
@@ -79,11 +75,18 @@ max(paramsitero$b2)
          theme_bw()+
          facet_wrap(~b2)
        # ,width=300, height=300,units='mm', dpi=300)
-  
-paramlist_type1_semel <- params[params$stage == "x4" & params$survival < 0.2,]
+
+
+paramlist_type1_semel <- params[params$stage == "x4" & params$survival > 0 & 
+                                             !is.na(params$survival) & params$survival < 0.2,]
 paramssemel <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]
-(semelmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
-(semelmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
+ggplot(paramssemel, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
+  geom_line()+
+  geom_point()+
+  theme_bw()+
+  facet_wrap(~b2)
+(semelmin <- aggregate(survival ~ stage, min, data = params_semel_test[interaction(params_semel_test[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
+(semelmax <- aggregate(survival ~ stage, max, data = params_semel_test[interaction(params_semel_test[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
 # alpha2
 min(paramssemel$a2)
 max(paramssemel$a2)
@@ -247,47 +250,8 @@ ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
   theme_clockwise()
 
 
-
-#### Semel
-# ------------------ Iteroparous fast ------------------------
-# only progressive, no retrogressive growth; r_ij = 0
-MPM_semelfast <- function(){
-  # three juvenile stages, one reproductive
-  i <- sample(1:nrow(paramlist_type1_semel),1)
-  s_s <- survivalTypeI(alpha2 = paramlist_type1_semel[i,1], beta2 = paramlist_type1_semel[i,2], 1:4)
-  f <- semel_fecundsurv(s_s[4])
-  # transitions for fast should be fairly flat
-  t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
-  # t_t2 <- transitions(b1 = 0.9,b2 = 0.1, x = 1:2)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:2))
-  t_ij <- matrix(c(0, s_s[1]*sum(t_t[1]), s_s[1]*sum(t_t[2]),  s_s[1]*sum(t_t[3]),
-                   0, s_s[2]*sum(t_t[1]), s_s[2]*sum(t_t[2]),  s_s[2]*sum(t_t[3]),
-                   0, 0,                  s_s[3]*sum(t_t2[1:2]),s_s[3]*sum(t_t2[3]),
-                   f, 0,                  0,                   s_s[4]),
-                 nrow = 4)
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
-}
-
-MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast()[[1]])
-generation.time(mean(MPMs_itfast))
-hist(unlist(lapply(MPMs_itfast, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Fast")
-
-#Elasticities
-Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast(StDev = 0.1)[[3]]))
-ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
-  geom_point()+
-  scale_color_viridis_c()+
-  theme_showarrows()+
-  theme_clockwise()
-
-
-
-# --------------------- Semelparous slow -------------------
-MPM_iteroslow <- function(StDev = 0.05){
+# ---------------------------- Iteroparous Slow ---------------------
+MPM_iteroslow <- function(){
   # three juvenile stages, one reproductive
   i <- sample(1:nrow(paramlist_type1),1)
   s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1],beta2 = paramlist_type1[i,2],1:4)
@@ -299,7 +263,6 @@ MPM_iteroslow <- function(StDev = 0.05){
                    f, 0,                   0,                  s_s[4]), 
                  nrow = 4)
   (lambda1 <- lambda(t_ij))
-  (lambdarange <- abs(1-rnorm(1, 1, StDev)))
   (e_ij <- popbio::elasticity(t_ij))
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
@@ -307,14 +270,94 @@ MPM_iteroslow <- function(StDev = 0.05){
   return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
-MPMs_itslow <- lapply(1:100, function(x) MPM_iteroslow(StDev = 0.05)[[1]])
+MPMs_itslow <- lapply(1:100, function(x) MPM_iteroslow()[[1]])
 generation.time(mean(MPMs_itslow))
 hist(unlist(lapply(MPMs_itslow, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Slow")
 
-#Elasticities
-Elasts_itslow <- do.call(rbind,lapply(1:100, function(x) MPM_iteroslow(StDev = 0.1)[[3]]))
+# Elasticities
+Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[3]]))
+ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
+  geom_point()+
+  scale_color_viridis_c(name = expression(lambda))+
+  theme_showarrows()+
+  theme_clockwise()
 
-ggtern::ggtern(Elasts_itslow, aes(R, G, S, colour = lam))+ #, shape = Type))+
+IteroAll <- rbind(data.frame(Elasts_itfast, parity = "iteroparous", speed = "fast"),
+                  data.frame(Elasts_itslow, parity = "semelparous", speed = "slow"))
+
+ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = interaction(speed,parity)))+
+  geom_point()+
+  scale_color_viridis_c(name = expression(lambda))+
+  scale_shape_discrete(name = "Speed and\n parity")
+  theme_showarrows()+
+  theme_clockwise()
+
+#### Semel ## FIX FROM DOWN HERE!!
+# ------------------ Semelparous fast ------------------------
+# only progressive, no retrogressive growth; r_ij = 0
+MPM_semelfast <- function(){
+  # three juvenile stages, one reproductive
+  i <- sample(1:nrow(paramlist_type1),1)
+  s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], 1:4)
+  s_s <- s_s - s_s[4]
+  f <- semel_fecundsurv(s_s[3])
+  # transitions for fast should be fairly flat
+  t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
+  t_ij <- matrix(c(0, s_s[1]*sum(t_t[1]), s_s[1]*sum(t_t[2]),   s_s[1]*sum(t_t[3]),
+                   0, s_s[2]*sum(t_t[1]), s_s[2]*sum(t_t[2]),   s_s[2]*sum(t_t[3]),
+                   0, 0,                  s_s[3]*sum(t_t2[2]),  s_s[3]*sum(t_t2[c(1,3)]),
+                   f, 0,                  0,                    s_s[4]),
+                 nrow = 4)
+  (lambda1 <- lambda(t_ij))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
+}
+
+MPMs_sefast <- lapply(1:100, function(x) MPM_semelfast()[[1]])
+generation.time(mean(MPMs_sefast))
+hist(unlist(lapply(MPMs_sefast, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Fast")
+
+#Elasticities
+Elasts_sefast <- do.call(rbind,lapply(1:100, function(x) MPM_semelfast()[[3]]))
+ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam))+
+  geom_point()+
+  scale_color_viridis_c()+
+  theme_showarrows()+
+  theme_clockwise()
+
+
+
+# --------------------- Semelparous slow -------------------
+MPM_semelslow <- function(){
+  # three juvenile stages, one reproductive
+  i <- sample(1:nrow(paramlist_type1_semel),1)
+  s_s <- survivalTypeI(alpha2 = paramlist_type1_semel[i,1], beta2 = paramlist_type1_semel[i,2], 1:4)
+  s_s <- s_s - s_s[4]
+  f <- semel_fecundsurv(s_s[3])  
+  t_t2 <- transitions(b1 = 0.1,b2 = 0.9, x = 1:3)/sum( transitions(b1 = 0.1,b2 = 0.9, x = 1:3))
+  t_ij <- matrix(c(0, s_s[1],              0,                  0,
+                   0, s_s[2]*sum(t_t2[c(1,3)]),  s_s[2]*t_t2[2],     0,
+                   0, 0,                   s_s[3]*sum(t_t2[1:2]), s_s[3]*t_t2[3],
+                   f, 0,                   0,                  0), 
+                 nrow = 4)
+  (lambda1 <- lambda(t_ij))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
+}
+
+MPMs_seslow <- lapply(1:100, function(x) MPM_semelslow()[[1]])
+generation.time(mean(MPMs_seslow))
+hist(unlist(lapply(MPMs_seslow, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Slow")
+
+#Elasticities
+Elasts_seslow <- do.call(rbind,lapply(1:100, function(x) MPM_semelslow()[[3]]))
+ggtern::ggtern(Elasts_seslow, aes(R, G, S, colour = lam))+ #, shape = Type))+
   geom_point()+
   scale_color_viridis_c(name = expression(lambda))+
   theme_showarrows()+
