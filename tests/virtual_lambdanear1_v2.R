@@ -219,15 +219,14 @@ MPM_iterofast <- function(){
 }
 
 MPMs_itfast <- lapply(1:100, function(x) MPM_iterofast()[[1]])
-lam <-unlist(lapply(MPMs_itfast, function(x) lambda(x))) 
-gentim <- unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]])))
+lamitfast <-data.frame(lam = unlist(lapply(MPMs_itfast, function(x) lambda(x))), parity = "itero", speed = "fast") 
+gentimitfast <- data.frame(gentim = unlist(lapply(1:100, function(x) generation.time(MPM_iterofast()[[1]]))), parity = "itero", speed = "fast")
 generation.time(mean(MPMs_itfast))
-hist(gentim, xlab = "Generation time", main = "Iteroparous Fast")
-hist(lam, xlab = "lambda", main = "Iteroparous Fast")
-lines(seq(min(lam), max(lam), length.out = 10),dnorm(seq(min(lam), max(lam), length.out = 10), mean = mean(lam), sd = sd(lam)))
+hist(gentimitfast$gentim, xlab = "Generation time", main = "Iteroparous Fast")
+hist(lamitfast$lam, xlab = "lambda", main = "Iteroparous Fast")
 
-plot(density(gentim),  main = "Iteroparous Fast", xlab = "Generation time")
-plot(density(lam), main = "Iteroparous Fast", xlab = expression(lambda))
+plot(density(gentimitfast$gentim),  main = "Iteroparous Fast", xlab = "Generation time")
+plot(density(lamitfast$lam), main = "Iteroparous Fast", xlab = expression(lambda))
 
 #Elasticities
 Elasts_itfast <- data.frame(do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[3]])), 
@@ -265,8 +264,31 @@ MPM_iteroslow <- function(){
 }
 
 MPMs_itslow <- lapply(1:100, function(x) MPM_iteroslow()[[1]])
+lamitslow <-data.frame(lam = unlist(lapply(MPMs_itslow, function(x) lambda(x))), parity = "itero", speed = "slow") 
+gentimitslow <- data.frame(gentim = unlist(lapply(1:100, function(x) generation.time(MPM_iteroslow()[[1]]))), parity = "itero", speed = "slow") 
 generation.time(mean(MPMs_itslow))
-hist(unlist(lapply(MPMs_itslow, function(x) lambda(x))), xlab = "lambda", main = "Iteroparous Slow")
+
+ggplot(rbind(lamitslow,lamitfast), aes(lam, fill = speed))+
+  geom_density(alpha = 0.5)
+
+# Figure 1 -
+plot(density(lamitslow$lam), col = "red", xlab = expression(lambda), xlim = c(min(rbind(lamitslow,lamitfast)$lam),
+                                                                              max(rbind(lamitslow,lamitfast)$lam)),
+     main = "Iteroparous")
+lines(density(lamitfast$lam), col = "blue")
+text(1.025,30, "slow")
+text(0.9,6,"fast")
+# ----------
+
+# Figure 2 - 
+plot(density(gentimitslow$gentim), col = "red", xlab = "Generation time", xlim = c(min(rbind(gentimitslow,gentimitfast)$gentim)-1,
+                                                                              max(rbind(gentimitslow,gentimitfast)$gentim)+1),
+     main = "Iteroparous")
+lines(density(gentimitfast$gentim), col = "blue")
+text(mean(gentimitslow$gentim),0.1, "slow")
+text(mean(gentimitfast$gentim),0.1,"fast")
+# ------------
+
 
 # Elasticities
 Elasts_itfast <- do.call(rbind,lapply(1:100, function(x) MPM_iterofast()[[3]]))
@@ -277,16 +299,15 @@ ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+
   theme_clockwise()
 
 IteroAll <- rbind(data.frame(Elasts_itfast, parity = "iteroparous", speed = "fast"),
-                  data.frame(Elasts_itslow, parity = "semelparous", speed = "slow"))
+                  data.frame(Elasts_itslow, parity = "iteroparous", speed = "slow"))
 
 ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = interaction(speed,parity)))+
-  geom_point()+
-  scale_color_viridis_c(name = expression(lambda))+
-  scale_shape_discrete(name = "Speed and\n parity")
-  theme_showarrows()+
-  theme_clockwise()
+            geom_point()+
+            scale_color_viridis_c(name = expression(lambda))+
+            scale_shape_manual(name = "Speed and\n parity", values = c(1,2))+
+            theme_showarrows()+
+            theme_clockwise()
 
-#### Semel ## FIX FROM DOWN HERE!!
 # ------------------ Semelparous fast ------------------------
 # only progressive, no retrogressive growth; r_ij = 0
 MPM_semelfast <- function(){
@@ -311,8 +332,9 @@ MPM_semelfast <- function(){
 }
 
 MPMs_sefast <- lapply(1:100, function(x) MPM_semelfast()[[1]])
+lamsefast <- data.frame(unlist(lapply(MPMs_sefast, function(x) lambda(x)))) 
 generation.time(mean(MPMs_sefast))
-hist(unlist(lapply(MPMs_sefast, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Fast")
+hist(, xlab = "lambda", main = "Semelparous Fast")
 
 #Elasticities
 Elasts_sefast <- do.call(rbind,lapply(1:100, function(x) MPM_semelfast()[[3]]))
