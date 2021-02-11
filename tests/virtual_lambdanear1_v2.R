@@ -332,9 +332,37 @@ MPM_semelfast <- function(){
 }
 
 MPMs_sefast <- lapply(1:100, function(x) MPM_semelfast()[[1]])
-lamsefast <- data.frame(unlist(lapply(MPMs_sefast, function(x) lambda(x)))) 
+lamsefast <- data.frame(lam = unlist(lapply(MPMs_sefast, function(x) lambda(x))), parity = "semel", speed = "fast")
+gentimsefast <- data.frame(gentim = unlist(lapply(1:100, function(x) generation.time(MPM_semelfast()[[1]]))), parity = "semel", speed = "fast")
 generation.time(mean(MPMs_sefast))
-hist(, xlab = "lambda", main = "Semelparous Fast")
+# hist(, xlab = "lambda", main = "Semelparous Fast")
+
+# Figure 1 -
+plot(density(lamitslow$lam), col = "red", xlab = expression(lambda), xlim = c(min(rbind(lamitslow,lamitfast,lamsefast)$lam)-0.05,
+                                                                              max(rbind(lamitslow,lamitfast,lamsefast)$lam)+0.05),
+     main="")
+lines(density(lamitfast$lam), col = "blue")
+lines(density(lamsefast$lam), col = "blue", lty = 3)
+# text(1.025,30, "slow")
+# text(0.9,6,"fast")
+legend(0.77,35, legend = c("iteroparous","semelparous"),
+       lty = c(1,3), cex = 0.8)
+legend(0.77,27, legend = c("fast","slow"), col = c("blue","red"), cex = 0.8, lty=1)
+# ----------
+
+# Figure 2 - 
+plot(density(gentimitslow$gentim), col = "red", xlab = "Generation time", 
+     xlim = c(min(rbind(gentimitslow,gentimitfast,gentimsefast)$gentim)-1,
+              max(rbind(gentimitslow,gentimitfast,gentimsefast)$gentim)+1),
+     ylim = c(0,0.8),
+     main = "")
+lines(density(gentimitfast$gentim), col = "blue")
+polygon(density(gentimsefast$gentim), col = rgb(0,0,1,0.2), lty = 3)
+legend(7.27,.8, legend = c("iteroparous","semelparous"),
+       lty = c(1,3), cex = 0.8)
+legend(10,0.6, legend = c("fast","slow"), col = c("blue","red"), cex = 0.8, lty=1)
+# ------------
+
 
 #Elasticities
 Elasts_sefast <- do.call(rbind,lapply(1:100, function(x) MPM_semelfast()[[3]]))
@@ -344,6 +372,13 @@ ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam))+
   theme_showarrows()+
   theme_clockwise()
 
+SemelIteroAll <- rbind(IteroAll, data.frame(Elasts_sefast, parity = "semelparous", speed = "fast"))
+ggtern::ggtern(SemelIteroAll, aes(R, G, S, colour = lam, shape = interaction(speed,parity)))+
+  geom_point(size = 2)+
+  scale_color_viridis_c(name = expression(lambda))+
+  scale_shape_manual(name = "Speed and\n parity", values = 1:3)+
+  theme_showarrows()+
+  theme_clockwise()
 
 
 # --------------------- Semelparous slow -------------------
@@ -363,15 +398,35 @@ MPM_semelslow <- function(){
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  (targetlam <- rnorm(1, 1, 0.1))
   
-  print(which(popbio::elasticity(t_ij) == max(popbio::elasticity(t_ij))))
-  
+  if(lambda1 > targetlam) { # allow more or less variability by speed of life, more variable for fastest
+    (i <- mostelastic <- which(e_ij == max(e_ij)))
+    for(k in seq(0.01,0.5, by = 0.01)){
+      t_ij[mostelastic] <- (1-k) * t_ij[mostelastic]
+      if(t_ij[13] < 0) t_ij[13] <- 0
+      lambda1 <- lambda(t_ij)
+      if(lambda1 <= targetlam) break
+      mostelastic <- which(e_ij == max(e_ij)) # check if still same element
+      if(mostelastic != i) break
+    } # end reduction by k for loop of that element
+  } # end while lambda is too big
+  if(lambda1 < targetlam){
+    i <- mostelastic <- which(e_ij == max(e_ij))
+    for(k in seq(1.01,1.5, by=0.01)){
+      t_ij[mostelastic] <- k * t_ij[mostelastic]
+      lambda1 <- lambda(t_ij)
+      if(lambda1 >= targetlam) break
+      mostelastic <- which(e_ij == max(e_ij)) # check if still same element
+      if(mostelastic !=i) break
+    } # end reduction by i for loop of that element
+  } # end if lambda is too small
   return(list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1)))
 }
 
 MPMs_seslow <- lapply(1:100, function(x) MPM_semelslow()[[1]])
 generation.time(mean(MPMs_seslow))
-hist(unlist(lapply(MPMs_seslow, function(x) lambda(x))), xlab = "lambda", main = "Semelparous Slow")
+lamseslow <- data.frame(lam = unlist(lapply(MPMs_seslow, function(x) lambda(x))), parity = "itero", speed = "slow")
 
 #Elasticities
 Elasts_seslow <- do.call(rbind,lapply(1:100, function(x) MPM_semelslow()[[3]]))
