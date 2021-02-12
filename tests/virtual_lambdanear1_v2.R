@@ -211,15 +211,16 @@ MPM_iterofast <- function(){
                    0, 0,                  s_s[3]*sum(t_t2[1:2]),s_s[3]*sum(t_t2[3]),
                    f, 0,                  0,                   s_s[4]),
                  nrow = 4)
-  (lambda1 <- lambda(t_ij))
+  (lambda_norm <- lambda1 <- lambda(t_ij))
   (e_ij <- popbio::elasticity(t_ij))
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
   t_ij_norm <- t_ij
-  
-  (targetlam <- rnorm(1, 1, 0.1))
-  if(lambda1 > targetlam) { # allow more or less variability by speed of life, more variable for fastest
+  # adjust lambda to a normal distribution 
+  norm_lam <- rnorm(1, 1, 0.1)
+  if(lambda1 > (1.01+0.069)) { # circular from median(lambda) before changes
+    (targetlam <- 1 + abs(1-norm_lam))
     (i <- mostelastic <- which(e_ij == max(e_ij)))
     for(k in seq(0.01,0.5, by = 0.01)){
       t_ij_norm[mostelastic] <- (1-k) * t_ij_norm[mostelastic]
@@ -230,7 +231,8 @@ MPM_iterofast <- function(){
       if(mostelastic != i) break
     } # end reduction by k for loop of that element
   } # end while lambda is too big
-  if(lambda1 < targetlam){
+  if(lambda1 <= (1.01-0.069)){
+    (targetlam <- 1 - abs(1-rnorm(1, 1, 0.1)))
     i <- mostelastic <- which(e_ij == max(e_ij))
     for(k in seq(1.01,1.5, by=0.01)){
       t_ij_norm[mostelastic] <- k * t_ij_norm[mostelastic]
@@ -253,6 +255,8 @@ itfast <- lapply(1:100, function(x) MPM_iterofast())
 
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(lam = unlist(lapply(MPMs_itfast, function(x) lambda(x))), parity = "itero", speed = "fast") 
+mean(lamitfast$lam)
+sd(lamitfast$lam)
 gentimitfast <- data.frame(gentim = unlist(lapply(MPMs_itfast, function(x) generation.time(x))), parity = "itero", speed = "fast")
 
 MPMs_itfast_norm <- lapply(itfast, function(x) x[[4]])
@@ -260,11 +264,10 @@ lamitfast_norm <-data.frame(lam = unlist(lapply(MPMs_itfast_norm, function(x) la
 gentimitfast_norm <- data.frame(gentim = unlist(lapply(MPMs_itfast_norm, function(x) generation.time(x))), parity = "itero", speed = "fast")
 
 generation.time(mean(MPMs_itfast))
-hist(gentimitfast$gentim, xlab = "Generation time", main = "Iteroparous Fast")
-hist(lamitfast$lam, xlab = "lambda", main = "Iteroparous Fast")
-
 
 # ---------------------------------------------
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IteroInitial_normalLambda.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
 layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
@@ -273,12 +276,13 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
     den2 <- density(gentimitfast$gentim)
     par(mar=c(0,4,0,0))
     plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red", ylim=c(0,max(c(den$y,den2$y))))
-    lines(den2$x, den2$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "lightcoral", lty = 5)
+    lines(den2$x, den2$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "blue", lty = 5)
   # Plot 2 scatter plot
     par(mar=c(4,4,0,0))
     plot(gentimitfast_norm$gentim,lamitfast_norm$lam, ylab = expression(lambda), xlab = "generation time",
-         main = "", pch = 16, col = "red")
-    points(gentimitfast$gentim, lamitfast$lam, col = "lightcoral", pch = 1)
+         main = "", pch = 1, col = "red")
+    points(gentimitfast$gentim, lamitfast$lam, col = rgb(0,0,1,0.3), pch = 16)
+    mtext("a)", 3, line = 0.5,adj = 0)
   # Plot 3 blank
     frame()
   # Plot 4 lambda density
@@ -286,16 +290,16 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
     den2 <- density(lamitfast$lam)
     par(mar=c(4,0,0,0))
     plot(den$y, den$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red", xlim=c(0,max(c(den$y,den2$y))))
-    lines(den2$y, den2$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", bty="n", col = "lightcoral", lty = 5)
+    lines(den2$y, den2$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", bty="n", col = "blue", lty = 5)
     
-
-    dev.off()
+dev.off()
       
 # ---------------------------------------------
 dev.off() # to reset par
-            
-plot(density(gentimitfast$gentim),  main = "Iteroparous Fast", xlab = "Generation time")
-plot(density(lamitfast$lam), main = "Iteroparous Fast", xlab = expression(lambda))
+
+# The largest increase in lambda resulted in the largest increase in generation time
+plot(gentimitfast_norm$gentim - gentimitfast$gentim,
+     lamitfast_norm$lam - lamitfast$lam, xlab = "difference in generation time", ylab = expression("difference in "~lambda))
 
 #Elasticities
 
