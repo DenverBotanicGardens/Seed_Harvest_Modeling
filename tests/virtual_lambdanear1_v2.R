@@ -3,7 +3,7 @@ library(ggplot2)
 library(devtools)
 # library(Rcompadre)
 library(popdemo)
-library(Rage)
+# library(Rage)
 library(ggtern)
 library(patchwork)
 rm(list=ls())
@@ -26,9 +26,6 @@ itero_fecundsurv <- function(s){
   12.5*((s - 0.9)^2) - 0.125
 }
 
-#Hazard
-# h(x) <- alpha3*exp((-beta3 * x))
-
 # Fujiwara and Diaz-Lopez 2017 
 # The x's represent the median age of the stage class
 # Salguero-Gomez has signs flipped, type I is the area where rare plants fall; equation 2 from Fujiwara and Diaz-Lopez 2017; hazard is
@@ -43,10 +40,8 @@ transitions <- function(b1, b2, x){
   b1*exp((x*-b2))
 }
 
-
 #Flat when b1 = 1 and b2 = 0
 plot(1:4, transitions(.9,0.1,1:4)/sum(transitions(.9,0.1,1:4)))
-
 # decreasing 
 plot(1:4, transitions(0.1,.9,1:4)/sum(transitions(0.1,.9,1:4)))
 
@@ -85,8 +80,8 @@ ggplot(paramssemel, aes(stage, survival, colour = as.factor(a2), group = interac
   geom_point()+
   theme_bw()+
   facet_wrap(~b2)
-(semelmin <- aggregate(survival ~ stage, min, data = params_semel_test[interaction(params_semel_test[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
-(semelmax <- aggregate(survival ~ stage, max, data = params_semel_test[interaction(params_semel_test[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
+(semelmin <- aggregate(survival ~ stage, min, data = paramssemel[interaction(paramssemel[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
+(semelmax <- aggregate(survival ~ stage, max, data = paramssemel[interaction(paramssemel[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
 # alpha2
 min(paramssemel$a2)
 max(paramssemel$a2)
@@ -113,6 +108,7 @@ hazard <- function(alpha2,beta2,x){
 }
 
 plot(1:4, hazard(alpha2 = 1.2, beta2 = -.3, 1:4))
+lines(c(1,4), c(0.888, 0.362))
 ## ------------------ years 1:4 where reproductive when age 4------------------
 # Early maturation so all are kept as ages 1:4 but then just stay as a reproductive after 4 years
 # conceptual model of model creation and expections on lambda and extinction risk
@@ -192,10 +188,6 @@ which(generic_mat == "G")
 # Fecundity
 which(generic_mat == "F")
 
-# Semelparous elasticities:            growth > 0.5, survival < 0.5, fecundity > 0.5
-# Iteroparous elasticities:            growth [0,1], survival [0,1], fecundity < 0.5
-# trees and shrubs (slow iteroparous): growth < 0.5, survival [0.25,1], fecundity < 0.25
-
 # ------------------ Iteroparous fast ------------------------
 # keep between 0.8 < lambda < 1.2
 # only progressive, no retrogressive growth; r_ij = 0
@@ -208,18 +200,18 @@ MPM_iterofast <- function(){
   t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
   t_ij <- matrix(c(0, s_s[1]*sum(t_t[1]), s_s[1]*sum(t_t[2]),  s_s[1]*sum(t_t[3]),
                    0, s_s[2]*sum(t_t[1]), s_s[2]*sum(t_t[2]),  s_s[2]*sum(t_t[3]),
-                   0, 0,                  s_s[3]*sum(t_t2[1:2]),s_s[3]*sum(t_t2[3]),
+                   0, 0,                  s_s[3]*sum(t_t[1:2]),s_s[3]*sum(t_t[3]),
                    f, 0,                  0,                   s_s[4]),
                  nrow = 4)
   (lambda_norm <- lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
+  (e_ij_norm <- e_ij <- popbio::elasticity(t_ij))
   survivalElast <- sum(e_ij[which(generic_mat == "L")])
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
   t_ij_norm <- t_ij
   # adjust lambda to a normal distribution 
   norm_lam <- rnorm(1, 1, 0.1)
-  if(lambda1 > (1.01+0.069)) { # circular from median(lambda) before changes
+  if(lambda1 > 1.2) { # circular from mean(lambda) before changes
     (targetlam <- 1 + abs(1-norm_lam))
     (i <- mostelastic <- which(e_ij == max(e_ij)))
     for(k in seq(0.01,0.5, by = 0.01)){
@@ -231,7 +223,7 @@ MPM_iterofast <- function(){
       if(mostelastic != i) break
     } # end reduction by k for loop of that element
   } # end while lambda is too big
-  if(lambda1 <= (1.01-0.069)){
+  if(lambda1 <= 0.8){
     (targetlam <- 1 - abs(1-rnorm(1, 1, 0.1)))
     i <- mostelastic <- which(e_ij == max(e_ij))
     for(k in seq(1.01,1.5, by=0.01)){
@@ -242,7 +234,6 @@ MPM_iterofast <- function(){
       if(mostelastic !=i) break
     } # end reduction by i for loop of that element
   } # end if lambda is too small
-  e_ij_norm <- popbio::elasticity(t_ij_norm)
   survivalElast_norm <- sum(e_ij_norm[which(generic_mat == "L")])
   growthElast_norm <- sum(e_ij_norm[which(generic_mat == "G")])
   fecundElast_norm <- sum(e_ij_norm[which(generic_mat == "F")])
@@ -252,9 +243,10 @@ MPM_iterofast <- function(){
 
 # get 100 runs
 itfast <- lapply(1:100, function(x) MPM_iterofast())
-
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
+
 lamitfast <-data.frame(lam = unlist(lapply(MPMs_itfast, function(x) lambda(x))), parity = "itero", speed = "fast") 
+median(lamitfast$lam)
 mean(lamitfast$lam)
 sd(lamitfast$lam)
 gentimitfast <- data.frame(gentim = unlist(lapply(MPMs_itfast, function(x) generation.time(x))), parity = "itero", speed = "fast")
@@ -264,7 +256,9 @@ lamitfast_norm <-data.frame(lam = unlist(lapply(MPMs_itfast_norm, function(x) la
 gentimitfast_norm <- data.frame(gentim = unlist(lapply(MPMs_itfast_norm, function(x) generation.time(x))), parity = "itero", speed = "fast")
 
 generation.time(mean(MPMs_itfast))
+generation.time(mean(MPMs_itfast_norm))
 
+# check how much needed to be moved
 # ---------------------------------------------
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IteroInitial_normalLambda.jpg",
      width = 100, height = 100, units="mm", res = 300)
@@ -293,9 +287,7 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
     lines(den2$y, den2$x, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", bty="n", col = "blue", lty = 5)
     
 dev.off()
-      
 # ---------------------------------------------
-dev.off() # to reset par
 
 # The largest increase in lambda resulted in the largest increase in generation time
 plot(gentimitfast_norm$gentim - gentimitfast$gentim,
