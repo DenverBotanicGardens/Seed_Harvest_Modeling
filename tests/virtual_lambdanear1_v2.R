@@ -34,6 +34,11 @@ survivalTypeI <- function(alpha2, beta2, x){
   exp((alpha2/beta2)*(1-(exp(beta2*x))))
 }
 
+# semelparous
+survivalTypeIII <- function(alpha1,x,alpha3,beta3){
+  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
+}
+
 transitions <- function(b1, b2, x){
   b1*exp((x*-b2))
 }
@@ -45,10 +50,20 @@ plot(1:4, transitions(0.1,.9,1:4)/sum(transitions(0.1,.9,1:4)))
 
 params <- do.call(rbind, lapply(seq(0,.6, by=0.01), function(a2){
   outb2 <- do.call(rbind, lapply(seq(0.2,1, by=0.01), function(b2){
-    surv <- survivalTypeI(a2, b2, 1:20)
-    data.frame(a2, b2, age = 1:20, survival = surv, a2b2 = paste(a2,b2,sep=""))
+    surv <- survivalTypeI(a2, b2, seq(1,20,by=0.5))
+    data.frame(a2, b2, age = seq(1,20,by=0.5), survival = surv, a2b2 = paste(a2,b2,sep=""))
   }))
 }))
+
+paramssemel <- do.call(rbind, lapply(seq(0,.1, by=0.05), function(a1){
+  outa3 <- do.call(rbind, lapply(seq(0.1,0.7,by = 0.05), function(a3){
+    outb2 <- do.call(rbind, lapply(seq(0.2,0.7, by=0.05), function(b3){
+      surv <- survivalTypeIII(a1, a3, b3, seq(1,20,by=0.5))
+      data.frame(a1, a3, b3, age = seq(1,20,by=0.5), survival = surv, a1a3b3 = paste(a1,a3,b3,sep=""))
+      }))
+    }))
+  }))
+
 
 # itero fast ---------------------------
 params8 <- params[params$a2b2 %in% 
@@ -64,19 +79,23 @@ params8slow <- params8slow[params8slow$a2b2 %in%
 params8slow <- params8slow[params8slow$a2b2 %in%
                              params8slow$a2b2[params8slow$survival < 0.01 & params8slow$age == 10],] # end of reproductive stage can't be 0
 params8slow <- params8slow[!duplicated(params8slow[,c("a2","b2")]),]
+
+# -------------------------------------------------------------------------
 # semel fast
-params8se <- params[params$a2b2 %in% 
-                    params$a2b2[params$survival < 0.801 & params$survival > 0.01 & params$age == 5],]  # reproductive stage can't be above 0.8
-params8se <- params8se[params8se$a2b2 %in% params8se$a2b2[params8se$survival < 0.01 & params8se$age == 6],] # end of reproductive stage can't be 0 
-params8se <- params8se[!duplicated(params8se[,c("a2","b2")]),]
+params8se <- paramssemel[paramssemel$a1a3b3 %in%
+                           paramssemel$a1a3b3[paramssemel$survival < 0.8 & 
+                                                paramssemel$survival > 0.001 & paramssemel$age == 5],]  # reproductive stage can't be above 0.8
+params8se <- params8se[params8se$a1a3b3 %in% params8se$a1a3b3[params8se$survival < 0.01 & params8se$age == 6],] # end of reproductive stage can't be 0
+params8se <- params8se[!duplicated(params8se[,c("a1","a3","b3")]),]
 
 # semel slow
-params8seslow <- params[params$a2b2 %in%
-                        params$a2b2[params$survival < 0.801 & params$survival > 0.01 & params$age == 9],]  # reproductive stage can't be above 0.8
-params8seslow <- params8seslow[params8seslow$a2b2 %in%
-                             params8seslow$a2b2[params8seslow$survival < 0.01 & params8seslow$age == 10],]
+params8seslow <- paramssemel[paramssemel$a1a3b3 %in%
+                               paramssemel$a1a3b3[paramssemel$survival < 0.8 & paramssemel$age == 9],]  # reproductive stage can't be above 0.8
+params8seslow <- params8seslow[params8seslow$a1a3b3 %in%
+                             params8seslow$a1a3b3[params8seslow$survival < 0.01 &
+                                                         params8seslow$age == 10],]
 # end of reproductive stage can't be 0
-params8seslow <- params8seslow[!duplicated(params8seslow[,c("a2","b2")]),]
+params8seslow <- params8seslow[!duplicated(params8seslow[,c("a1","a3","b3")]),]
 # ---------------------------------------
 
 stage2itero <- 3
@@ -88,79 +107,80 @@ stage3slow <- 10
 
 # ---------------------------------------------
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalStasisFig1a.jpg",
-     width = 200, height = 200, units="mm", res = 300)
+     width = 150, height = 150, units="mm", res = 300)
 layout(matrix(c(1:4),2,2, byrow=TRUE), widths = c(3,3), heights = c(3,3))
 #### Iteroparous fast ---------------------------------
-par(mar = c(0,4,4,0))
-plot(2:11, survivalTypeI(params8[1,1], params8[1,2], 2:11), type = "l", col = rainbow(nrow(params8), alpha = 0.5)[1],
-     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)")
+par(mar = c(2,4,2,1))
+plot(2:7, survivalTypeI(params8[1,1], params8[1,2], 2:7), type = "l", col = rainbow(nrow(params8), alpha = 0.5)[1],
+     xlab = "",xaxt = "n", ylab = "Survival (stasis)",
+     ylim = c(0,1))
 for(i in 2:nrow(params8)){
-  lines(2:11, survivalTypeI(params8[i,1], params8[i,2], 2:11), type = "l", col = rainbow(nrow(params8), alpha = 0.5)[i])
+  lines(2:7, survivalTypeI(params8[i,1], params8[i,2], 2:7), type = "l", col = rainbow(nrow(params8), alpha = 0.5)[i])
 }
 abline(v=2)
-text("1", x = 1.75,y = 0.9, adj = 0,cex = 0.8) 
+text("1", x = 2,y = 0.9, adj = 1) 
 abline(v = stage2itero)
-text("2", x = stage2itero,y = 0.9,adj = 1, cex = 0.8) # srt = 90,
+text("2", x = stage2itero,y = 0.9,adj = 1) # srt = 90,
 abline(v=stage3fast)
-text("3", x = stage3fast,y = 0.9,adj = 1, cex = 0.8) 
+text("3", x = stage3fast,y = 0.9,adj = 1) 
 mtext("a) iteroparous fast", adj=0)
 
 # itero slow -----------------------------
-# par(mar = c(0,4,4,0))
+par(mar = c(2,1,2,4))
 plot(2:11, survivalTypeI(params8slow[1,1], params8slow[1,2], 2:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[1],
-     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)")
+     xlab = "",xaxt="n", ylab = "", yaxt = "n",
+     ylim = c(0,1))
 for(i in 2:nrow(params8slow)){
   lines(2:11, survivalTypeI(params8slow[i,1], params8slow[i,2], 2:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[i])
 }
-text("1", x = 1.75,y = 0.9, adj = 0,cex = 0.8) 
-text("2", x = stage2iteroslow,y = 0.9, adj = 1,cex = 0.8) 
+text("1", x = 2,y = 0.9, adj = 1) 
+text("2", x = stage2iteroslow,y = 0.9, adj = 1) 
 abline(v=2, lty=2)
-abline(v=stage2iteroslow,lty=2 )
+abline(v=stage2iteroslow,lty=2)
 abline(v= stage3slow,lty=2)
-text("3", x = stage3slow, y=0.4, adj = 1, cex = 0.8)
+text("3", x = stage3slow, y=0.74, adj = 1)
 legend("topright", legend = c("Stage 1: seedling", "Stage 2: vegetative","Stage 3: reproductive"), cex = 0.8)
 mtext("b) iteroparous slow", adj=0)
 
 
 #### semelparous fast ---------------------------------
-# par(mar = c(4,0,4,0))
-plot(2:11, survivalTypeI(params8se[1,1], params8se[1,2], 2:11), type = "l", col = rainbow(nrow(params8se), alpha = 0.5)[1],
-     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)")
+par(mar = c(4,4,2,1))
+plot(2:7, survivalTypeI(params8se[1,1], params8se[1,2], 2:7), type = "l", col = rainbow(nrow(params8se), alpha = 0.5)[1],
+     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)",
+     ylim = c(0,1))
 for(i in 2:nrow(params8se)){
-  lines(2:11, survivalTypeI(params8se[i,1], params8se[i,2], 2:11), type = "l", 
+  lines(2:7, survivalTypeI(params8se[i,1], params8se[i,2], 2:7), type = "l", 
         col = rainbow(nrow(params8se), alpha = 0.25)[i])
 }
 abline(v=2)
-text("1", x = 1.75,y = 0.9, adj = 0,cex = 0.8) 
+text("1", x = 2,y = 0.9, adj = 1) 
 abline(v = stage2semel)
-text("2", x = stage2semel,y = 0.9,adj = 1, cex = 0.8) # srt = 90,
+text("2", x = stage2semel,y = 0.9,adj = 1)
 abline(v=stage3fast)
-text("3", x = stage3fast,y = 0.9,adj = 1, cex = 0.8) 
+text("3", x = stage3fast,y = 0.9,adj = 1) 
 mtext("c) semelparous fast", adj=0)
 
 # itero slow -----------------------------
-# par(mar = c(4,0,4,0))
+par(mar = c(4,1,2,4))
 plot(2:11, survivalTypeI(params8seslow[1,1], params8seslow[1,2], 2:11), type = "l", col = rainbow(nrow(params8seslow), alpha = 1)[1],
-     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)")
+     xlab = "Age (years) \nStage class", ylab = "", yaxt = "n",
+     ylim = c(0,1))
 for(i in 2:nrow(params8seslow)){
   lines(2:11, survivalTypeI(params8seslow[i,1], params8seslow[i,2], 2:11), type = "l", col = rainbow(nrow(params8seslow), alpha = 1)[i])
 }
-text("1", x = 1.75,y = 0.9, adj = 0,cex = 0.8) 
-text("2", x = stage2iteroslow,y = 0.9, adj = 1,cex = 0.8) 
-abline(v=2, lty=2)
-abline(v=stage2iteroslow,lty=2 )
+text("1", x = 1.75,y = 0.9, adj = 0) 
+text("2", x = stage2semelslow,y = 0.9, adj = 1) 
+abline(v=2,lty=2 )
+abline(v=stage2semelslow,lty=2 )
 abline(v= stage3slow,lty=2)
-text("3", x = stage3slow, y=0.9, adj = 1, cex = 0.8)
-mtext("b) semelparous slow", adj=0)
-
+text("3", x = stage3slow, y=0.9, adj = 1)
+mtext("d) semelparous slow", adj=0)
 
 dev.off()
 # ----------------------------
 
-(paramstransitions <- params[params$stage == "x4" & params$survival > 0.6 & params$survival < 0.8,])
 
-paramlist_type1 <- params[params$stage == "x4" & params$survival > 0.6 & params$survival < 0.8,]
-paramsitero <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]
+# Methods ------ parameters parity and speed
 (slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
 (slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
 min(paramsitero$a2)
