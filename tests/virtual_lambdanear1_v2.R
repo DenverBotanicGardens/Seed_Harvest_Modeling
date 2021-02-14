@@ -48,32 +48,23 @@ plot(1:4, transitions(.9,0.1,1:4)/sum(transitions(.9,0.1,1:4)))
 # decreasing 
 plot(1:4, transitions(0.1,.9,1:4)/sum(transitions(0.1,.9,1:4)))
 
-params <- do.call(rbind, lapply(seq(0,.6, by=0.01), function(a2){
-  outb2 <- do.call(rbind, lapply(seq(0.2,1, by=0.01), function(b2){
+params <- do.call(rbind, lapply(seq(0,.9, by=0.01), function(a2){
+  outb2 <- do.call(rbind, lapply(seq(0,1, by=0.01), function(b2){
     surv <- survivalTypeI(a2, b2, seq(1,20,by=0.5))
     data.frame(a2, b2, age = seq(1,20,by=0.5), survival = surv, a2b2 = paste(a2,b2,sep=""))
   }))
 }))
 
-paramssemel <- do.call(rbind, lapply(seq(0,.1, by=0.05), function(a1){
-  outa3 <- do.call(rbind, lapply(seq(0.1,0.7,by = 0.05), function(a3){
-    outb2 <- do.call(rbind, lapply(seq(0.2,0.7, by=0.05), function(b3){
-      surv <- survivalTypeIII(a1, a3, b3, seq(1,20,by=0.5))
-      data.frame(a1, a3, b3, age = seq(1,20,by=0.5), survival = surv, a1a3b3 = paste(a1,a3,b3,sep=""))
-      }))
-    }))
-  }))
-
 
 # itero fast ---------------------------
 params8 <- params[params$a2b2 %in% 
-                    params$a2b2[params$survival < 0.801 & params$survival > 0 & params$age == 3],]  # reproductive stage can't be above 0.8
+                    params$a2b2[params$survival < 0.501 & params$survival > 0 & params$age == 3],]  # reproductive stage can't be above 0.8
 params8 <- params8[params8$a2b2 %in% params8$a2b2[params8$survival > 0.01 & params8$age == 5],] # end of reproductive stage can't be 0 
 params8 <- params8[params8$a2b2 %in% params8$a2b2[params8$survival < 0.01 & params8$age == 6],] # end of reproductive stage can't be 0
 params8 <- params8[!duplicated(params8[,c("a2","b2")]),]
 # itero slow
 params8slow <- params[params$a2b2 %in%
-                        params$a2b2[params$survival < 0.801 & params$survival > 0.01 & params$age == 4],]  # reproductive stage can't be above 0.8
+                        params$a2b2[params$survival < 0.501 & params$survival > 0.01 & params$age == 4],]  # reproductive stage can't be above 0.8
 params8slow <- params8slow[params8slow$a2b2 %in%
                              params8slow$a2b2[params8slow$survival > 0.01 & params8slow$age == 9],] # end of reproductive stage can't be 0
 params8slow <- params8slow[params8slow$a2b2 %in%
@@ -82,20 +73,19 @@ params8slow <- params8slow[!duplicated(params8slow[,c("a2","b2")]),]
 
 # -------------------------------------------------------------------------
 # semel fast
-params8se <- paramssemel[paramssemel$a1a3b3 %in%
-                           paramssemel$a1a3b3[paramssemel$survival < 0.8 & 
-                                                paramssemel$survival > 0.001 & paramssemel$age == 5],]  # reproductive stage can't be above 0.8
-params8se <- params8se[params8se$a1a3b3 %in% params8se$a1a3b3[params8se$survival < 0.01 & params8se$age == 6],] # end of reproductive stage can't be 0
-params8se <- params8se[!duplicated(params8se[,c("a1","a3","b3")]),]
+params8se <- params[params$a2b2 %in% 
+                      params$a2b2[params$survival < 0.801 & params$survival > 0.01 & params$age == 5],]  # reproductive stage can't be above 0.8
+params8se <- params8se[params8se$a2b2 %in% params8se$a2b2[params8se$survival < 0.01 & params8se$age == 6],] # end of reproductive stage can't be 0 
+params8se <- params8se[params8se$a2b2 %in% params8se$a2b2[params8se$survival < 0.05 & params8se$age == 5],] # end of reproductive stage can't be 0 
+params8se <- params8se[!duplicated(params8se[,c("a2","b2")]),]
 
 # semel slow
-params8seslow <- paramssemel[paramssemel$a1a3b3 %in%
-                               paramssemel$a1a3b3[paramssemel$survival < 0.8 & paramssemel$age == 9],]  # reproductive stage can't be above 0.8
-params8seslow <- params8seslow[params8seslow$a1a3b3 %in%
-                             params8seslow$a1a3b3[params8seslow$survival < 0.01 &
-                                                         params8seslow$age == 10],]
+params8seslow <- params[params$a2b2 %in%
+                          params$a2b2[params$survival < 0.801 & params$survival > 0.01 & params$age == 9],]  # reproductive stage can't be above 0.8
+params8seslow <- params8seslow[params8seslow$a2b2 %in%
+                                 params8seslow$a2b2[params8seslow$survival < 0.01 & params8seslow$age == 10],]
 # end of reproductive stage can't be 0
-params8seslow <- params8seslow[!duplicated(params8seslow[,c("a1","a3","b3")]),]
+params8seslow <- params8seslow[!duplicated(params8seslow[,c("a2","b2")]),]
 # ---------------------------------------
 
 stage2itero <- 3
@@ -104,6 +94,16 @@ stage2iteroslow <- 5
 stage2semelslow <- 9
 stage3fast <- 6
 stage3slow <- 10
+
+# Stage middle ages
+itfastst2 <- 2+(stage2itero-2)/2
+itfastst3 <- stage2itero+(stage3fast-stage2itero)/2
+sefastst2 <- 2+(stage2semel-2)/2
+sefastst3 <- stage2semel+(stage3fast-stage2semel)/2
+itslowst2 <- 2+(stage2iteroslow-2)/2
+itslowst3 <- stage2iteroslow+(stage3slow - stage2iteroslow)/2
+seslowst2 <- 2+(stage2semelslow-2)/2
+seslowst3 <- stage2semelslow+(stage3fast - stage2semelslow)/2
 
 # ---------------------------------------------
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalStasisFig1a.jpg",
@@ -146,7 +146,7 @@ mtext("b) iteroparous slow", adj=0)
 #### semelparous fast ---------------------------------
 par(mar = c(4,4,2,1))
 plot(2:7, survivalTypeI(params8se[1,1], params8se[1,2], 2:7), type = "l", col = rainbow(nrow(params8se), alpha = 0.5)[1],
-     xlab = "Age (years) \nStage class", ylab = "Survival (stasis)",
+     xlab = "Age (years)", ylab = "Survival (stasis)",
      ylim = c(0,1))
 for(i in 2:nrow(params8se)){
   lines(2:7, survivalTypeI(params8se[i,1], params8se[i,2], 2:7), type = "l", 
@@ -180,53 +180,28 @@ dev.off()
 # ----------------------------
 
 
+
 # Methods ------ parameters parity and speed
-(slowmin <- aggregate(survival ~ stage, min, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
-(slowmax <- aggregate(survival ~ stage, max, data = params[interaction(params[,1:2]) %in% interaction(paramlist_type1[,1:2]),]))
-min(paramsitero$a2)
-max(paramsitero$a2)
-
-min(paramsitero$b2)
-max(paramsitero$b2)
-# ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalCurveTypeIIteroParams.jpg",
-       ggplot(paramsitero, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
-         geom_line()+
-         geom_point()+
-         theme_bw()+
-         facet_wrap(~b2)
-       # ,width=300, height=300,units='mm', dpi=300)
-
-
-paramlist_type1_semel <- params[params$stage == "x4" & params$survival > 0 & 
-                                             !is.na(params$survival) & params$survival < 0.2,]
-paramssemel <-  params[interaction(params[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]
-ggplot(paramssemel, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
-  geom_line()+
-  geom_point()+
-  theme_bw()+
-  facet_wrap(~b2)
-(semelmin <- aggregate(survival ~ stage, min, data = paramssemel[interaction(paramssemel[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
-(semelmax <- aggregate(survival ~ stage, max, data = paramssemel[interaction(paramssemel[,1:2]) %in% interaction(paramlist_type1_semel[,1:2]),]))
-# alpha2
-min(paramssemel$a2)
-max(paramssemel$a2)
-
-min(paramssemel$b2)
-max(paramssemel$b2)
-
-# ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SurvivalCurveTypeISemelParams.jpg",
-       ggplot(paramssemel, aes(stage, survival, colour = as.factor(a2), group = interaction(a2,b2)))+
-         geom_line()+
-         geom_point()+
-         theme_bw()+
-         facet_wrap(~b2)
-       # ,width=300, height=300,units='mm', dpi=300)
-
- semel_fecundsurv(semelmin$survival[semelmin$stage == "x4"])
- semel_fecundsurv(semelmax$survival[semelmax$stage == "x4"]) 
- itero_fecundsurv(slowmin$survival[slowmin$stage == "x4"]) 
- itero_fecundsurv(slowmax$survival[slowmax$stage == "x4"]) 
-
+(aggregate(survival ~ age, min, data = params[params$age %in% c(itfastst2,itfastst3)&
+                                                           params$a2b2 %in% params8$a2b2,])) # Iteroparous fast
+(aggregate(survival ~ age, max, data = params[params$age %in% c(itfastst2,itfastst3)&
+                                                           params$a2b2 %in% params8$a2b2,]))
+# ----------------
+(aggregate(survival ~ age, min, data = params[params$age %in% c(sefastst2,sefastst3)&
+                                                params$a2b2 %in% params8se$a2b2,])) # semel fast
+(aggregate(survival ~ age, max, data = params[params$age %in% c(sefastst2,sefastst3)&
+                                                params$a2b2 %in% params8se$a2b2,]))
+# ----------------
+(aggregate(survival ~ age, min, data = params[params$age %in% c(itslowst2,itslowst3)&
+                                                params$a2b2 %in% params8slow$a2b2,])) # itero slow
+(aggregate(survival ~ age, max, data = params[params$age %in% c(itslowst2,itslowst3)&
+                                                params$a2b2 %in% params8slow$a2b2,]))
+# ----------------
+(aggregate(survival ~ age, min, data = params[params$age %in% c(seslowst2,seslowst3)&
+                                                params$a2b2 %in% params8seslow$a2b2,])) # semel slow
+(aggregate(survival ~ age, max, data = params[params$age %in% c(seslowst2,seslowst3)&
+                                                params$a2b2 %in% params8seslow$a2b2,]))
+# ----------------
 
 hazard <- function(alpha2,beta2,x){
   alpha2*exp(beta2*x)
@@ -234,43 +209,65 @@ hazard <- function(alpha2,beta2,x){
 
 plot(1:4, hazard(alpha2 = 1.2, beta2 = -.3, 1:4))
 lines(c(1,4), c(0.888, 0.362))
+
+
+### ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to teh managment of plant populations for conservation"
+generic_mat <- matrix(c("L","G","G",
+                        " ","L","G",
+                        " "," ","F"), nrow = 3)
+# Survival
+which(generic_mat == "L")
+# Growth
+which(generic_mat == "G")
+# Fecundity
+which(generic_mat == "F")
+
+
+
 ## ------------------ years 1:4 where reproductive when age 4------------------
 # Early maturation so all are kept as ages 1:4 but then just stay as a reproductive after 4 years
 # conceptual model of model creation and expections on lambda and extinction risk
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ConceptualMatrixCreation.jpg",
-     width = 170, height = 70, units="mm", res = 300)
+     width = 170, height = 100, units="mm", res = 300)
       
       # Plot layout of plots
-      layout(matrix(c(1,2,3),1,3))
+      layout(matrix(c(1:2),1,2))
       
       # Plot 1
-            plot(1:4, survivalTypeI(0.03,0.60,1:4), 
-           xaxt = "n",
-           xlab = "Stage", ylab = "Survival (S)", type = "l")
-      axis(1, at = 1:4)
-      mtext("a)", side = 3, adj = 0)
-      
-      # Plot 2
       plot(seq(0,1,by=0.1), xlim = c(0,0.8), ylim = c(0,10), semel_fecundsurv(seq(0,1,by=0.1)), type = "l", 
            ylab = "Fecundity (R)", xlab = expression("Adult survival (S"[44]~")"))
       lines(seq(0,1,by=0.1), itero_fecundsurv(seq(0,1,by=0.1)))
       text(0.6,7, "iteroparous")
       text(0.2,3, "semelparous")
-      mtext("b)", side = 3, adj = 0)
+      mtext("a)", side = 3, adj = 0)
       
-      # Plot 3
+      # Plot 2
       plot(seq(0,0.9,0.25),seq(0,0.9,0.25),type = "n", ylim = c(0,.5), xlab = "Stage", ylab = "Growth (G)", xaxt = "n")
       axis(1, at = seq(0,0.9,by = 0.25), labels = 1:4)
-      mtext("c)", side = 3, adj = 0)
+      mtext("b)", side = 3, adj = 0)
       for(b1 in c(0,1)){
         for(b2 in c(0,1)){
           lines(seq(0,0.9,0.25), transitions(b1,b2,seq(0,0.91,0.25))/sum(transitions(b1,b2,seq(0,0.91,0.25)))) #, col = rgb((1-b2),(1-b1),b1,1))
         }}
       text(0.65,0.27, "fast")
       text(0.65, 0.165, "slow")
+dev.off()      
 
-      
-dev.off()
+
+      #Plot 3
+      plot(1:4,1:4, axes = FALSE, xlab="",ylab="", type="n")
+      for(i in 1:4){
+        abline(v=i)
+        abline(h=i)
+      }
+      text(1.5,3.5,"S")
+      text(1.5,2.5, "G")
+      text(1.5,1.5,"G")
+      text(2.5,2.5, "S")
+      text(2.5,1.5,"G")
+      text(3.5,1.5,"R")
+
+
 
 # Elasticity space, survival of the reproductive stage
 elast_type <- data.frame(R = c(0.3, 0.2, 0.7, 0.025, 0.2, 0.01, 0.25, 0.05, 0.9,  0.4, 0.05, 0.6, 0.49, 0.01, 0.98, 0.4),
@@ -298,21 +295,6 @@ ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/
          # theme(legend.position = "none")
        , width=100, height = 70, units = 'mm', dpi = 300)
       
-
-### Set the SD of rnorm for variability in part of the function
-### spit out the most elastic as a check
-## ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to teh managment of plant populations for conservation"
-generic_mat <- matrix(c("L","G","G","G",
-         " ","L","G","G",
-         " "," ","L","G",
-         "F"," "," ","L"), nrow = 4)
-# Survival
-which(generic_mat == "L")
-# Growth
-which(generic_mat == "G")
-# Fecundity
-which(generic_mat == "F")
-
 # Constrain lambda function
 # Step 1: make matrices from the functions above for 
 #   a) survival across stages for a Type I survival curve, 
@@ -358,7 +340,7 @@ which(generic_mat == "F")
 MPM_iterofast <- function(){
   # three juvenile stages, one reproductive
   i <- sample(1:nrow(paramlist_type1),1)
-  s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], 1:4)
+  s_s <- survivalTypeI(alpha2 = paramlist_type1[i,1], beta2 = paramlist_type1[i,2], c(itslowst2))
   f <- itero_fecundsurv(s_s[4])
   # transitions for fast should be fairly flat
   t_t <- transitions(b1 = 0.9,b2 = 0.1, x = 1:3)/sum( transitions(b1 = 0.9,b2 = 0.1, x = 1:3))
