@@ -59,58 +59,19 @@ The wider the difference, the lower the transition should be
      S_11 * (1-G)   R
      G              S_22
 ```{r}
-alpha2 <- params8[1,1]
-beta2 <- params8[1,2]
-Age_1 <- 2
-Age_2 <- 4
+# alpha2 <- params8[1,1]
+# beta2 <- params8[1,2]
+# Age_1 <- 2
+# Age_2 <- 4
 rm(alpha2);rm(beta2);rm(Age_1);rm(Age_2)
 # first derivative at the mid point between veg and reproductive? The greater the slope or difference, the faster growth and less stasis, the less different the longer to get to next stage and more stasis
 Growth <- function(alpha2, beta2, Age_1, Age_2){
   (survival1 <- exp((alpha2/beta2)*(1-(exp(beta2*Age_1)))))
   (survival2 <- exp((alpha2/beta2)*(1-(exp(beta2*Age_2)))))
-  survival1-survival2
+  rnorm(1, survival1 - survival2, 0.05)
 }
 
 ```
-
-
-# estimate a growth to stasis curve from points within the ternary plot from Silvertown and Franco 1996
-itero_gr_st <- data.frame(S = c(.2,.5,.4,.2,.5,.3,.4,.5,.6,.7,.8, .9, 1),
-                          G = c(.6,.3,.6,.5,.5,.6,.4,.4,.3,.2,.15,.05,0))
-
-plot(itero_gr_st)
-abline(lm(G~S, data=itero_gr_st))
-summary(lm(G~S, data=itero_gr_st))
-model <- lm(G~S + I(0.9 + S^2), data=itero_gr_st)
-predict(model)
-
-itero_growthstasis <- function(s){
-  0.77 + (s* -0.77) + rnorm(1, s, (1-s)^2)
-}
-
-plot(seq(0,1,0.1), sapply(seq(0,1,0.1), function(s) rlogis(1, s, scale = 1)))
-s <- 0.5
-(sca <- -s + 0.03)
-hist(rlogis(100, s+ 0.1, sca))
-
-semel_gr_st <- data.frame(S = c(0,  0,  0,  0,  0,  0, 0, .1, .1, .1,.2,.2,.3),
-                          G = c(.8,.76,.75,.74,.73,.5,.1,.74,.72,.5,.7,.5,.6))
-
-
-plot(semel_gr_st)
-abline(lm(G~S + I((S-0.2)^2), data=semel_gr_st))
-abline(lm(G~S, data=semel_gr_st), col="red")
-summary(lm(G~S, data=semel_gr_st))
-model <- lm(G~S + I(0.9 + S^2), data=semel_gr_st)
-predict(model)
-
-semel_growthsurv <- function(s){
-  0.63 + (s* -0.08) + rlogis(1, s, (-1 * s + 0.03)))
-}
-
-
-plot(seq(0.1,0.8,by=0.01), itero_growthsurv(seq(0.1,0.8,by=0.01)), xlab = "Stasis", ylab = "Growth")
-lines(seq(0,0.2,by=0.1), semel_growthsurv(seq(0,0.2,by=0.1)), col = "red")
 
 
 ### ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to the managment of plant populations for conservation"
@@ -139,7 +100,7 @@ params <- do.call(rbind, lapply(seq(0,0.6, by=0.01), function(a2){
 ```{r}
 stage1 <- 2
 stage2 <- 4
-stage2slow <- 8
+
 ```
 
 Stasis! along the diagonal - there are two so max and min/2
@@ -152,6 +113,14 @@ params8 <- params8[params8$a2b2 %in%
 params8 <- params8[params8$a2b2 %in% 
                     params8$a2b2[  params8$survival > 0.6 & params8$age == stage2+(stage2-stage1)],]
 params8 <- params8[!duplicated(params8[,c("a2","b2")]),]
+
+
+        a2   b2 age  survival     
+8961  0.02 0.52 0.5 0.9886446
+9001  0.02 0.53 0.5 0.9886151
+12001 0.03 0.37 0.5 0.9836578
+15161 0.04 0.25 0.5 0.9789216
+18401 0.05 0.15 0.5 0.9743727
 
 ```{r}
 dev.off()
@@ -166,6 +135,8 @@ params8 <- params8[params8$a2b2 %in%
 #                     params8$a2b2[params8$survival > 0.2  & params8$age == stage2+(stage2-stage1)],] #& params8$survival < 0.7
 params8 <- params8[!duplicated(params8[,c("a2","b2")]),]
 
+
+
 plot(0:7, survivalTypeI(params8[1,1], params8[1,2], 0:7), type = "l", col = rainbow(nrow(params8), alpha = 1)[1],
      # xlab = "",xaxt = "n", 
      xlab = "Age in years",
@@ -174,6 +145,7 @@ plot(0:7, survivalTypeI(params8[1,1], params8[1,2], 0:7), type = "l", col = rain
 for(i in 2:nrow(params8)){
   lines(0:7, survivalTypeI(params8[i,1], params8[i,2], 0:7), type = "l", col = rainbow(nrow(params8), alpha = 1)[i])
 }
+
 
 # params8 where survival of reproductive stage middle is less than 0.8 and end of reproductive stage is non-zero but after is zero < 0.01
 # ------------------ Iteroparous fast ------------------------
@@ -192,8 +164,8 @@ MPM_iterofast <- function(){
                 Age_1 = stage2,
                 Age_2 = stage2+(stage2 - stage1)*2))
   # Of the ones that survive, s_s[1], what proportion grow? 
-  t_ij <- matrix(c(s_s[1]-G, G,
-                   f, s_s[2]-G2),
+  t_ij <- matrix(c(s_s[1], G,
+                   f, s_s[2]),
                  nrow = 2)
   (lambda1 <- lambda(t_ij))
   (e_ij <- popbio::elasticity(t_ij))
@@ -263,23 +235,23 @@ Elasts_itfast <- data.frame(do.call(rbind,lapply(itfast, function(x) x[[3]])),
 # reproductive stage middle (stage2) < 0.8
 params$survival > 0.7 & 
 ```{r}
-# params8slow <- params[params$a2b2 %in%
-#                         params$a2b2[params$survival < 1 & params$age == stage1],]
-# params8slow <- params8slow[params8slow$a2b2 %in% 
-#                     params8slow$a2b2[params8slow$survival < 0.8 & params8slow$age == stage2],]
-# params8slow <- params8slow[params8slow$a2b2 %in% 
-#                     params8slow$a2b2[params8slow$survival > 0.4 & params8slow$age == stage2*2],]
-# params8slow <- params8slow[!duplicated(params8slow[,c("a2","b2")]),]
-# 
-# # -------------------------------------------------------------------------
-# 
-# dev.off()
-# plot(0:11, survivalTypeI(params8slow[1,1], params8slow[1,2], 0:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[1],
-#      xlab = "Age", ylab = "Survival",
-#      ylim = c(0,1))
-# for(i in 2:nrow(params8slow)){
-#   lines(0:11, survivalTypeI(params8slow[i,1], params8slow[i,2], 0:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[i])
-# }
+params8slow <- params[params$a2b2 %in%
+                        params$a2b2[params$survival < 1 & params$age == stage1],]
+params8slow <- params8slow[params8slow$a2b2 %in%
+                    params8slow$a2b2[params8slow$survival < 0.8 & params8slow$age == stage2],]
+params8slow <- params8slow[params8slow$a2b2 %in%
+                    params8slow$a2b2[params8slow$survival > 0.4 & params8slow$age == stage2*2],]
+params8slow <- params8slow[!duplicated(params8slow[,c("a2","b2")]),]
+
+# -------------------------------------------------------------------------
+
+dev.off()
+plot(0:11, survivalTypeI(params8slow[1,1], params8slow[1,2], 0:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[1],
+     xlab = "Age", ylab = "Survival",
+     ylim = c(0,1))
+for(i in 2:nrow(params8slow)){
+  lines(0:11, survivalTypeI(params8slow[i,1], params8slow[i,2], 0:11), type = "l", col = rainbow(nrow(params8slow), alpha = 1)[i])
+}
 ```
 
 # ---------------------------- Iteroparous Slow ---------------------
@@ -290,13 +262,13 @@ MPM_iteroslow <- function(){
   (s_s <- survivalTypeI(alpha2 = params8[i,1],beta2 = params8[i,2], c(stage1, stage2)))
   (f <- itero_fecundsurv(s_s[2]))
   # transitions or growth based on how far away (how big a reduction along survival curve) to get from stage 1 to 2
-  (G <- Growth(alpha2 = params8[i,1], beta2 = params8[i,2],Age_1 = stage1, Age_2 = stage2+(stage2 - stage1)/2)) #
+  (G <- Growth(alpha2 = params8[i,1], beta2 = params8[i,2],Age_1 = stage1, Age_2 = stage2+(stage2 - stage1)*2)) #
   # how long within reproductive stage?
   (G2 <- Growth(alpha2 = params8[i,1], beta2 = params8[i,2],
                 # Age_1 = stage2-(stage2 - stage1), 
                 # Age_2 = stage2+((stage2 - stage1))
                 Age_1 = stage2, 
-                Age_2 = stage2+(stage2 - stage1)/2))
+                Age_2 = stage2+(stage2 - stage1)*2))
   # Of the ones that survive, s_s[1], what proportion grow? 
   t_ij <- matrix(c(s_s[1]-G, G,
                    f, s_s[2]-G2),
@@ -319,10 +291,11 @@ mean(lamitslow$lam)
 sd(lamitslow$lam)
 generation.time(mean(MPMs_itslow))
 mean(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
+```
 
-
-# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IteroslowInitial_normalLambda.jpg",
-#      width = 100, height = 100, units="mm", res = 300)
+```{r}
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
     
@@ -341,7 +314,7 @@ mean(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
            ylim = c(min(lamitslow$lam, lamitfast$lam),max(lamitslow$lam, lamitfast$lam)))
       points(lamitfast$gentim, lamitfast$lam, pch = 2, col = "grey70")
       legend("topright", legend = c("fast","slow"), col = c("red","grey70"), pch = c(16,2))
-      mtext("b)", 3, line = 0.5,adj = 0)
+      mtext("a)", 3, line = 0.5,adj = 0)
     # Plot 3 blank
       frame()
     # Plot 4 lambda density
@@ -352,6 +325,7 @@ mean(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
            xlim = c(min(c(den$y, density(lamitfast$lam)$y)), max(c(den$y, density(lamitfast$lam)$y))))
       lines(density(lamitfast$lam)$y, density(lamitfast$lam)$x, col = "grey70")
       
+dev.off()
 # ---------------------------------------------
 ```
 
