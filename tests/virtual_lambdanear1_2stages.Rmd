@@ -60,7 +60,7 @@ The wider the difference, the lower the transition should be
 # Fujiwara and Diaz-Lopez 2017: Transition rate, matching duration
 Growth <- function(Age_first_1, Age_first_2, alpha2, beta2){
   # matching_duration <- 1-(1/(Age_first_2-Age_first_1))
-  matching_proportion <- survivalTypeI(alpha2, beta2, Age_first_2-1)/
+  matching_proportion <- survivalTypeI(alpha2, beta2, Age_first_2)/
     sum(survivalTypeI(alpha2,beta2,Age_first_1:Age_first_2))
   matching_proportion
 }
@@ -80,30 +80,6 @@ MPM_itero <- function(params, stage1, stage2){
   #                  f, s_s[2]-G2),
   t_ij <- matrix(c(s_s[1]-G, G,
                    f, s_s[2]-G2),
-                 nrow = 2)
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)))
-  return(listout)
-}
-
-#Test
-params <- params_semel
-(stage1 <- max(3,rpois(1,3)))
-(stage2 <- (stage1*2)+1)
-### Semelparous ----------------------------------------------
-MPM_semel <- function(params, stage1, stage2){
-  # three juvenile stages, one reproductive
-  i <- sample(1:nrow(params),1)
-  (s_s <- survivalTypeI(alpha2 = params[i,1], beta2 = params[i,2], c(stage1,stage2))) 
-  (f <- semel_fecundsurv(s_s[2]))
-  (G <- Growth(alpha2 = params[i,1], beta2 = params[i,2],Age_first_1 = 1, Age_first_2 = stage2))
-  t_ij <- matrix(c(s_s[1]-(2*G), G,
-                   f,        0),
                  nrow = 2)
   (lambda1 <- lambda(t_ij))
   (e_ij <- popbio::elasticity(t_ij))
@@ -317,24 +293,66 @@ ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/
        
 ```
 
+```{r}
+
+
+#Test
+# params <- params_semel
+# (stage1 <- max(3,rpois(1,3)))
+# (stage2 <- (stage1*2)+1)
+### Semelparous ----------------------------------------------
+MPM_semel <- function(params, stage1, stage2){
+  # three juvenile stages, one reproductive
+  i <- sample(1:nrow(params),1)
+  (s_s <- survivalTypeI(alpha2 = params[i,1], beta2 = params[i,2], c(stage1,stage2))) 
+  # (f <- rnorm(1,semel_fecundsurv(s_s[2]),0.01))
+  f <- semel_fecundsurv(s_s[2])
+  (G <- Growth(alpha2 = params[i,1], beta2 = params[i,2],Age_first_1 = 1, Age_first_2 = stage2))
+  t_ij <- matrix(c(s_s[1], G,
+                   f,      0),
+                 nrow = 2)
+  print(colSums(t_ij))
+  (lambda1 <- lambda(t_ij))
+  (e_ij <- popbio::elasticity(t_ij))
+  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+  growthElast <- sum(e_ij[which(generic_mat == "G")])
+  fecundElast <- sum(e_ij[which(generic_mat == "F")])
+  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+                                    gentim = generation.time(t_ij)))
+  return(listout)
+}
+```
+
+params_semel <- params[params$a2b2 %in%
+                      params$a2b2[params$survival < 0.8 & params$age == 1],] # an annual reproductive at stage 1
+
+params_semel <- params_semel[params_semel$a2b2 %in%
+                               params_semel$a2b2[params_semel$survival > 0.05 &
+                                                   params_semel$age == 7],] # maximum short lived reproductive stage is 7
+params_semel <- params_semel[!duplicated(params_semel[,c("a2","b2")]),]
+
+
 # semel fast
 ```{r}
 # reproductive stage middle < 0.8 sefastst3 = middle of stage
 # reproductive stage ca. 0 
 dev.off()
 params_semel <- params[params$a2b2 %in%
-                      params$a2b2[params$survival < .99 & params$age == 2],]
+                      params$a2b2[params$survival < 0.4 & # to keep all S + G below 1
+                                    # params$survival > 0.69 &
+                                    params$age == 2],] # an annual reproductive at stage 2 year 2, first is seed bank
 
-params_semel <- params_semel[params_semel$a2b2 %in%
-                               params_semel$a2b2[params_semel$survival < 0.8 &
-                                                   params_semel$survival > 0.5 &
-                                                   params_semel$age == 4],]
-params_semel <- params_semel[params_semel$a2b2 %in%
-                               params_semel$a2b2[params_semel$survival < 0.4 & params_semel$age == 5],]
+# params_semel <- params_semel[params_semel$a2b2 %in%
+#                                params_semel$a2b2[
+#                                  # params_semel$survival < 0.8 &
+#                                                    params_semel$survival > 0.001 &
+#                                                    params_semel$age == 7],] # maximum short lived reproductive stage is 7
+# params_semel <- params_semel[params_semel$a2b2 %in%
+#                                params_semel$a2b2[params_semel$survival < 0.3 & params_semel$age == 8],]
 
 # params_semel <- params_semel[params_semel$a2b2 %in%
 #                                params_semel$a2b2[params_semel$survival > 0 &
-#                                                    params_semel$survival < 0.05 & params_semel$age == 26],]
+#                                                    params_semel$survival < 0.5 & params_semel$age == 26],]
 params_semel <- params_semel[!duplicated(params_semel[,c("a2","b2")]),]
 
 # save(params_semel, file = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsSemel.Rdata")
@@ -358,9 +376,10 @@ for(i in 2:nrow(params_semel)){
 # get 100 runs
 set.seed(123)
 sefast <- lapply(1:100, function(x){ 
-  stage1 <- max(3,rpois(1,3))
-  stage2 <- stage1 + max(1,rpois(1,2))
-  MPM_semel(params_semel, stage1 = stage1, stage2 = stage2)
+  (stage2 <- max(2,rpois(1,2))) # 1:7 years
+  # stage 1 is halfway from 1 to stage2
+  (stage1 <- max(1,round((stage2-1)/2,0)))
+  MPM_semel(params_semel, stage1 = stage1, stage2 = (stage2+1)) # because want really low survival to drive up fecudity
   })
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
@@ -400,11 +419,19 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 Elasts_sefast <- data.frame(do.call(rbind,lapply(sefast, function(x) x[[3]])), 
                             parity = "semelparous", speed = "fast")
 
-# tern_itfast <-
+Elasts_all <- do.call(rbind, list(Elasts_itfast, Elasts_itslow, Elasts_sefast))
  ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam))+ 
                   geom_point(shape = 1)+
                   scale_color_viridis_c(name = expression(lambda))+
    scale_size_continuous(name = "Generation time\n (years binned)")+
+                  theme_showarrows()+
+                  theme_clockwise()
+
+  ggtern::ggtern(Elasts_all, aes(R, G, S, colour = lam, shape = (interaction(speed, parity))))+ 
+                  geom_point()+
+                  scale_color_viridis_c(name = expression(lambda))+
+   scale_shape_manual(name = "Generation time\n (years binned)",
+                       values = 1:3)+
                   theme_showarrows()+
                   theme_clockwise()
               
@@ -459,9 +486,9 @@ dev.off()
 # Semel slow
 ```{r}
 # ---------------------------- Semelparous Slow ---------------------
-# hist(rpois(100,5))
-# max(rpois(1000,2))
-# max(rpois(1000, 5))
+hist(rpois(100,5))
+max(rpois(1000,2))
+max(rpois(1000, 6)) # at most semel slow will reproduce and die at age 16+stage 1
 set.seed(123)
 seslow <- lapply(1:100, function(x){ 
   stage1 <- max(1,rpois(1,2))
