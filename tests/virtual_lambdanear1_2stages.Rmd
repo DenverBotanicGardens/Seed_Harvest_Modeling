@@ -109,10 +109,8 @@ if(stage1 > 1){
 (stage2 <- stage1 + max(2,rpois(1,1)))
 ### Iteroparous ----------------------------------------------
 MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
-  # three juvenile stages, one reproductive
   possibleParams <- params[params$survival < 0.8 & params$survival > minSurv & params$age == stage1+1 &
                              !is.na(params$survival),]
-  # possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == 1,]
   G_all <- sapply(1:nrow(possibleParams),function(x){
     Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first_1 = 1, Age_first_2 = stage1+1)
     })
@@ -126,8 +124,7 @@ MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
       })
       }
   params1 <- possibleParams[(S_all + G_all) < maxSurv,]
-  # params1 <-  params[params$survival < 0.8 & params$survival > 0.2 & params$age == stage1+1 &
-  #                            !is.na(params$survival),]
+  params1 <-  params1[!duplicated(params1[,1:2]),]
   i <- sample(1:nrow(params1),1)
   if(stage1 > 1){
     S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
@@ -135,7 +132,7 @@ MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
       S <- survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1)
     }
   S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
-  (f <- itero_fecundsurv(S2))
+  (f <- itero_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1+1))) # first survival of rep
   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first_1 = 1, 
                Age_first_2 = stage1+1))
   t_ij <- matrix(c(S, G,
@@ -198,7 +195,7 @@ itfast <- lapply(1:100, function(x){
   stage1 <- max(1,rpois(1,1))
   stage2 <- stage1 + max(2,rpois(1,1))
   # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.6, minSurv = 0.01)
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.009)
   })
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
@@ -267,48 +264,14 @@ Elasts_itfast <- data.frame(do.call(rbind,lapply(itfast, function(x) x[[3]])),
 
 # itero slow
 ```{r}
-dev.off()
-params8 <- paramsAll[paramsAll$a2b2 %in%
-                    paramsAll$a2b2[
-                      paramsAll$survival < 0.45 &
-                                     # paramsAll$survival > 0.65 &
-                        paramsAll$age == 7],] # the smallest repro is 13
-params8 <- params8[params8$a2b2 %in%
-                    params8$a2b2[
-                      params8$survival > 0.35 &
-                        # params8$survival < 0.37 &
-                        params8$age == 8],]
-
-params8 <- params8[!duplicated(params8[,c("a2","b2")]),]
-
-params_itero_slow <- params8
-# save(params_itero_slow, file = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroslow.Rdata")
-# load("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroslow.Rdata")
-
-plot(0:26, survivalTypeI(params_itero_slow[1,1], params_itero_slow[1,2], 0:26), type = "l", 
-     col = rainbow(nrow(params_itero_slow), alpha = 1)[1],
-     # xlab = "",xaxt = "n", 
-     xlab = "Age in years",
-     ylab = "Survival (stasis)",
-     ylim = c(0,1))
-for(i in 2:nrow(params_itero_slow)){
-  lines(0:26, survivalTypeI(params_itero_slow[i,1], params_itero_slow[i,2], 0:26), type = "l", 
-        col = rainbow(nrow(params_itero_slow), alpha = 1)[i])
-}
-
 
 # ---------------------------- Iteroparous Slow ---------------------
-# hist(rpois(100,5))
-# max(rpois(1000,2))
-# max(rpois(1000, 5))
-# min(rpois(1000, 5))
-# max(rpois(1000, 2))
-
+# Ages are end points of age
 set.seed(123)
 itslow <- lapply(1:100, function(x){ 
-  stage1 <- max(5,rpois(1,3))
-  stage2 <- stage1 + max(2,rpois(1,2))
-  MPM_itero(params_itero_slow, stage1 = stage1, stage2 = stage2)
+  stage1 <- max(4,rpois(1,4))
+  stage2 <- stage1 + max(3,rpois(1,5))
+  MPM_itero(params, stage1 = stage1, stage2 = stage2,maxSurv = 0.8,minSurv = 0.3)
   })
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 
@@ -318,11 +281,12 @@ mean(lamitslow$lam)
 sd(lamitslow$lam)
 generation.time(mean(MPMs_itslow))
 mean(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
-```
 
-```{r}
+params_itero_slow <- do.call(rbind,lapply(itslow, function(x) x[[4]]))
+params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
+
+
 matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
-matrixmetrics <- matrixmetrics[matrixmetrics$lam > 0.8 & matrixmetrics$lam < 1.2,]
 
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
      width = 100, height = 100, units="mm", res = 300)
@@ -377,7 +341,7 @@ ggtern::ggtern(Elasts_itslow, aes(R, G, S, colour = lam))+
   theme_clockwise()
 
 IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
-IteroAll <- IteroAll[IteroAll$lam > 0.8 & IteroAll$lam < 1.2,]
+# IteroAll <- IteroAll[IteroAll$lam > 0.8 & IteroAll$lam < 1.2,]
 
 ternItero <- ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = speed))+ #interaction(speed,parity)))+
             geom_point()+
@@ -385,6 +349,7 @@ ternItero <- ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = speed))
             scale_shape_manual(name = "Speed", values = c(16,2))+
             theme_showarrows()+
             theme_clockwise()
+ternItero
 ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TernaryItero.jpg",
        ternItero,
        width=130, height=70,units='mm', dpi=300)
