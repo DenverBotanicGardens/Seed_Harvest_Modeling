@@ -74,8 +74,8 @@ Growth <- function(Age_first_1, Age_first_2, alpha2, beta2){
 }
 
 # The proportion that survive to the end of the vegetative stage are the ones that have remained vegetative
-Stasis <- function(Age_last_1, alpha2, beta2){
-  survivalTypeI(alpha2, beta2, Age_last_1)/sum(survivalTypeI(alpha2, beta2, 1:Age_last_1))
+Stasis <- function(Age_first, Age_last, alpha2, beta2){
+  survivalTypeI(alpha2, beta2, Age_last)/sum(survivalTypeI(alpha2, beta2, Age_first:Age_last))
 }
 
 # Growth+Stasis < 1
@@ -86,52 +86,60 @@ params <- paramsAll
 (stage1 <- max(1,rpois(1,1)))
 # stage1 <- 3
 (stage2 <- stage1 + max(2,rpois(1,1))) # itero so needs to have at least 2 years of reproductive
-possibleParams <- params[params$survival < 0.8 & params$survival > 0.2 & params$age == stage2 & !is.na(params$survival),]
+# possibleParams <- params[params$survival < 0.8 & params$survival > 0.2 & params$age == stage2 & !is.na(params$survival),]
 
 # alpha2 <- possibleParams[1,1]
 # beta2 <- possibleParams[1,2]
-Age_last_1 <- stage1
-survivalTypeI(alpha2, beta2, Age_last_1)/sum(survivalTypeI(alpha2, beta2, 1:Age_last_1))
+# Age_last_1 <- stage1
 # The growth at each row, can then limit rows of survival to ones that sum to < 0.99 which
 G_all <- sapply(1:nrow(possibleParams),function(x){
   Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first_1 = 1, Age_first_2 = stage1+1)
   })
 if(stage1 > 1){
   S_all <- sapply(1:nrow(possibleParams),function(x){
-    Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_last_1 = stage1)
+    Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
   })
 } else {
     S_all <- sapply(1:nrow(possibleParams),function(x){
       survivalTypeI(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], x = stage1)
       })
 }
-possibleParams[(S_all + G_all) < 0.99,]
-
+# possibleParams[(S_all + G_all) < 0.99,]
+(stage1 <- max(1,rpois(1,1)))
+(stage2 <- stage1 + max(2,rpois(1,1)))
 ### Iteroparous ----------------------------------------------
-MPM_itero <- function(params, stage1, stage2){
+MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
   # three juvenile stages, one reproductive
-  possibleParams <- params[params$survival < 0.8 & params$survival > 0.2 & params$age == stage2 & !is.na(params$survival),]
-
+  possibleParams <- params[params$survival < 0.8 & params$survival > minSurv & params$age == stage1+1 &
+                             !is.na(params$survival),]
+  # possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == 1,]
   G_all <- sapply(1:nrow(possibleParams),function(x){
     Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first_1 = 1, Age_first_2 = stage1+1)
     })
   if(stage1 > 1){
     S_all <- sapply(1:nrow(possibleParams),function(x){
-      Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_last_1 = stage1)
+      Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
       })
     } else {
       S_all <- sapply(1:nrow(possibleParams),function(x){
         survivalTypeI(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], x = stage1)
       })
       }
-  params1 <- possibleParams[(S_all + G_all) < 0.99,]
+  params1 <- possibleParams[(S_all + G_all) < maxSurv,]
+  # params1 <-  params[params$survival < 0.8 & params$survival > 0.2 & params$age == stage1+1 &
+  #                            !is.na(params$survival),]
   i <- sample(1:nrow(params1),1)
-  (s_s <- survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], c(stage1,stage2)))
-  (f <- itero_fecundsurv(s_s[2]))
+  if(stage1 > 1){
+    S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
+    } else {
+      S <- survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1)
+    }
+  S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
+  (f <- itero_fecundsurv(S2))
   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first_1 = 1, 
-               Age_first_2 = stage2 - round((stage2-stage1)/2, 0)))
-  t_ij <- matrix(c(s_s[1], G,
-                   f, s_s[2]),
+               Age_first_2 = stage1+1))
+  t_ij <- matrix(c(S, G,
+                   f, S2),
                  nrow = 2)
   print(colSums(t_ij))
   (lambda1 <- lambda(t_ij))
@@ -140,7 +148,7 @@ MPM_itero <- function(params, stage1, stage2){
   growthElast <- sum(e_ij[which(generic_mat == "G")])
   fecundElast <- sum(e_ij[which(generic_mat == "F")])
   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)))
+                                    gentim = generation.time(t_ij)), params1)
   return(listout)
 }
 ```
@@ -182,66 +190,15 @@ paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
 
 # Iteroparous fast
 ```{r}
-dev.off()
-params8 <- paramsAll[paramsAll$a2b2 %in%
-                    paramsAll$a2b2[paramsAll$survival < 0.36 & paramsAll$age == 2],]
-params8 <- params8[params8$a2b2 %in%
-                    params8$a2b2[
-                      params8$survival > 0.0001 &
-                        params8$age == 5],]
-# params8 <- params8[params8$a2b2 %in%
-#                     params8$a2b2[params8$survival > 0.25 &
-#                                    params8$age == 6],]
-params8 <- params8[!duplicated(params8[,c("a2","b2")]),]
-params_itero <- params8
-# save(params_itero, file = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroFast.Rdata")
-# load("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroFast.Rdata")
-
-plot(0:26, survivalTypeI(params_itero[1,1], params_itero[1,2], 0:26), type = "l", 
-     col = rainbow(nrow(params_itero), alpha = 1)[1],
-     # xlab = "",xaxt = "n", 
-     xlab = "Age in years",
-     ylab = "Survival (stasis)",
-     ylim = c(0,1))
-for(i in 2:nrow(params_itero)){
-  lines(0:26, survivalTypeI(params_itero[i,1], params_itero[i,2], 0:26), type = "l", 
-        col = rainbow(nrow(params_itero), alpha = 1)[i])
-}
-
-
-# params8 <- paramsAllType3[paramsAllType3$a1a3b3 %in% 
-#                             paramsAllType3$a1a3b3[paramsAllType3$survival < 0.45 &
-#                                                                  paramsAllType3$age == 2],]
-# params8 <- params8[params8$a1a3b3 %in%
-#                     params8$a1a3b3[
-#                       params8$survival > 0.09 &
-#                         params8$age == 6],]
-
-params_itero <- params8
-# save(params_itero, file = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroFast.Rdata")
-# load("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/paramsIteroFast.Rdata")
-
-## Failed attempt at Type 3 survival curve
-# plot(0:26, survivalTypeIII(params_itero[1,1], params_itero[1,2], params_itero[1,3], 0:26), type = "l", 
-#      col = rainbow(nrow(params_itero), alpha = 1)[1],
-#      # xlab = "",xaxt = "n", 
-#      xlab = "Age in years",
-#      ylab = "Survival (stasis)",
-#      ylim = c(0,1))
-# for(i in 2:nrow(params_itero)){
-#   lines(0:26, survivalTypeIII(params_itero[i,1], params_itero[i,2], params_itero[i,3], 0:26), type = "l", 
-#         col = rainbow(nrow(params_itero), alpha = 1)[i])
-# }
-
-
 # ------------------ Iteroparous fast ------------------------
 # hist(rpois(100,2))
 # max(rpois(1000,2))
 set.seed(123)
 itfast <- lapply(1:100, function(x){ 
-  stage1 <- max(1,rpois(1,2))
-  stage2 <- stage1 + max(1,rpois(1,2))
-  MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
+  stage1 <- max(1,rpois(1,1))
+  stage2 <- stage1 + max(2,rpois(1,1))
+  # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.6, minSurv = 0.01)
   })
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
@@ -270,6 +227,26 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
     
 # dev.off()
 # ---------------------------------------------
+```
+
+```{r}
+params_itero_fast <- do.call(rbind,lapply(itfast, function(x) x[[4]]))
+params_itero_fast <- params_itero_fast[!duplicated(params_itero_fast[,1:2]),]
+dev.off()
+
+
+
+plot(0:26, survivalTypeI(params_itero_fast[1,1], params_itero_fast[1,2], 0:26), type = "l", 
+     col = rainbow(nrow(params_itero_fast), alpha = 0.5)[1],
+     # xlab = "",xaxt = "n", 
+     xlab = "Age in years",
+     ylab = "Survival (stasis)",
+     ylim = c(0,1))
+for(i in 2:nrow(params_itero_fast)){
+  lines(0:26, survivalTypeI(params_itero_fast[i,1], params_itero_fast[i,2], 0:26), type = "l", 
+        col = rainbow(nrow(params_itero_fast), alpha = 0.5)[i])
+}
+
 ```
 
 ```{r}
