@@ -347,13 +347,55 @@ dev.off()
 # Elasticities
 Elasts_itslow <- data.frame(do.call(rbind,lapply(itslow, function(x) x[[3]])), 
                             parity = "iteroparous", speed = "slow")
+Elasts_itslow_points <- lapply(itslow, function(x) as.numeric(x[[3]][,c("G","S","R")]))
 # ggtern::ggtern(Elasts_itslow, aes(R, G, S, colour = lam))+
 #   geom_point()+
 #   scale_color_viridis_c(name = expression(lambda))+
 #   theme_showarrows()+
 #   theme_clockwise()
 
-IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
+# IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
+
+
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_ternary.jpg",
+     width = 200, height = 100, units="mm", res = 300)
+
+cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
+minCol <- min(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
+maxCol <- max(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
+
+cols2 <- colorRampPalette(c("yellow","red"))
+
+
+layout(matrix(c(1,1,2,1,1,3),ncol=3, byrow = TRUE), width = c(2,2,1),height = c(1,1))
+par(mar = c(0,0,0,0))
+        Ternary::TernaryPlot(point = "up",
+                             atip = "G",
+                             btip = "S",
+                             ctip = "R",
+                             alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
+                             grid.minor.lines = 0) 
+        AddToTernary(points, Elasts_itfast_points, pch = 16, 
+                     col = cols[as.numeric(cut(Elasts_itfast$lam, breaks = 50))], cex = 2) 
+        AddToTernary(points, Elasts_itslow_points, pch = 17, 
+                     col = cols2(50)[as.numeric(cut(Elasts_itslow$lam, breaks = 50))], cex = 1) 
+        legend("topright", legend = c("Iteroparous fast", "Iteroparous slow"),
+                        pch = c(16,17), col = "black", cex = 1.25)
+        par(mar = c(2,2,2,2))
+        # fast legend
+        legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression(lambda))
+        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_itfast$lam),max(Elasts_itfast$lam),l=5),2),
+             cex = 1)
+        rasterImage(legend_image, 0, 0, 1,1)
+        # slow legend
+        legend_image <- as.raster(matrix(cols2(50)), ncol=1)
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression(lambda))
+        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_itslow$lam),max(Elasts_itslow$lam),l=5),2),
+             cex = 1)
+        rasterImage(legend_image, 0, 0, 1,1)
+        
+dev.off()
 # IteroAll <- IteroAll[IteroAll$lam > 0.8 & IteroAll$lam < 1.2,]
 
 # ternItero <- ggtern::ggtern(IteroAll, aes(R, G, S, colour = lam, shape = speed))+ #interaction(speed,parity)))+
@@ -373,26 +415,26 @@ IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
 
 
 #Test
-# params <- params_semel
-# (stage1 <- max(3,rpois(1,3)))
-# (stage2 <- (stage1*2)+1)
+params <- paramsAll
+(stage1 <- max(1,rpois(1,1)))
+(stage2 <- stage1+1)
 ### Semelparous ----------------------------------------------
-MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
- possibleParams <- params[params$survival < 0.8 & params$survival > minSurv & params$age == stage1+1 &
+MPM_semel <- function(params, stage1, stage2, maxSurv = 0.2, minSurv = 0.001){
+ possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
                              !is.na(params$survival),]
-  G_all <- sapply(1:nrow(possibleParams),function(x){
+ G_all <- sapply(1:nrow(possibleParams),function(x){
     Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first_1 = 1, Age_first_2 = stage1+1)
     })
-  if(stage1 > 1){
-    S_all <- sapply(1:nrow(possibleParams),function(x){
-      Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
-      })
-    } else {
-      S_all <- sapply(1:nrow(possibleParams),function(x){
-        survivalTypeI(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], x = stage1)
-      })
-      }
-  params1 <- possibleParams[(S_all + G_all) < maxSurv,]
+ if(stage1 > 1){
+   S_all <- sapply(1:nrow(possibleParams),function(x){
+     Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
+     })
+   } else {
+     S_all <- sapply(1:nrow(possibleParams),function(x){
+       survivalTypeI(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], x = stage1)
+     })
+     }
+ params1 <- possibleParams[(S_all + G_all) < maxSurv,]
   params1 <-  params1[!duplicated(params1[,1:2]),]
   i <- sample(1:nrow(params1),1)
   if(stage1 > 1){
@@ -426,8 +468,8 @@ semelparous get to reproductive and die so stage 1 [1,7] is set and to be in the
 set.seed(123)
 sefast <- lapply(1:100, function(x){ 
   stage1 <- max(1,rpois(1,1))
-  stage2 <- stage1*2
-  MPM_semel(params, stage1 = stage1, stage2 = stage2, maxSurv = 0.7, minSurv = 0.01) # because want really low survival to drive up fecudity
+  stage2 <- stage1+1
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.42, minSurv = 0.02) # because want really low survival to drive up fecudity
   })
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
@@ -480,17 +522,27 @@ Elasts_sefast <- data.frame(do.call(rbind,lapply(sefast, function(x) x[[3]])),
 
 
 Elasts_seall <- do.call(rbind, list(Elasts_sefast))
- ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam, shape = speed))+ 
-                  geom_point(shape = 1)+
-                  scale_color_viridis_c(name = expression(lambda))+
-   scale_shape_manual(name = "Speed")+
-                  theme_showarrows()+
-                  theme_clockwise()
+ # ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam, shape = speed))+ 
+ #                  geom_point(shape = 1)+
+ #                  scale_color_viridis_c(name = expression(lambda))+
+ #   scale_shape_manual(name = "Speed")+
+ #                  theme_showarrows()+
+ #                  theme_clockwise()
 
  max(Elasts_sefast$S)
 min(Elasts_sefast$S)
  max(Elasts_sefast$R)
 min(Elasts_sefast$R)
+
+
+Ternary::TernaryPlot(point = "up",
+                     atip = "G",
+                     btip = "S",
+                     ctip = "R",
+                     alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
+                     grid.minor.lines = 0)
+AddToTernary(points, Elasts_itfast_points, pch = 21)
+
               
 ```
 
