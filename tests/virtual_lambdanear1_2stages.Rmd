@@ -698,7 +698,81 @@ dev.off()
 ```
 
 
-# Semelparous slow
+# Annuals
+```{r}
+annuals <- lapply(1:100, function(x) MPM_annual(paramsAll, maxSurv = 0.8, minSurv = 0.001))
+MPMs_annuals <- lapply(annuals, function(x) x[[1]])
+
+lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
+median(lamannuals$lam)
+mean(lamannuals$lam)
+sd(lamannuals$lam)
+generation.time(mean(MPMs_annuals))
+mean(unlist(lapply(annuals, function(x) x[[3]]$gentim)))
+
+params_annuals <- do.call(rbind,lapply(annuals, function(x) x[[4]]))
+params_annuals <- params_annuals[!duplicated(params_annuals[,1:2]),]
+
+# plot(0:26, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:26), type = "l", 
+#      col = rainbow(nrow(params_semel), alpha = 1)[1],
+#      # xlab = "",xaxt = "n", 
+#      xlab = "Age in years",
+#      ylab = "Survival (stasis)",
+#      ylim = c(0,1))
+# for(i in 2:nrow(params_semel)){
+#   lines(0:26, survivalTypeI(params_semel[i,1], params_semel[i,2], 0:26), type = "l", 
+#         col = rainbow(nrow(params_semel), alpha = 1)[i])
+# }
+
+matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
+# matrixmetrics <- matrixmetrics[matrixmetrics$lam > 0.8 & matrixmetrics$lam < 1.2,]
+
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
+
+    layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
+
+    # Plot 1 density generation time
+      # den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
+      denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
+      par(mar=c(0,4,0,0))
+      plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
+           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
+      #      ,
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      # lines(denslow$x,denslow$y, col = "grey70",
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+    # Plot 2 scatter plot
+      par(mar=c(4,4,0,0))
+      plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
+           ylab = expression(lambda), xlab = "generation time",
+           main = "", pch = 16, col = "red",
+           xlim = c(min(matrixmetrics$gentim),max(matrixmetrics$gentim)),
+           ylim = c(min(matrixmetrics$lam),max(matrixmetrics$lam)))
+      points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
+             matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey70")
+      legend("topright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
+      mtext("b)", 3, line = 0.5,adj = 0)
+    # Plot 3 blank
+      frame()
+    # Plot 4 lambda density
+      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"])
+      denlamslow <- density(matrixmetrics$lam[matrixmetrics$speed == "slow"])
+      par(mar=c(4,0,0,0))
+      plot(denlamfast$y, denlamfast$x, xlab = "",ylab="", main="", 
+           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey70",
+           ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
+           xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
+      lines(denlamslow$y, denlamslow$x, col = "red")
+
+# dev.off()
+
+```
+
+
+
 
 
 
@@ -717,24 +791,26 @@ plot(0:15, survivalTypeI(params_itero_fast[1,1], params_itero_fast[1,2], 0:15), 
      ylab = "Survival",
      ylim = c(0,1))
 for(i in 2:nrow(params_itero_fast)){
-  lines(0:15, survivalTypeI(params_itero_fast[i,1], params_itero_fast[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_fast), alpha = 0.5)[i])
-  abline(v = 1)
-  abline(v = mean())
+  lines(0:15, survivalTypeI(params_itero_fast[i,1], params_itero_fast[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_fast), alpha = 0.1)[i])
 }
 mtext("a) (S)tasis and (G)rowth", adj= 0.75, line = 1)
 mtext("iteroparous", adj=0.5, cex = 0.75)
 mtext("fast", adj=0.5, side = 2, line = 4)
+abline(v = 1)
+abline(v = mean(lamitfast$AgeRep)) # stage1 + 1
 
 #### semelparous fast---------------------------------
 par(mar = c(2,3,3,2))
 plot(0:15, survivalTypeI(params_semel_fast[1,1], params_semel_fast[1,2], 0:15), type = "l", col = rainbow(nrow(params_semel_fast), alpha = 1)[1],
      xlab = "Age (years)", ylab = "", yaxt = "n",
      ylim = c(0,1))
-for(i in 2:nrow(params_semel_fast)){
+for(i in seq(2,nrow(params_semel_fast), by = 5000)){
   lines(0:15, survivalTypeI(params_semel_fast[i,1], params_semel_fast[i,2], 0:15), type = "l", 
         col = rainbow(nrow(params_semel_fast), alpha = 1)[i])
 }
 mtext("semelparous", adj=0.5, cex = 0.75)
+abline(v = 1)
+abline(v = mean(lamsefast$AgeRep), lty = 3) # stage1 + 1
 
 ### itero slow
 par(mar = c(4,5,1,0))
@@ -746,6 +822,8 @@ for(i in 2:nrow(params_itero_slow)){
   lines(0:15, survivalTypeI(params_itero_slow[i,1], params_itero_slow[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_slow), alpha = 1)[i])
 }
 mtext("slow", adj=0.5, side = 2, line = 4)
+abline(v = 4) # 4:rpois(1,4); stage 2 = stage1 + [3,rpois(1,5)]
+abline(v = mean(lamitslow$AgeRep), lty = 3) # stage1 + 1
 
 #### semelparous slow---------------------------------
 par(mar = c(4,3,1,2))
@@ -753,10 +831,12 @@ plot(0:15, survivalTypeI(params_semel_slow[1,1], params_semel_slow[1,2], 0:15), 
      col = rainbow(nrow(params_semel_slow), alpha = 1)[1],
      xlab = "Age (years)", ylab = "", yaxt = "n",
      ylim = c(0,1))
-for(i in 2:nrow(params_semel_slow)){
+for(i in seq(2,nrow(params_semel_slow), by = 10)){
   lines(0:15, survivalTypeI(params_semel_slow[i,1], params_semel_slow[i,2], 0:15), type = "l",
         col = rainbow(nrow(params_semel_slow), alpha = 1)[i])
 }
+abline(v = 2) # 2:rpois(1,3); stage 2 = stage1 + 1
+abline(v = mean(lamseslow$AgeRep), lty = 3) # stage1 + 1
 
 
 # Plot 5
