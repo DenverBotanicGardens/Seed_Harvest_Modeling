@@ -17,6 +17,13 @@ rm(list=ls())
 ```
 
 
+### source Virtual_iteroparous.R (semel and annual) and VitalRates.R
+```{r}
+source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/VitalRates.R")
+source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/Virtual_iteroparous.R")
+
+```
+
 # Rare plants from Salguero-Gomez et al. 2016
 # Keyfitz' entropy < 1, Type I, K-selected species, low juvenile mortality with most individuals living to an old age. 
 
@@ -28,27 +35,27 @@ rm(list=ls())
 # Convex for semelparous - see Farrell 2020 and Takada and Kawai 2020
 ```{r}
 # Concave for iteroparous from Takada and Kawai 2020 
-itero_fecundsurv <- function(s){
-  -12.5*((s + 0.1)^2) + 10.125
-}
-
-semel_fecundsurv <- function(s){
-  12.5*((s - 0.9)^2) - 0.125
-}
+# itero_fecundsurv <- function(s){
+#   -12.5*((s + 0.1)^2) + 10.125
+# }
+# 
+# semel_fecundsurv <- function(s){
+#   12.5*((s - 0.9)^2) - 0.125
+# }
 
 ## Stasis: survival - treat this as less than perfect survival, need some juvenile mortality 
 # Fujiwara and Diaz-Lopez 2017 
 # The x's represent the median age of the stage class
 # Salguero-Gomez has signs flipped, type I is the area where rare plants fall; equation 2 from Fujiwara and Diaz-Lopez 2017; hazard is
 # h(x) = alpha2*exp(beta2*x); exponentially increasing risk of mortality with age, risk due to aging
-survivalTypeI <- function(alpha2, beta2, x){
-  exp((alpha2/beta2)*(1-(exp(beta2*x))))
-}
-
-
-survivalTypeIII <- function(alpha1,alpha3,beta3,x){
-  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
-}
+# survivalTypeI <- function(alpha2, beta2, x){
+#   exp((alpha2/beta2)*(1-(exp(beta2*x))))
+# }
+# 
+# 
+# survivalTypeIII <- function(alpha1,alpha3,beta3,x){
+#   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
+# }
 
 ```
 
@@ -75,18 +82,18 @@ The wider the difference, the lower the transition should be
 # alpha2 <- 0.1
 # beta2 <- 0.1
 # rm(Age_first);rm(Age_last);rm(alpha2);rm(beta2)
-Growth <- function(Age_first, Age_last, alpha2, beta2){
-  # matching_duration <- 1-(1/(Age_first_2-Age_first_1))
-  # 
-  matching_proportion <- survivalTypeI(alpha2, beta2, (Age_last))/
-    sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
-  # matching_proportion *  prod(survivalTypeI(alpha2, beta2, 
-  #                      Age_first_1:(Age_first_2 - 1)))^(1/((Age_first_2)-Age_first_1))
-  matching_proportion * sum(survivalTypeI(alpha2, beta2, 
-                       Age_first:Age_last))/(length(Age_first:Age_last))
-  # prod(survivalTypeI(alpha2, beta2, 
-                       # Age_first:Age_last))^(1/(Age_last - Age_first))
-}
+# Growth <- function(Age_first, Age_last, alpha2, beta2){
+#   # matching_duration <- 1-(1/(Age_first_2-Age_first_1))
+#   # 
+#   matching_proportion <- survivalTypeI(alpha2, beta2, (Age_last))/
+#     sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
+#   # matching_proportion *  prod(survivalTypeI(alpha2, beta2, 
+#   #                      Age_first_1:(Age_first_2 - 1)))^(1/((Age_first_2)-Age_first_1))
+#   matching_proportion * sum(survivalTypeI(alpha2, beta2, 
+#                        Age_first:Age_last))/(length(Age_first:Age_last))
+#   # prod(survivalTypeI(alpha2, beta2, 
+#                        # Age_first:Age_last))^(1/(Age_last - Age_first))
+# }
 
 # The proportion that survive to the end of the vegetative stage are the ones that have remained vegetative
 # Stasis <- function(Age_first, Age_last, alpha2, beta2){
@@ -101,21 +108,21 @@ Growth <- function(Age_first, Age_last, alpha2, beta2){
 # alpha2 <- 0.1
 # beta2 <- 0.1
 # rm(Age_first);rm(Age_last);rm(alpha2);rm(beta2)
-Stasis <- function(Age_first, Age_last, alpha2, beta2){
-  # sum(survivalTypeI(alpha2, beta2, (Age_first+1):Age_last))/(Age_last-Age_first)
-  # if(Age_first < Age_last){
-  #   0
-  # } else {
-  #   prod(survivalTypeI(alpha2, beta2,
-  #                      Age_first:(Age_last-1)))^(1/((Age_last -1)- Age_first))
-  # }
-  if(Age_first < Age_last){
-    stasis <- prod(unlist(lapply(Age_first:(Age_last -1), function(i){
-      survivalTypeI(alpha2, beta2,i+1)/survivalTypeI(alpha2, beta2,i)
-    })))
-    } else stasis <- 0 
-    stasis
-}
+# Stasis <- function(Age_first, Age_last, alpha2, beta2){
+#   # sum(survivalTypeI(alpha2, beta2, (Age_first+1):Age_last))/(Age_last-Age_first)
+#   # if(Age_first < Age_last){
+#   #   0
+#   # } else {
+#   #   prod(survivalTypeI(alpha2, beta2,
+#   #                      Age_first:(Age_last-1)))^(1/((Age_last -1)- Age_first))
+#   # }
+#   if(Age_first < Age_last){
+#     stasis <- prod(unlist(lapply(Age_first:(Age_last -1), function(i){
+#       survivalTypeI(alpha2, beta2,i+1)/survivalTypeI(alpha2, beta2,i)
+#     })))
+#     } else stasis <- 0 
+#     stasis
+# }
 
 # Growth+Stasis < 1
 # define stage 1 and stage 2 as the *end* points, not the middle
@@ -128,55 +135,55 @@ Stasis <- function(Age_first, Age_last, alpha2, beta2){
 # maxSurv <- 0.4
 # rm(params);rm(stage1);rm(stage2);rm(minSurv)
 ### Iteroparous ----------------------------------------------
-MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
-  possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < 0.8 & 
-                                                          params$survival > minSurv & params$age == stage1+1 &
-                                                          !is.na(params$survival)],]
-  possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == stage1,]
-  # S_all <- sapply(1:nrow(possibleParams),function(x){
-  #   Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
-  #   })
-  # # if vegetative is only the first year then 100 percent transition to reproductive
-  # G_all <- sapply(1:nrow(possibleParams),function(x){
-  #   Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2],
-  #          Age_first_1 = 1, Age_first_2 = stage1+1)
-  #   })
-  # params1 <- possibleParams[(S_all + G_all) < maxSurv,]
-  params1 <- possibleParams
-  i <- sample(1:nrow(params1),1)
-  S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
-  S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
-  # (f <- itero_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1+1))) # first survival of rep
-  # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
-  f <- itero_fecundsurv(S2) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
-  (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
-  t_ij <- matrix(c(S, G,
-                   f, S2),
-                 nrow = 2)
-  print(t_ij)
-  print(colSums(t_ij))
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)), params1)
-  return(listout)
-}
+# MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
+#   possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < 0.8 & 
+#                                                           params$survival > minSurv & params$age == stage1+1 &
+#                                                           !is.na(params$survival)],]
+#   possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == stage1,]
+#   # S_all <- sapply(1:nrow(possibleParams),function(x){
+#   #   Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
+#   #   })
+#   # # if vegetative is only the first year then 100 percent transition to reproductive
+#   # G_all <- sapply(1:nrow(possibleParams),function(x){
+#   #   Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2],
+#   #          Age_first_1 = 1, Age_first_2 = stage1+1)
+#   #   })
+#   # params1 <- possibleParams[(S_all + G_all) < maxSurv,]
+#   params1 <- possibleParams
+#   i <- sample(1:nrow(params1),1)
+#   S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
+#   S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
+#   # (f <- itero_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1+1))) # first survival of rep
+#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
+#   f <- itero_fecundsurv(S2) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
+#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
+#   t_ij <- matrix(c(S, G,
+#                    f, S2),
+#                  nrow = 2)
+#   print(t_ij)
+#   print(colSums(t_ij))
+#   (lambda1 <- lambda(t_ij))
+#   (e_ij <- popbio::elasticity(t_ij))
+#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
+#   growthElast <- sum(e_ij[which(generic_mat == "G")])
+#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+#                                     gentim = generation.time(t_ij)), params1)
+#   return(listout)
+# }
 ```
 
 
 ### ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to the managment of plant populations for conservation"
 ```{r}
-generic_mat <- matrix(c("L","G",
-                        "F","L"), nrow = 2)
-# Stasis 
-which(generic_mat == "L")
-# Growth
-which(generic_mat == "G")
-# Fecundity
-which(generic_mat == "F")
+# generic_mat <- matrix(c("L","G",
+#                         "F","L"), nrow = 2)
+# # Stasis 
+# which(generic_mat == "L")
+# # Growth
+# which(generic_mat == "G")
+# # Fecundity
+# which(generic_mat == "F")
 ```
 
 ```{r}
@@ -192,12 +199,12 @@ which(generic_mat == "F")
 
 
 # Type 1
-paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
-  outb2 <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(b2){
-    surv <- survivalTypeI(a2, b2, 1:30)
-    data.frame(a2, b2, age = 1:30, survival = surv, a2b2 = paste(a2,b2,sep=""))
-  }))
-}))
+# paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
+#   outb2 <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(b2){
+#     surv <- survivalTypeI(a2, b2, 1:30)
+#     data.frame(a2, b2, age = 1:30, survival = surv, a2b2 = paste(a2,b2,sep=""))
+#   }))
+# }))
 ```
 
 
@@ -208,11 +215,12 @@ paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
 # max(rpois(1000,2))
 set.seed(123)
 itfast <- lapply(1:100, function(x){ 
-  stage1 <- max(1,rpois(1,1))
+  # stage1 <- max(1,rpois(1,1))
+  stage1 <- 1
   stage2 <- stage1 + max(2,rpois(1,1))
   print(paste(stage1, stage2))
   # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.35, minSurv = 0.001) # from 0.4
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.01) # from 0.4
   })
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
@@ -305,7 +313,7 @@ set.seed(123)
 itslow <- lapply(1:100, function(x){ 
   stage1 <- max(4,rpois(1,4))
   stage2 <- stage1 + max(3,rpois(1,5))
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.56,minSurv = 0.1)
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.42,minSurv = 0.25)
   })
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 
@@ -322,21 +330,23 @@ params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
 
 matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
 
-# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
-#      width = 100, height = 100, units="mm", res = 300)
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
-    layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
+    layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
     # Plot 1 density generation time
-      den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
+      # den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
-      plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey70",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
-      lines(denslow$x,denslow$y, col = "red",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      plot(denslow$x, denslow$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", 
+           type = "l",bty="n", col = "red")
+           # ,
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
+      # lines(denslow$x,denslow$y, col = "red",
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -347,8 +357,9 @@ matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
       points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
              matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey70")
       legend("topright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
-      mtext("a)", 3, line = 0.5,adj = 0)
+      mtext("a)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
+      par(mar=c(0,0,0,0))
       frame()
     # Plot 4 lambda density
       denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"])
@@ -360,7 +371,7 @@ matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
       lines(denlamslow$y, denlamslow$x, col = "red")
 
-# dev.off()
+dev.off()
 # ---------------------------------------------
 ```
 
@@ -377,16 +388,13 @@ Elasts_itslow_points <- lapply(itslow, function(x) as.numeric(x[[3]][,c("G","S",
 
 # IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
 
-# 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_ternary.jpg",
-     width = 200, height = 100, units="mm", res = 300)
-
 cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
 minCol <- min(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
 maxCol <- max(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
-
 cols2 <- colorRampPalette(c("yellow","red"))
 
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_ternary.jpg",
+     width = 200, height = 100, units="mm", res = 300)
 
 layout(matrix(c(1,1,2,1,1,3),ncol=3, byrow = TRUE), width = c(3,3,1),height = c(1,1))
 par(mar = c(0,0,0,0))
@@ -428,41 +436,46 @@ dev.off()
 # params <- paramsAll
 # (stage1 <- max(1,rpois(1,1)))
 # (stage2 <- stage1+1)
+# maxSurv <- 0.8
+# minSurv <- 0.0001
 ### Semelparous ----------------------------------------------
-MPM_semel <- function(params, stage1, stage2, maxSurv = 0.2, minSurv = 0.001){
- possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
-                             !is.na(params$survival),]
- params1 <- possibleParams
- i <- sample(1:nrow(params1),1)
- S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
- (f <- itero_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1+1))) # first survival of rep
-  (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first_1 = 1, 
-               Age_first_2 = stage1+1))
-  t_ij <- matrix(c(S, G,
-                   f, 0),
-                 nrow = 2)
-  print(colSums(t_ij))
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)), params1)
-  return(listout)
-}
+# MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001){
+#  possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
+#                              !is.na(params$survival),]
+#  params1 <- possibleParams
+#  i <- sample(1:nrow(params1),1)
+#  S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
+#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
+#   f <- semel_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage2)) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
+#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
+#   t_ij <- matrix(c(S, G,
+#                    f, 0),
+#                  nrow = 2)
+#   print(t_ij)
+#   print(colSums(t_ij))
+#   (lambda1 <- lambda(t_ij))
+#   (e_ij <- popbio::elasticity(t_ij))
+#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
+#   growthElast <- sum(e_ij[which(generic_mat == "G")])
+#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+#                                     gentim = generation.time(t_ij)), params1)
+#   return(listout)
+# }
 ```
 
 # semel fast
 semelparous get to reproductive and die so stage 1 [1,7] is set and to be in the middle, stage 2 is one year double that of stage1 [2,14]
+max 0.04, min 0.009
 ```{r}
 
 # get 100 runs
+# make it be a biennial
 set.seed(123)
 sefast <- lapply(1:100, function(x){ 
-  stage1 <- max(1,rpois(1,1))
+  stage1 <- 1 # max(1,rpois(1,1))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.02) # because want really low survival to drive up fecudity
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.009) # because want really low survival to drive up fecudity
   })
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
@@ -472,7 +485,7 @@ sd(lamsefast$lam)
 generation.time(mean(MPMs_sefast))
 
 
-params_itero_slow <- do.call(rbind, lapply(sefast, function(x) x[[4]]))
+params_semel_fast <- do.call(rbind, lapply(sefast, function(x) x[[4]]))
 # plot(0:26, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:26), type = "l", 
 #      col = rainbow(nrow(params_semel), alpha = 1)[1],
 #      # xlab = "",xaxt = "n", 
@@ -489,14 +502,15 @@ params_itero_slow <- do.call(rbind, lapply(sefast, function(x) x[[4]]))
 layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
   # Plot 1 density generation time
-    den <- density(lamsefast$gentim)
-    par(mar=c(0,4,0,0))
-    plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
+  frame()
+    # den <- density(lamsefast$gentim) # They are all 2
+    # par(mar=c(0,4,0,0))
+    # plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
   # Plot 2 scatter plot
     par(mar=c(4,4,0,0))
-    plot(lamsefast$gentim,lamsefast$lam, ylab = expression(lambda), xlab = "generation time",
+    plot(lamsefast$AgeRep,lamsefast$lam, ylab = expression(lambda), xlab = "generation time",
          main = "", pch = 1, col = "red")
-    mtext("a) semelparous fast", 3, line = 0.5,adj = 0)
+    mtext("b) semelparous fast", 3, line = 0.5,adj = 0)
   # Plot 3 blank
     frame()
   # Plot 4 lambda density
@@ -510,20 +524,15 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
 #Elasticities
 ```{r}
+dev.off()
 Elasts_sefast <- data.frame(do.call(rbind,lapply(sefast, function(x) x[[3]])), 
                             parity = "semelparous", speed = "fast")
 
 
-Elasts_sefast_points <- lapply(sefast, function(x) as.numeric(x[[3]][,c("G","S","R")]))
+Elasts_sefast_points <- lapply(sefast, function(x) as.numeric(x[[3]][,c("G","S","R")]))[Elasts_sefast$lam < 1.2 &
+                                                                                          Elasts_sefast$lam > 0.8]
 
 Elasts_seall <- do.call(rbind, list(Elasts_sefast))
- # ggtern::ggtern(Elasts_sefast, aes(R, G, S, colour = lam, shape = speed))+ 
- #                  geom_point(shape = 1)+
- #                  scale_color_viridis_c(name = expression(lambda))+
- #   scale_shape_manual(name = "Speed")+
- #                  theme_showarrows()+
- #                  theme_clockwise()
-
  max(Elasts_sefast$S)
 min(Elasts_sefast$S)
  max(Elasts_sefast$R)
@@ -537,7 +546,9 @@ par(mar = c(0,0,0,0))
                              alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
                              grid.minor.lines = 0) 
         AddToTernary(points, Elasts_sefast_points, pch = 16, 
-                     col = cols[as.numeric(cut(Elasts_itfast$lam, breaks = 50))], cex = 2) 
+                     col = cols[as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+                                                                   Elasts_sefast$lam > 0.8], 
+                                               breaks = 50))], cex = 2) 
         # AddToTernary(points, Elasts_itslow_points, pch = 17, 
         #              col = cols2(50)[as.numeric(cut(Elasts_itslow$lam, breaks = 50))], cex = 1) 
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
@@ -556,9 +567,9 @@ par(mar = c(0,0,0,0))
 # max(rpois(1000, 5)) # Stage1 center when stage2 is just double stage 1
 set.seed(123)
 seslow <- lapply(1:100, function(x){ 
-  stage1 <- max(10,rpois(1,7))
+  stage1 <- max(2,rpois(1,3))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.37, minSurv = 0.00001)
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
   })
 # seslow <- lapply(1:100, function(x) MPM_semel(params = params_semel_slow, stage1 = stage1, stage2 = stage2))
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
@@ -570,6 +581,8 @@ sd(lamseslow$lam)
 generation.time(mean(MPMs_seslow))
 mean(unlist(lapply(seslow, function(x) x[[3]]$gentim)))
 
+params_semel_slow <- do.call(rbind,lapply(seslow, function(x) x[[4]]))
+params_semel_slow <- params_semel_slow[!duplicated(params_semel_slow[,1:2]),]
 
 # plot(0:26, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:26), type = "l", 
 #      col = rainbow(nrow(params_semel), alpha = 1)[1],
@@ -585,21 +598,23 @@ mean(unlist(lapply(seslow, function(x) x[[3]]$gentim)))
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
 # matrixmetrics <- matrixmetrics[matrixmetrics$lam > 0.8 & matrixmetrics$lam < 1.2,]
 
-# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_lambdagenerationtime.jpg",
-#      width = 100, height = 100, units="mm", res = 300)
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_lambdagenerationtime.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
     # Plot 1 density generation time
-      den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
+      # den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
-      plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
-      lines(denslow$x,denslow$y, col = "grey70",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
+           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
+      #      ,
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      # lines(denslow$x,denslow$y, col = "grey70",
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -623,7 +638,7 @@ matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
       lines(denlamslow$y, denlamslow$x, col = "red")
 
-# dev.off()
+dev.off()
 # ---------------------------------------------
 ```
 
@@ -631,25 +646,55 @@ matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
 # Elasticities
 Elasts_seslow <- data.frame(do.call(rbind,lapply(seslow, function(x) x[[3]])), 
                             parity = "semelparous", speed = "slow")
-ggtern::ggtern(Elasts_seslow, aes(R, G, S, colour = lam))+
-  geom_point()+
-  scale_color_viridis_c(name = expression(lambda))+
-  theme_showarrows()+
-  theme_clockwise()
 
-SemelAll <- rbind(Elasts_sefast,Elasts_seslow)
-SemelAll <- SemelAll[SemelAll$lam > 0.8 & SemelAll$lam < 1.2,]
+Elasts_seslow_points <- lapply(seslow, function(x) as.numeric(x[[3]][,c("G","S","R")]))[lamseslow$lam > 0.8 & 
+                                                                                          lamseslow$lam < 1.2]
 
-ternSemel <- ggtern::ggtern(SemelAll, aes(R, G, S, colour = lam, shape = speed))+ #interaction(speed,parity)))+
-            geom_point()+
-            scale_color_viridis_c(name = expression(lambda))+
-            scale_shape_manual(name = "Speed", values = c(16,2))+
-            theme_showarrows()+
-            theme_clockwise()
-ggsave(filename =  "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TernarySemel.jpg",
-       ternSemel,
-       width=130, height=70,units='mm', dpi=300)
-       
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_ternary.jpg",
+     width = 200, height = 100, units="mm", res = 300)
+cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
+# minCol <- min(as.numeric(cut(Elasts_sefast$lam, breaks = 50)))
+# maxCol <- max(as.numeric(cut(Elasts_sefast$lam, breaks = 50)))
+minCol <- min(as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+                                                 Elasts_sefast$lam > 0.8], breaks = 50)))
+maxCol <- max(as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+                                                 Elasts_sefast$lam > 0.8], breaks = 50)))
+cols2 <- colorRampPalette(c("yellow","red"))
+layout(matrix(c(1,1,2,1,1,3),ncol=3, byrow = TRUE), width = c(3,3,1),height = c(1,1))
+par(mar = c(0,0,0,0))
+        Ternary::TernaryPlot(point = "up",
+                             atip = "G",
+                             btip = "S",
+                             ctip = "R",
+                             alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
+                             grid.minor.lines = 0) 
+        AddToTernary(points, Elasts_sefast_points, pch = 16, 
+                     col = cols[as.numeric(cut(Elasts_sefast$lam, breaks = 50))], cex = 2) 
+        AddToTernary(points, Elasts_seslow_points, pch = 17, 
+                     col = cols2(50)[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1) 
+        legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
+                        pch = c(16,17), col = "black", cex = 1.25)
+        par(mar = c(2,0,2,3))
+        # fast legend
+        legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("fast"~lambda))
+        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+                                                 Elasts_sefast$lam > 0.8]),
+                                                 max(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+                                                 Elasts_sefast$lam > 0.8]),l=5),2),
+             cex = 1)
+        rasterImage(legend_image, 0, 0, 1,1)
+        # slow legend
+        legend_image <- as.raster(matrix(cols2(50)), ncol=1)
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("slow"~lambda))
+        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
+                                                 Elasts_seslow$lam > 0.8]),
+                                                 max(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
+                                                 Elasts_seslow$lam > 0.8]),l=5),2),
+             cex = 1)
+        rasterImage(legend_image, 0, 0, 1,1)
+        
+dev.off()
 ```
 
 
@@ -666,13 +711,15 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
 layout(matrix(c(1,2,5,5,3,4,5,5),2,4, byrow=TRUE), widths = c(1,1,1,1), heights = c(1,1))
 #### Iteroparous fast---------------------------------
 par(mar = c(2,5,3,0))
-plot(0:15, survivalTypeI(params_itero[1,1], params_itero[1,2], 0:15), type = "l", col = rainbow(nrow(params_itero), alpha = 1)[1],
+plot(0:15, survivalTypeI(params_itero_fast[1,1], params_itero_fast[1,2], 0:15), type = "l", col = rainbow(nrow(params_itero_fast), alpha = 1)[1],
      # xlab = "",xaxt = "n",
      xlab = "Age in years",
      ylab = "Survival",
      ylim = c(0,1))
-for(i in 2:nrow(params_itero)){
-  lines(0:15, survivalTypeI(params_itero[i,1], params_itero[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero), alpha = 1)[i])
+for(i in 2:nrow(params_itero_fast)){
+  lines(0:15, survivalTypeI(params_itero_fast[i,1], params_itero_fast[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_fast), alpha = 0.5)[i])
+  abline(v = 1)
+  abline(v = mean())
 }
 mtext("a) (S)tasis and (G)rowth", adj= 0.75, line = 1)
 mtext("iteroparous", adj=0.5, cex = 0.75)
@@ -680,12 +727,12 @@ mtext("fast", adj=0.5, side = 2, line = 4)
 
 #### semelparous fast---------------------------------
 par(mar = c(2,3,3,2))
-plot(0:15, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:15), type = "l", col = rainbow(nrow(params_semel), alpha = 1)[1],
+plot(0:15, survivalTypeI(params_semel_fast[1,1], params_semel_fast[1,2], 0:15), type = "l", col = rainbow(nrow(params_semel_fast), alpha = 1)[1],
      xlab = "Age (years)", ylab = "", yaxt = "n",
      ylim = c(0,1))
-for(i in 2:nrow(params_semel)){
-  lines(0:15, survivalTypeI(params_semel[i,1], params_semel[i,2], 0:15), type = "l", 
-        col = rainbow(nrow(params_semel), alpha = 1)[i])
+for(i in 2:nrow(params_semel_fast)){
+  lines(0:15, survivalTypeI(params_semel_fast[i,1], params_semel_fast[i,2], 0:15), type = "l", 
+        col = rainbow(nrow(params_semel_fast), alpha = 1)[i])
 }
 mtext("semelparous", adj=0.5, cex = 0.75)
 
