@@ -681,7 +681,7 @@ cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
 # maxCol <- max(as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
 #                                                  Elasts_sefast$lam > 0.8], breaks = 50)))
 cols2 <- colorRampPalette(c("yellow","red"))
-layout(matrix(c(1,1,2,1,1,3),ncol=3, byrow = TRUE), width = c(3,3,1),height = c(1,1))
+layout(matrix(c(1,1,2,1,1,2),ncol=3, byrow = TRUE), width = c(3,3,2),height = c(1,1))
 par(mar = c(0,0,0,0))
         Ternary::TernaryPlot(point = "up",
                              atip = "G",
@@ -696,24 +696,33 @@ par(mar = c(0,0,0,0))
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
                         pch = c(16,17), col = "black", cex = 1.25)
         par(mar = c(2,0,2,3))
-        # fast legend
+        
+        par(mar = c(8,2,2,2))
         legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
-        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("fast"~lambda))
-        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-                                                 Elasts_sefast$lam > 0.8]),
-                                                 max(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-                                                 Elasts_sefast$lam > 0.8]),l=5),2),
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression(lambda))
+        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(c(Elasts_seslow$lam,Elasts_sefast$lam)),
+                                                         max(c(Elasts_seslow$lam, Elasts_sefast$lam)),l=5),2),
              cex = 1)
         rasterImage(legend_image, 0, 0, 1,1)
+        
+        # fast legend
+        # legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
+        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("fast"~lambda))
+        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+        #                                          Elasts_sefast$lam > 0.8]),
+        #                                          max(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
+        #                                          Elasts_sefast$lam > 0.8]),l=5),2),
+        #      cex = 1)
+        # rasterImage(legend_image, 0, 0, 1,1)
         # slow legend
-        legend_image <- as.raster(matrix(cols2(50)), ncol=1)
-        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("slow"~lambda))
-        text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
-                                                 Elasts_seslow$lam > 0.8]),
-                                                 max(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
-                                                 Elasts_seslow$lam > 0.8]),l=5),2),
-             cex = 1)
-        rasterImage(legend_image, 0, 0, 1,1)
+        # legend_image <- as.raster(matrix(cols2(50)), ncol=1)
+        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("slow"~lambda))
+        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
+        #                                          Elasts_seslow$lam > 0.8]),
+        #                                          max(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
+        #                                          Elasts_seslow$lam > 0.8]),l=5),2),
+        #      cex = 1)
+        # rasterImage(legend_image, 0, 0, 1,1)
         
 dev.off()
 ```
@@ -735,7 +744,6 @@ fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
 
 
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
-# matrixmetrics <- matrixmetrics[matrixmetrics$lam > 0.8 & matrixmetrics$lam < 1.2,]
 
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SemelAnnual_lambdagenerationtime.jpg",
      width = 100, height = 100, units="mm", res = 300)
@@ -747,12 +755,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
-           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red") #,
-           # xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           # ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
-      # lines(den$x,den$y, col = "blue",
-      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -763,8 +766,8 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
       points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
              matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey40")
       points(matrixmetrics$gentim[matrixmetrics$speed == "annual"], 
-             matrixmetrics$lam[matrixmetrics$speed == "annual"], pch = 3, col = "blue", cex= 0.75)
-      legend("topright", legend = c("slow","fast","annual"), col = c("red","grey40","blue"), pch = c(16,2))
+             matrixmetrics$lam[matrixmetrics$speed == "annual"], pch = 2, col = "grey40", cex= 0.75)
+      legend("topright", legend = c("slow","fast"), col = c("red","grey40"), pch = c(16,2))
       mtext("b)", 3, line = 0.5,adj = 0)
     # Plot 3 blank
       frame()
@@ -789,7 +792,44 @@ dev.off()
 ```
 
 
+# Semel fast (annuals and biennials) and slow
+```{r}
+Elasts_annual <- data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual")
+Elasts_annual_points <- lapply(annuals, function(x) as.numeric(x[[3]][,c("G","S","R")]))
 
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_ternary.jpg",
+     width = 100, height = 100, units="mm", res = 300)
+
+layout(matrix(c(1,1,2,1,1,2),ncol=3, byrow = TRUE), width = c(3,3,2),height = c(1,1))
+par(mar = c(0,0,0,0))
+        Ternary::TernaryPlot(point = "up",
+                             atip = "G",
+                             btip = "S",
+                             ctip = "R",
+                             alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
+                             grid.minor.lines = 0) 
+        AddToTernary(points, Elasts_sefast_points, pch = 16, 
+                     col = cols[as.numeric(cut(Elasts_sefast$lam, breaks = 50))], cex = 2) 
+        AddToTernary(points, Elasts_seslow_points, pch = 17, 
+                     col = cols[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1)
+        AddToTernary(points, Elasts_annual_points, pch = 23,
+                     col = cols[as.numeric(cut(Elasts_annual$lam, breaks = 50))], cex = 4)
+        legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
+                        pch = c(16,17), col = "black", cex = 0.85)
+        # Lambda color ramp
+        par(mar = c(8,2,2,2))
+        legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
+        plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression(lambda))
+        text(x=1.5, y = seq(0,1,l=5), 
+             labels = round(seq(min(c(Elasts_seslow$lam,Elasts_sefast$lam,Elasts_annual$lam)),
+                                max(c(Elasts_itslow$lam, Elasts_itfast$lam,Elasts_annual$lam)),l=5),2),
+             cex = 1)
+        rasterImage(legend_image, 0, 0, 1,1)
+
+dev.off()
+
+
+```
 
 
 
