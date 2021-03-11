@@ -10,7 +10,7 @@ library(popbio)
 library(ggplot2)
 library(devtools)
 library(popdemo)
-# library(ggtern)
+library(viridis)
 library(patchwork)
 library(Ternary)
 rm(list=ls())
@@ -62,6 +62,8 @@ source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedH
 
 ```
 
+Caswell MPM 2001 - Age-specific survival
+mean and variance of time spent in each stage, mean and variance of time to death
 
 Use survival curve to estimate along the curve, how many of the vegetative should survive and transition to the next stage class - i.e. reproductive
 Then the length of time to or proportion that grow to reprodutive can be sped up or slowed down discounted by the survival to reproductive  
@@ -218,12 +220,13 @@ The wider the difference, the lower the transition should be
 # max(rpois(1000,2))
 set.seed(123)
 itfast <- lapply(1:100, function(x){ 
-  # stage1 <- max(1,rpois(1,1))
   stage1 <- 1
-  stage2 <- stage1 + max(2,rpois(1,1))
+  stage2 <- 3
+  # stage1 <- 1
+  # stage2 <- stage1 + max(2,rpois(1,1))
   print(paste(stage1, stage2))
   # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.01) # from 0.4
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.005, minSurv = 0.0001) 
   })
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
@@ -233,6 +236,20 @@ sd(lamitfast$lam)
 generation.time(mean(MPMs_itfast))
 # age-specific survival from stage classified matrix
 fundamental.matrix(MPMs_itfast[[1]], r = 1) # $meaneta mean of time to death by stage; $var, variance of time spent in each stage class
+# $cv Coefficient of variation (SD/mean) 
+# meaneta = sum(N); time n_j to death;  vereta = sum(2*N^2 - N) - sum(N.*sum(N))
+# life expectancy == mean age at death
+# R = FN; F = the fertility matrix expected number of offspring of each type produced per time step, N the fundamental matrix (the expected number of time steps spent in each transient state)
+# entries r_ij = expected lifetime production of type-i offspring of an individual starting life in stage j
+R <- lapply(MPMs_itfast, function(x) splitA(x)$F %*% fundamental.matrix(x)$N)   # default is row 1, col not 1
+mean(R)
+#         [,1]    [,2]
+# [1,] 1.09612 3.28661
+# [2,] 0.00000 0.00000
+# interpreted as an individual starting life in stage j (vegetative) can be expected to produce 1.1 veg individuals; A plant starting life as a reproductive will produce 3.3 vegetative over its lifetime
+
+# age specific survivorship - the probability of survival to age x
+# R0 = net reproductive rate = mean number of offspring by which a newborn individual will be replaced by end of life, rate the population increases from one generation to the next. 
 
 layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
@@ -316,9 +333,11 @@ AddToTernary(points, Elasts_itfast_points, pch = 21)
 # Ages are end points of age
 set.seed(123)
 itslow <- lapply(1:100, function(x){ 
-  stage1 <- max(4,rpois(1,4))
-  stage2 <- stage1 + max(3,rpois(1,5))
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.42,minSurv = 0.25)
+  stage1 <- 6
+  stage2 <- 15
+  # stage1 <- max(4,rpois(1,4))
+  # stage2 <- stage1 + max(3,rpois(1,5))
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.5,minSurv = 0.3) # maxSurv = 0.42,minSurv = 0.25)
   })
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 
@@ -328,6 +347,7 @@ mean(lamitslow$lam)
 sd(lamitslow$lam)
 generation.time(mean(MPMs_itslow))
 mean(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
+max(unlist(lapply(itslow, function(x) x[[3]]$gentim)))
 
 # age-specific survival from stage classified matrix
 fundamental.matrix(MPMs_itslow[[1]], r = 1) # $meaneta mean of time to death by stage; $var, variance of time spent in each stage class
@@ -340,21 +360,20 @@ params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
 
 matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
-     width = 100, height = 100, units="mm", res = 300)
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
     # Plot 1 density generation time
-      # den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
+      den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", 
-           type = "l",bty="n", col = "red")
-           # ,
-      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-      #      ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
-      # lines(denslow$x,denslow$y, col = "red",
+           type = "l",bty="n", col = "red",
+           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+           ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
+      # lines(den$x,den$y, col = "grey70",
       #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
       #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
@@ -381,7 +400,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
       lines(denlamslow$y, denlamslow$x, col = "red")
 
-dev.off()
+# dev.off()
 # ---------------------------------------------
 ```
 
@@ -390,23 +409,10 @@ dev.off()
 Elasts_itslow <- data.frame(do.call(rbind,lapply(itslow, function(x) x[[3]])), 
                             parity = "iteroparous", speed = "slow")
 Elasts_itslow_points <- lapply(itslow, function(x) as.numeric(x[[3]][,c("G","S","R")]))
-# ggtern::ggtern(Elasts_itslow, aes(R, G, S, colour = lam))+
-#   geom_point()+
-#   scale_color_viridis_c(name = expression(lambda))+
-#   theme_showarrows()+
-#   theme_clockwise()
-
-# IteroAll <- rbind(Elasts_itfast,Elasts_itslow)
-
 cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
-# minCol <- min(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
-# maxCol <- max(as.numeric(cut(Elasts_itfast$lam, breaks = 50)))
-# cols2 <- colorRampPalette(c("yellow","red"))
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_ternary.jpg",
-     width = 100, height = 100, units="mm", res = 300)
-
-# layout(matrix(c(1,1,2,1,1,3),ncol=3, byrow = TRUE), width = c(3,3,1),height = c(1,1))
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_ternary.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
 layout(matrix(c(1,1,2,1,1,2),ncol=3, byrow = TRUE), width = c(3,3,2),height = c(1,1))
 par(mar = c(0,0,0,0))
@@ -432,21 +438,7 @@ par(mar = c(0,0,0,0))
              cex = 1)
         rasterImage(legend_image, 0, 0, 1,1)
         
-        # fast legend
-        # legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
-        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("fast"~lambda))
-        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_itfast$lam),max(Elasts_itfast$lam),l=5),2),
-        #      cex = 1)
-        # rasterImage(legend_image, 0, 0, 1,1)
-        # slow legend
-        # legend_image <- as.raster(matrix(cols2(50)), ncol=1)
-        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("slow"~lambda))
-        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_itslow$lam),max(Elasts_itslow$lam),l=5),2),
-        #      cex = 1)
-        # rasterImage(legend_image, 0, 0, 1,1)
-        
-dev.off()
-
+# dev.off()
        
 ```
 
@@ -496,7 +488,7 @@ set.seed(123)
 sefast <- lapply(1:100, function(x){ 
   stage1 <- 1 # max(1,rpois(1,1))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.009) # because want really low survival to drive up fecudity
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.02) # because want really low survival to drive up fecudity
   })
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
@@ -518,15 +510,16 @@ params_semel_fast <- do.call(rbind, lapply(sefast, function(x) x[[4]]))
 #         col = rainbow(nrow(params_semel), alpha = 1)[i])
 # }
 
-
+# dev.off()
 # ---------------------------------------------
 layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
   # Plot 1 density generation time
-  frame()
-    # den <- density(lamsefast$gentim) # They are all 2
-    # par(mar=c(0,4,0,0))
-    # plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
+par(mar=c(0,0,0,0))  
+frame()
+  #   den <- density(lamsefast$gentim) # They are all 2
+  #   par(mar=c(0,4,0,0))
+  #   plot(den$x, den$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
   # Plot 2 scatter plot
     par(mar=c(4,4,0,0))
     plot(lamsefast$AgeRep,lamsefast$lam, ylab = expression(lambda), xlab = "generation time",
@@ -588,9 +581,10 @@ par(mar = c(0,0,0,0))
 # max(rpois(1000, 5)) # Stage1 center when stage2 is just double stage 1
 set.seed(123)
 seslow <- lapply(1:100, function(x){ 
-  stage1 <- max(2,rpois(1,3))
+  stage1 <- 4
+  # stage1 <- max(2,rpois(1,3))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.26, minSurv = 0.09)
   })
 # seslow <- lapply(1:100, function(x) MPM_semel(params = params_semel_slow, stage1 = stage1, stage2 = stage2))
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
@@ -601,6 +595,7 @@ mean(lamseslow$lam)
 sd(lamseslow$lam)
 generation.time(mean(MPMs_seslow))
 mean(unlist(lapply(seslow, function(x) x[[3]]$gentim)))
+fundamental.matrix(mean(MPMs_seslow))
 
 params_semel_slow <- do.call(rbind,lapply(seslow, function(x) x[[4]]))
 params_semel_slow <- params_semel_slow[!duplicated(params_semel_slow[,1:2]),]
@@ -617,22 +612,20 @@ params_semel_slow <- params_semel_slow[!duplicated(params_semel_slow[,1:2]),]
 # }
 
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
-# matrixmetrics <- matrixmetrics[matrixmetrics$lam > 0.8 & matrixmetrics$lam < 1.2,]
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_lambdagenerationtime.jpg",
-     width = 100, height = 100, units="mm", res = 300)
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
     # Plot 1 density generation time
-      # den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
+      den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
-           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red")
-      #      ,
-      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+           xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red",
+           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))) ) #,
+           # ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
       # lines(denslow$x,denslow$y, col = "grey70",
       #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
       #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
@@ -650,6 +643,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
     # Plot 3 blank
       frame()
     # Plot 4 lambda density
+      par(mar=c(4,0,0,0))
       denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"])
       denlamslow <- density(matrixmetrics$lam[matrixmetrics$speed == "slow"])
       par(mar=c(4,0,0,0))
@@ -657,9 +651,11 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey70",
            ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
-      lines(denlamslow$y, denlamslow$x, col = "red")
+      lines(denlamslow$y, denlamslow$x, col = "red",
+           ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
+           xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
 
-dev.off()
+# dev.off()
 # ---------------------------------------------
 ```
 
@@ -674,13 +670,7 @@ Elasts_seslow_points <- lapply(seslow, function(x) as.numeric(x[[3]][,c("G","S",
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_ternary.jpg",
      width = 200, height = 100, units="mm", res = 300)
 cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
-# minCol <- min(as.numeric(cut(Elasts_sefast$lam, breaks = 50)))
-# maxCol <- max(as.numeric(cut(Elasts_sefast$lam, breaks = 50)))
-# minCol <- min(as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-#                                                  Elasts_sefast$lam > 0.8], breaks = 50)))
-# maxCol <- max(as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-#                                                  Elasts_sefast$lam > 0.8], breaks = 50)))
-cols2 <- colorRampPalette(c("yellow","red"))
+
 layout(matrix(c(1,1,2,1,1,2),ncol=3, byrow = TRUE), width = c(3,3,2),height = c(1,1))
 par(mar = c(0,0,0,0))
         Ternary::TernaryPlot(point = "up",
@@ -692,7 +682,7 @@ par(mar = c(0,0,0,0))
         AddToTernary(points, Elasts_sefast_points, pch = 16, 
                      col = cols[as.numeric(cut(Elasts_sefast$lam, breaks = 50))], cex = 2) 
         AddToTernary(points, Elasts_seslow_points, pch = 17, 
-                     col = cols2(50)[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1) 
+                     col = cols[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1) 
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
                         pch = c(16,17), col = "black", cex = 1.25)
         par(mar = c(2,0,2,3))
@@ -705,32 +695,14 @@ par(mar = c(0,0,0,0))
              cex = 1)
         rasterImage(legend_image, 0, 0, 1,1)
         
-        # fast legend
-        # legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
-        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("fast"~lambda))
-        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-        #                                          Elasts_sefast$lam > 0.8]),
-        #                                          max(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
-        #                                          Elasts_sefast$lam > 0.8]),l=5),2),
-        #      cex = 1)
-        # rasterImage(legend_image, 0, 0, 1,1)
-        # slow legend
-        # legend_image <- as.raster(matrix(cols2(50)), ncol=1)
-        # plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = expression("slow"~lambda))
-        # text(x=1.5, y = seq(0,1,l=5), labels = round(seq(min(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
-        #                                          Elasts_seslow$lam > 0.8]),
-        #                                          max(Elasts_seslow$lam[Elasts_seslow$lam < 1.2 &
-        #                                          Elasts_seslow$lam > 0.8]),l=5),2),
-        #      cex = 1)
-        # rasterImage(legend_image, 0, 0, 1,1)
-        
 dev.off()
+
 ```
 
 
 # Annuals
 ```{r}
-annuals <- lapply(1:100, function(x) MPM_annual(paramsAll, maxSurv = 0.13, minSurv = 0.08, 
+annuals <- lapply(1:100, function(x) MPM_annual(paramsAll, maxSurv = 0.1, minSurv = 0.08, 
                                                 minGerm = 0.03, maxGerm = 0.09, persSeedBank = 5))
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 
@@ -745,8 +717,8 @@ fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
 
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SemelAnnual_lambdagenerationtime.jpg",
-     width = 100, height = 100, units="mm", res = 300)
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SemelAnnual_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
@@ -768,13 +740,13 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
       points(matrixmetrics$gentim[matrixmetrics$speed == "annual"], 
              matrixmetrics$lam[matrixmetrics$speed == "annual"], pch = 2, col = "grey40", cex= 0.75)
       legend("topright", legend = c("slow","fast"), col = c("red","grey40"), pch = c(16,2))
-      mtext("b)", 3, line = 0.5,adj = 0)
+      mtext("b)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
       frame()
     # Plot 4 lambda density
-      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"])
+      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed %in% c("fast","annual")])
       denlamslow <- density(matrixmetrics$lam[matrixmetrics$speed == "slow"])
-      denlamannual <- density(matrixmetrics$lam[matrixmetrics$speed == "annual"])
+      # denlamannual <- density(matrixmetrics$lam[matrixmetrics$speed == "annual"])
       par(mar=c(4,0,0,0))
       plot(denlamfast$y, denlamfast$x, xlab = "",ylab="", main="", 
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey40",
@@ -783,11 +755,11 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
       lines(denlamslow$y, denlamslow$x, col = "red",
            ylim = c(min(c(denlamfast$x, denlamslow$x, denlamannual$x)), max(c(denlamfast$x, denlamslow$x, denlamannual$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y, denlamannual$y)), max(c(denlamfast$y, denlamslow$y, denlamannual$y))))
-      lines(denlamfast$y, denlamannual$x, col = "blue",
-           ylim = c(min(c(denlamfast$x, denlamslow$x, denlamannual$x)), max(c(denlamfast$x, denlamslow$x, denlamannual$x))),
-           xlim = c(min(c(denlamfast$y, denlamslow$y, denlamannual$y)), max(c(denlamfast$y, denlamslow$y, denlamannual$y))))
+      # lines(denlamfast$y, denlamannual$x, col = "blue",
+      #      ylim = c(min(c(denlamfast$x, denlamslow$x, denlamannual$x)), max(c(denlamfast$x, denlamslow$x, denlamannual$x))),
+      #      xlim = c(min(c(denlamfast$y, denlamslow$y, denlamannual$y)), max(c(denlamfast$y, denlamslow$y, denlamannual$y))))
 
-dev.off()
+# dev.off()
 
 ```
 
@@ -796,6 +768,7 @@ dev.off()
 ```{r}
 Elasts_annual <- data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual")
 Elasts_annual_points <- lapply(annuals, function(x) as.numeric(x[[3]][,c("G","S","R")]))
+
 
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Semel_ternary.jpg",
      width = 100, height = 100, units="mm", res = 300)
@@ -812,8 +785,8 @@ par(mar = c(0,0,0,0))
                      col = cols[as.numeric(cut(Elasts_sefast$lam, breaks = 50))], cex = 2) 
         AddToTernary(points, Elasts_seslow_points, pch = 17, 
                      col = cols[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1)
-        AddToTernary(points, Elasts_annual_points, pch = 23,
-                     col = cols[as.numeric(cut(Elasts_annual$lam, breaks = 50))], cex = 4)
+        AddToTernary(points, Elasts_annual_points, pch = 18,
+                     col = cols[as.numeric(cut(Elasts_annual$lam, breaks = 50))], cex = 2)
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
                         pch = c(16,17), col = "black", cex = 0.85)
         # Lambda color ramp
@@ -830,6 +803,7 @@ dev.off()
 
 
 ```
+
 
 
 
