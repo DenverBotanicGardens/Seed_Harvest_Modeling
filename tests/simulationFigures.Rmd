@@ -10,7 +10,72 @@ library(popbio)
 library(ggplot2)
 library(devtools)
 library(patchwork)
+require(AICcmodavg)
+library(lme4)
 rm(list=ls())
+source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/VitalRates.R")
+source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/Virtual_iteroparous.R")
+
+```
+
+Uncertainty and bias heuristic
+```{r}
+# plot(sort(rpois(100, 1:100)),sort(rpois(100, 100)))
+# plot(1:100, rpois(100, 100:1100))
+
+(df <- data.frame(x = 1:150, y = rlnorm(150, log(1:150), 1)))
+
+ggplot(df, aes(x,y))+
+  geom_point()+
+  # stat_smooth(method = "lm", formula = y ~ x^2, se = 0.9)+
+  theme_bw()
+  # ylim(c(0,200))
+
+df <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(50),0.25))
+df2 <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(70),0.35))
+
+dens <- density(df$Time2Ext, adjust = 1, from = 0, to = 150)
+dens <- data.frame(Time2Ext = dens$x, y=dens$y)
+
+dens2 <- density(df2$Time2Ext, adjust = 1, from = 0, to = 150)
+dens2 <- data.frame(Time2Ext = dens2$x, y=dens2$y)
+
+ggplot(df, aes(Time2Ext))+
+  # stat_ecdf(size=0.5)+
+  geom_line(data=dens, aes(x=Time2Ext, y = cumsum(y)/sum(y)))+
+  geom_line(data=dens2, aes(x=Time2Ext, y = cumsum(y)/sum(y)), col = "red")+
+  xlim(0,150)+
+  theme_bw()
+```
+
+Have Dan check it to make sure logic and maths are sound - or one of his students. 
+time in years to generation time
+```{r}
+layout(matrix(c(1,0,2,3), byrow = TRUE, nrow = 2), widths = c(3,1), heights = c(3,1))
+  # Plot 1
+  par(mar = c(4,4,4,5))
+  plot(dens$Time2Ext, cumsum(dens$y)/sum(dens$y), xlim = c(0,150), main="", 
+       xlab = "Time to extinction", type = "l",
+       ylab = "Cumulative probability of extinction")
+  lines(dens2$Time2Ext, cumsum(dens2$y)/sum(dens2$y), col = "blue")
+  points( quantile(df$Time2Ext, na.rm = TRUE)[3], 0.5 , col = "red", cex = 2, pch=16)
+  points( quantile(df2$Time2Ext, na.rm = TRUE)[3], 0.5 , col = "red", cex = 2, pch=16)
+  mtext("total extinctions", side = 3, line = -1, adj=1.7)
+  abline(v)
+  
+  # Plot 2
+  par(mar = c(0,4,2,0))
+  plot(1:150, seq(0,1,length.out = 150), type = "n", xaxt = "n", yaxt='n', ann=FALSE, axes=FALSE)
+  segments(x0 = quantile(df$Time2Ext)[1],1, quantile(df$Time2Ext)[5],1)
+  points(quantile(df$Time2Ext)[3], 1, col="red", pch=16)
+  points(quantile(df$Time2Ext)[c(1,5)], c(1,1), pch = "|")
+  segments(x0 = quantile(df2$Time2Ext)[1],0.5, quantile(df2$Time2Ext)[5],0.5, col = "blue")
+  points(quantile(df2$Time2Ext)[3], 0.5, col="red", pch=16)
+  points(quantile(df2$Time2Ext)[c(1,5)], c(0.5,0.5), pch = "|", col = "blue")
+  
+
+
+
 
 ```
 
@@ -18,135 +83,152 @@ rm(list=ls())
 Functions
 ```{r}
 # Concave for iteroparous from Takada and Kawai 2020 
-itero_fecundsurv <- function(s){
-  -12.5*((s + 0.1)^2) + 10.125
-}
+# itero_fecundsurv <- function(s){
+#   -12.5*((s + 0.1)^2) + 10.125
+# }
+# 
+# semel_fecundsurv <- function(s){
+#   12.5*((s - 0.9)^2) - 0.125
+# }
+# 
+# ## Stasis: survival - treat this as less than perfect survival, need some juvenile mortality 
+# # Fujiwara and Diaz-Lopez 2017 
+# # The x's represent the median age of the stage class
+# # Salguero-Gomez has signs flipped, type I is the area where rare plants fall; equation 2 from Fujiwara and Diaz-Lopez 2017; hazard is
+# # h(x) = alpha2*exp(beta2*x); exponentially increasing risk of mortality with age, risk due to aging
+# survivalTypeI <- function(alpha2, beta2, x){
+#   exp((alpha2/beta2)*(1-(exp(beta2*x))))
+# }
+# 
+# 
+# survivalTypeIII <- function(alpha1,alpha3,beta3,x){
+#   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
+# }
+# 
+# Growth <- function(Age_first, Age_last, alpha2, beta2){
+#   matching_proportion <- survivalTypeI(alpha2, beta2, (Age_last))/
+#     sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
+#   matching_proportion * sum(survivalTypeI(alpha2, beta2, 
+#                        Age_first:Age_last))/(length(Age_first:Age_last))
+# }
+# 
+# 
+# Stasis <- function(Age_first, Age_last, alpha2, beta2){
+#   if(Age_first < Age_last){
+#     stasis <- prod(unlist(lapply(Age_first:(Age_last -1), function(i){
+#       survivalTypeI(alpha2, beta2,i+1)/survivalTypeI(alpha2, beta2,i)
+#     })))
+#     } else stasis <- 0 
+#     stasis
+# }
+# 
+# generic_mat <- matrix(c("L","G",
+#                         "F","L"), nrow = 2)
+# 
+# ### Iteroparous ----------------------------------------------
+# MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
+#   possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < 0.8 & 
+#                                                           params$survival > minSurv & params$age == stage1+1 &
+#                                                           !is.na(params$survival)],]
+#   possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == stage1,]
+#   params1 <- possibleParams
+#   i <- sample(1:nrow(params1),1)
+#   S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
+#   S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
+#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
+#   f <- itero_fecundsurv(S2) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1) # should maybe be average
+#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
+#   t_ij <- matrix(c(S, G,
+#                    f, S2),
+#                  nrow = 2)
+#   print(t_ij)
+#   print(colSums(t_ij))
+#   (lambda1 <- lambda(t_ij))
+#   (e_ij <- popbio::elasticity(t_ij))
+#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
+#   growthElast <- sum(e_ij[which(generic_mat == "G")])
+#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+#                                     gentim = generation.time(t_ij)), params1)
+#   return(listout)
+# }
+# 
+# ### Semelparous ----------------------------------------------
+# MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001){
+#  possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
+#                              !is.na(params$survival),]
+#  params1 <- possibleParams
+#  i <- sample(1:nrow(params1),1)
+#  S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
+#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
+#   f <- semel_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage2)) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
+#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
+#   t_ij <- matrix(c(S, G,
+#                    f, 0),
+#                  nrow = 2)
+#   print(t_ij)
+#   print(colSums(t_ij))
+#   (lambda1 <- lambda(t_ij))
+#   (e_ij <- popbio::elasticity(t_ij))
+#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
+#   growthElast <- sum(e_ij[which(generic_mat == "G")])
+#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
+#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+#                                     gentim = generation.time(t_ij)), params1)
+#   return(listout)
+# }
+# 
+# # Type 1
+# paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
+#   outb2 <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(b2){
+#     surv <- survivalTypeI(a2, b2, 1:30)
+#     data.frame(a2, b2, age = 1:30, survival = surv, a2b2 = paste(a2,b2,sep=""))
+#   }))
+# }))
 
-semel_fecundsurv <- function(s){
-  12.5*((s - 0.9)^2) - 0.125
-}
-
-## Stasis: survival - treat this as less than perfect survival, need some juvenile mortality 
-# Fujiwara and Diaz-Lopez 2017 
-# The x's represent the median age of the stage class
-# Salguero-Gomez has signs flipped, type I is the area where rare plants fall; equation 2 from Fujiwara and Diaz-Lopez 2017; hazard is
-# h(x) = alpha2*exp(beta2*x); exponentially increasing risk of mortality with age, risk due to aging
-survivalTypeI <- function(alpha2, beta2, x){
-  exp((alpha2/beta2)*(1-(exp(beta2*x))))
-}
-
-
-survivalTypeIII <- function(alpha1,alpha3,beta3,x){
-  exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
-}
-
-Growth <- function(Age_first, Age_last, alpha2, beta2){
-  matching_proportion <- survivalTypeI(alpha2, beta2, (Age_last))/
-    sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
-  matching_proportion * sum(survivalTypeI(alpha2, beta2, 
-                       Age_first:Age_last))/(length(Age_first:Age_last))
-}
-
-
-Stasis <- function(Age_first, Age_last, alpha2, beta2){
-  if(Age_first < Age_last){
-    stasis <- prod(unlist(lapply(Age_first:(Age_last -1), function(i){
-      survivalTypeI(alpha2, beta2,i+1)/survivalTypeI(alpha2, beta2,i)
-    })))
-    } else stasis <- 0 
-    stasis
-}
-
-generic_mat <- matrix(c("L","G",
-                        "F","L"), nrow = 2)
-
-### Iteroparous ----------------------------------------------
-MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
-  possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < 0.8 & 
-                                                          params$survival > minSurv & params$age == stage1+1 &
-                                                          !is.na(params$survival)],]
-  possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == stage1,]
-  params1 <- possibleParams
-  i <- sample(1:nrow(params1),1)
-  S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
-  S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
-  # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
-  f <- itero_fecundsurv(S2) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1) # should maybe be average
-  (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
-  t_ij <- matrix(c(S, G,
-                   f, S2),
-                 nrow = 2)
-  print(t_ij)
-  print(colSums(t_ij))
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)), params1)
-  return(listout)
-}
-
-### Semelparous ----------------------------------------------
-MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001){
- possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
-                             !is.na(params$survival),]
- params1 <- possibleParams
- i <- sample(1:nrow(params1),1)
- S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
-  # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
-  f <- semel_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage2)) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
-  (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
-  t_ij <- matrix(c(S, G,
-                   f, 0),
-                 nrow = 2)
-  print(t_ij)
-  print(colSums(t_ij))
-  (lambda1 <- lambda(t_ij))
-  (e_ij <- popbio::elasticity(t_ij))
-  survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  growthElast <- sum(e_ij[which(generic_mat == "G")])
-  fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                    gentim = generation.time(t_ij)), params1)
-  return(listout)
-}
-
-# Type 1
-paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
-  outb2 <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(b2){
-    surv <- survivalTypeI(a2, b2, 1:30)
-    data.frame(a2, b2, age = 1:30, survival = surv, a2b2 = paste(a2,b2,sep=""))
-  }))
-}))
-
-virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero"){
+virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", annualYN = FALSE){
   # replicate simulations
   dfout <- do.call(rbind,lapply(1:100, function(repl){
     Nx <- stable.stage(mean(MPMs))
-    vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+    if(annualYN){
+      vec1 <- matrix(round(Nx*(StartPopSize/Nx[2]),0), ncol = 1)
+    } else {
+      vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+    }
+    
     # Initialize for loop
     Extant <- c()
     yr <- c()
     mats <- list()
     gentim <- c()
+    netrep <- c()
     popsz <- c()
     detlam <- c()
     Time2Ext <- NA
     for(i in 1:150){
       yr[i] <- i
       mats[[i]] <- sample(MPMs,size = 1)[[1]]
-      gentim[i] <- popbio::generation.time(mats[[i]])
-      detlam[i] <- popbio::lambda(mean(mats)) 
+      if(annualYN){
+        gentim[i] <- popbio::generation.time(mats[[i]], r = c(1,2), c = 2)
+        netrep[i] <- net.reproductive.rate(mats[[i]], r=c(1,2), c=2)
+      } else {
+        gentim[i] <- popbio::generation.time(mats[[i]])
+        netrep[i] = net.reproductive.rate(mats[[i]])
+      }
+      detlam[i] <- popbio::lambda(mean(mats))
       vec1 <- floor(mats[[i]]%*%vec1)
-      popsz[i] <- sum(vec1)
+      if(annualYN){
+        popsz[i] <- vec1[2]
+      } else {
+        popsz[i] <- sum(vec1)
+      }
       Extant[i] <- if(popsz[i]<1) 0 else 1
       if(Extant[i] == 0) Time2Ext <- i
       if(popsz[i] == 0) break
     }
     
     dfMPM <- data.frame(PopSize = popsz, Year = yr, parity = parity, speed = speed, GenTime = gentim,
+                        netrep = netrep,
                         Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext,
                         Replicate = repl, detlam = detlam)
     dfMPM
@@ -166,14 +248,14 @@ itfast <- lapply(1:1000, function(x){
   # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
   MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.01)
   })
-lambdaItFast <- lapply(itfast_1, function(x) x[[3]]$lam)
-MPMs <- lapply(itfast_1, function(x) x[[1]])
-MPMs<- MPMs[which(lambdaItFast < 1.2 & lambdaItFast > 0.9)]
+lambdaItFast <- lapply(itfast, function(x) x[[3]]$lam)
+MPMs <- lapply(itfast, function(x) x[[1]])
+MPMs<- MPMs[which(lambdaItFast < 1.1 & lambdaItFast > 0.9)]
 MPMs
 
 
 
-iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500), function(StartPopSize){
+iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs, speed = "fast", parity = "itero")
 }))
 
@@ -182,31 +264,34 @@ plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(R
   geom_rug(sides = "b", aes(Time2Extinction))+
   theme_bw()+
   scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol =4)+
-  ylab(expression(lambda[det]))
+  facet_wrap(~StPopSz, ncol =7)+
+  ylab(expression("Iteroparous fast "~lambda[det]))
 
-plotItFast
-```
+# plotItFast
+# ``` 
 
-difference between generation and chunk of time, how different 
-entropy measure of similarity of set amount of time vs. 
-
-maybe get rid of 500 at least or mixed model with pop size 
-glm(time2ext ~ stpopsize + MVP + parity + speed)
+ # difference between generation and chunk of time, how different 
+ # entropy measure of similarity of set amount of time vs. 
+ # 
+ # maybe get rid of 500 at least or mixed model with pop size 
+ # glm(time2ext ~ stpopsize + MVP + parity + speed)
 
 # iteroslow
-```{r}
-itslow <- lapply(1:1000, function(x){ 
-  stage1 <- max(4,rpois(1,4))
-  stage2 <- stage1 + max(3,rpois(1,5))
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.42,minSurv = 0.25)
+# ```{r}
+itslow <- lapply(1:100, function(x){
+  stage1 <- 2
+  stage2 <- 20
+  # stage1 <- max(4,rpois(1,4))
+  # stage2 <- stage1 + max(3,rpois(1,5))
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.8,minSurv = 0.3) #0.42 ; 0.25
   })
 lambdaItslow <- lapply(itslow, function(x) x[[3]]$lam)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
+(generation.time(mean(MPMs_itslow)))
 MPMs_itslow<- MPMs_itslow[which(lambdaItslow < 1.1 & lambdaItslow > 0.9)]
 MPMs_itslow
 
-iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500), function(StartPopSize){
+iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs_itslow, speed = "slow", parity = "itero")
 }))
 
@@ -215,18 +300,19 @@ plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(R
   geom_rug(sides = "b", aes(Time2Extinction))+
   theme_bw()+
   scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 4)+
-  ylab(expression(lambda[det]))
-plotItSlow
-```
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression("Iteroparous slow "~lambda[det]))
+# plotItSlow
+#```
 
 
 
 
-Semelparous
-annuals   
-```{r}
-annuals <- lapply(1:100, function(x) MPM_annual(paramsAll, maxSurv = 0.18, minSurv = 0.01, minGerm = 0.05, maxGerm = 0.09))
+#Semelparous
+#annuals   
+#```{r}
+annuals <- lapply(1:1000, function(x) MPM_annual(paramsAll, maxSurv = 0.13, minSurv = 0.08, 
+                                                minGerm = 0.03, maxGerm = 0.09, persSeedBank = 5))
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
@@ -236,32 +322,29 @@ sd(lamannuals$lam)
 generation.time(mean(MPMs_annuals), r=c(1,2), c=2) # because the rep can either produce seed or can produce reproductive
 mean(unlist(lapply(annuals, function(x) x[[3]]$gentim)))
 fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
-MPMs_annuals <- MPMs_annuals[which(lamannuals < 1.2 & lamannuals > 0.9)]
+MPMs_annuals <- MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam > 0.9)]
 
 
 
-annuals_simulation <- do.call(rbind, lapply(c(10,50,100,500), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_annuals, speed = "annual", parity = "semel")
+annuals_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_annuals, speed = "annual", parity = "semel", annualYN = TRUE)
 }))
 
-plotSefast <- ggplot(semelfast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
+plotannual <- ggplot(annuals_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
   geom_line(show.legend = FALSE)+
   geom_rug(sides = "b", aes(Time2Extinction))+
   theme_bw()+
   scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 4)+
-  ylab(expression(lambda[det]))
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression(annual~lambda[det]))
 
-plotSefast
-```
-
-```
+plotannual
+#```
 
 
 
-
-biennials
-```{r}
+#biennials
+#```{r}
 sefast <- lapply(1:1000, function(x){ 
   stage1 <- 1 # max(1,rpois(1,1))
   stage2 <- stage1+1
@@ -269,11 +352,11 @@ sefast <- lapply(1:1000, function(x){
   })
 lamsefast <- lapply(sefast, function(x) x[[3]]$lam) 
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
-MPMs_sefast <- MPMs_sefast[which(lamsefast < 1.2 & lamsefast > 0.9)]
+MPMs_sefast <- MPMs_sefast[which(lamsefast < 1.1 & lamsefast > 0.9)]
 
 
 
-semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500), function(StartPopSize){
+semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs_sefast, speed = "fast", parity = "semel")
 }))
 
@@ -282,26 +365,31 @@ plotSefast <- ggplot(semelfast_simulation, aes(Year, detlam, group = as.factor(R
   geom_rug(sides = "b", aes(Time2Extinction))+
   theme_bw()+
   scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 4)+
-  ylab(expression(lambda[det]))
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression(biennial~lambda[det]))
 
 plotSefast
-```
+#```
 
-Semelparous slow
-```{r}
-seslow <- lapply(1:100, function(x){ 
+#Semelparous slow
+#```{r}
+seslow <- lapply(1:1000, function(x){ 
   stage1 <- max(2,rpois(1,3))
   stage2 <- stage1+1
   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
   })
 lamseslow <- lapply(seslow, function(x) x[[3]]$lam) 
+hist(unlist(lamseslow))
+hist(unlist(lamsefast))
+hist(unlist(lambdaItFast))
+hist(unlist(lambdaItslow))
+hist(lamannuals$lam)
 MPMs_seslow <- lapply(seslow, function(x) x[[1]]) # The first item is the MPM
-MPMs_seslow <- MPMs_seslow[which(lamseslow < 1.2 & lamseslow > 0.95)]
+MPMs_seslow <- MPMs_seslow[which(lamseslow < 1.1 & lamseslow > 0.9)]
+length(MPMs_seslow)
 
 
-
-semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500), function(StartPopSize){
+semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs_seslow, speed = "slow", parity = "semel")
 }))
 
@@ -310,18 +398,13 @@ plotSeslow <- ggplot(semelslow_simulation, aes(Year, detlam, group = as.factor(R
   geom_rug(sides = "b", aes(Time2Extinction))+
   theme_bw()+
   scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 4)+
-  ylab(expression(lambda[det]))
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression("Semelparous slow "~lambda[det]))
 
 plotSeslow
 
 ```
 
-#  annuals
-```{r}
-
-
-```
 
 
 
@@ -329,27 +412,84 @@ plotSeslow
 
 # add lifespan, add age of sexual maturity
 ```{r}
-paceparity <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, semelfast_simulation, semelslow_simulation))
+paceparity <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, 
+                                  semelfast_simulation, semelslow_simulation,
+                                  annuals_simulation))
+paceparity$speed[paceparity$speed == "annual"] <- "fast"
 
-require(AICcmodavg)
-library(lme4)
+
+str(paceparity)
+table(paceparity$StPopSz)
+
+```
+
+```{r}
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Simulations.jpg",
+       
+      ggplot(paceparity[paceparity$StPopSz < 5000,], aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
+        geom_line(show.legend = FALSE)+
+        geom_rug(sides = "b", aes(Time2Extinction))+
+        theme_bw()+
+        scale_colour_viridis_c(name = "Time to extinction")+
+        facet_wrap(~ interaction(speed,parity) + StPopSz, ncol =5)+
+        ylab(expression(lambda[det])), 
+       
+       width=250, height=200,units='mm', dpi=300)
+
+```
 
 
-lm1 <- lmer(Time2Extinction ~ GenTime + parity*speed + as.factor(StPopSz) + (1|detlam), data = paceparity)
+```{r}
+ggplot(paceparity, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
+  geom_line(show.legend = FALSE)+
+  geom_rug(sides = "b", aes(Time2Extinction))+
+  theme_bw()+
+  scale_colour_viridis_c(name = "Time to extinction")+
+  facet_wrap(~ interaction(speed,parity) + StPopSz, ncol =7)+
+  ylab(expression(lambda[det]))
+
+ggplot(paceparity[!duplicated(paceparity[,c("parity","speed", "GenTime")]),], aes(GenTime, interaction(speed, parity), fill = interaction(speed, parity)))+
+  geom_violin(scale = "width" )+
+  geom_jitter(size = 0.3)+
+  theme_bw()
+
+ggplot(paceparity[!duplicated(paceparity[,c("parity","speed", "GenTime","netrep")]) &
+                                           paceparity$speed == "slow",],
+       aes(GenTime, netrep, colour = interaction(speed, parity)))+
+  # geom_point()+
+  stat_smooth(method="lm", formula = (y ~ exp(x)))+
+  theme_bw()
+
+ggplot(paceparity, aes(GenTime, detlam, colour = interaction(speed, parity)))+
+  # geom_point(size = 0.2)+
+  stat_smooth(method = "lm")+
+  theme_bw()
+```
+
+```{r}
+# Speed needs to be replaced with GenTime since annual and fast (ie. biennial) should be the same
+# lm1 <- lmer(Time2Extinction ~ GenTime + parity*speed + as.factor(StPopSz) + (1|detlam), data = paceparity)
+lm1 <- glm(Time2Extinction ~ GenTime*parity*detlam + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
 summary(lm1)
+lm2 <- glm(Time2Extinction ~ GenTime*detlam + StPopSz, data =  paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm3 <- glm(Time2Extinction ~ parity + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm4 <- glm(Time2Extinction ~ parity*detlam + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm5 <- glm(Time2Extinction ~ parity + GenTime, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm6 <- glm(Time2Extinction ~ StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm7 <- glm(Time2Extinction ~ GenTime, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm8 <- glm(Time2Extinction ~ detlam, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm9 <- glm(Time2Extinction ~ detlam + StPopSz + parity, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm10 <- glm(Time2Extinction ~ detlam + StPopSz , data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm11 <- glm(Time2Extinction ~ GenTime*parity + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm12 <- glm(Time2Extinction ~ netrep*parity*detlam + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm13 <- glm(Time2Extinction ~ netrep*detlam + StPopSz, data =  paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
 
-lm2 <- lmer(Time2Extinction ~ GenTime + as.factor(StPopSz) + (1|detlam), data = paceparity)
-summary(lm2)
-
-lm3 <- lmer(Time2Extinction ~ parity + as.factor(StPopSz) + (1|detlam), data = paceparity)
-summary(lm3)
-lm4 <- lmer(Time2Extinction ~ speed + as.factor(StPopSz) + (1|detlam), data = paceparity)
+lm14 <- glm(Time2Extinction ~ parity + netrep, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm15 <- glm(Time2Extinction ~ netrep, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
+lm16 <- glm(Time2Extinction ~ netrep*parity + StPopSz, data = paceparity[paceparity$Extant==0,], family =Gamma(link = "log"))
 
 
-lm5 <- lmer(Time2Extinction ~ parity + speed + (1|detlam), data = paceparity[paceparity$StPopSz == 50,])
-summary(lm5)
-
-lm.list <- list(lm1,lm2, lm3, lm4)
+lm.list <- list(lm1,lm2, lm3, lm4, lm5, lm6, lm7, lm8, lm9, lm10, lm11, lm12, lm13, lm14, lm15,lm16)
 lm.names <- as.character(unlist(lapply(lm.list,formula)))
 (lm.results <- aictab(lm.list, modnames=lm.names))
 #evidence ratio 
@@ -357,14 +497,149 @@ for(i in 2:length(lm.list)){
   print(exp(0.5*lm.results$Delta_AICc[i]))
 }
 
+# It's generation time, parity, deterministic lambda and starting population size
 
+```
+
+
+continuous outcomes compared between groups using a mean difference or a standardized mean difference
+Effect measures: risk ratio, odds ratio; or difference measures: mean difference, risk difference
+Ratio: 1 represents no difference
+difference: vale 0 represents no difference
+
+Forest plot to plot risk or effect size
+```{r}
+library(metafor)
+# log "RR" risk ratio (to make outcome measures symmetric around 0 and distributions closer to normality)
+# log "OR" odds ratio: the odds of a event between two groups
+# "RD" risk different
+
+
+```
+
+```{r}
+library(meta)
+
+# Standardized mean diffference between two groups G1, G2
+# Cohen's d = mean(G1)-mean(G2)/SD_pooled
+# Glass's delta = mean(G1)-mean(G2)/SD_control - for when the SD of the two groups differ, homogeneity of variance assumption is violated and shouldn't pool the SD
+# Hedges' g = mean(G1)-mean(G2)/SD_pooled *
+#     * SD_pooled = sqrt(( sum(G1-mean(G1))^2 + sum(G2-mean(G2))^2 )/ n_g1 + n_g2 -2)
+
+
+meta::forest()
+
+```
+
+Control for each would be a very large population size, then it is the change/reduction in population size?
+Or maybe I run one where I pick at random across all matrices regardless of speed and parity? 
+
+
+
+
+Of simulations that went extinct, what drove the timing and distribution of extinctions?
+```{r}
+ggplot(paceparity[paceparity$Extant==0,], 
+       aes(x = interaction(speed, parity, StPopSz), y = Time2Extinction, colour = netrep))+
+  geom_boxplot()+
+  geom_point(position = position_jitterdodge())+
+  theme(axis.text.x = element_text(angle = 90))
+  
+ggplot(paceparity[paceparity$Extant==0,], 
+       aes(netrep, Time2Extinction, colour = interaction(speed, parity, StPopSz)))+
+  # geom_point(position = position_jitterdodge()) +
+  geom_point()+
+  # geom_boxplot()+
+  theme_bw()+
+  facet_grid(~StPopSz)
+
+ggplot(paceparity[paceparity$Extant==0,], 
+       aes(detlam, Time2Extinction, colour = interaction(speed, parity, StPopSz)))+
+  # geom_point(position = position_jitterdodge()) +
+  geom_point()+
+  # geom_boxplot()+
+  theme_bw()+
+  facet_grid(~StPopSz)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/popsize_over150yrs.jpg",
+ggplot(paceparity, 
+       aes(Year, log(PopSize), colour = interaction(speed, parity)))+ #,group = interaction(speed, parity)))+
+  geom_line(alpha=0.5)+
+  scale_colour_discrete(name = "Speed and parity",
+                        labels = c("Iteroparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous fast",
+                                   "Semelparous slow"))+
+  theme_bw()+
+  ylab("Population size (log)")+
+  facet_wrap(~interaction(speed, parity)+StPopSz, nrow = 4),
+
+       width=300, height=200,units='mm', dpi=300)
+
+# What is the number of extinctions for each?
+ExtNum <- as.data.frame(table(paceparity$speed[paceparity$Extant==0],paceparity$parity[paceparity$Extant==0],
+      paceparity$StPopSz[paceparity$Extant==0])/c(100,100,200,100))
+names(ExtNum) <- c("speed","parity","StPopSz","PercentExt")
+ExtNum <- data.frame(Year = 150*ExtNum$PercentExt, Time2Extinction = ExtNum$PercentExt, ExtNum)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/time2ext_ecdf.jpg",
+ggplot(paceparity[paceparity$Extant==0,], 
+       aes(Year, Time2Extinction, colour = interaction(speed, parity)))+
+  # geom_point(position = position_jitterdodge()) +
+  stat_ecdf()+
+  # geom_boxplot()+
+  theme_bw()+
+  scale_colour_discrete(name = "Speed and parity",
+                        labels = c("Iteroparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous fast",
+                                   "Semelparous slow"))+
+  facet_grid(~StPopSz)+
+  geom_text(data = ExtNum, label = ExtNum$PercentExt, aes(Year, Time2Extinction),
+             position=position_jitter(height = 0.05, width = 0.05),
+            show.legend = FALSE),
+
+       width=250, height=70,units='mm', dpi=300)
+
+
+```
+
+
+```{r}
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/time2ext_logpopsz.jpg",
+  
+
+ggplot(paceparity[paceparity$Extant ==0,], aes(log(StPopSz), Time2Extinction, 
+                                               colour = interaction(speed, parity),
+                                               shape = interaction(speed, parity)))+
+  geom_jitter(width = 0.2)+
+  stat_smooth(method="lm",formula = (y ~ exp(x)))+
+  ylim(0,150)+
+  # stat_smooth(method="lm")+
+  theme_bw()+
+  scale_colour_discrete(name = "Speed and parity",
+                        labels = c("Iteroparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous fast",
+                                   "Semelparous slow"))+
+  scale_shape_discrete(guide=FALSE)+
+  xlab("log Starting population size")+
+  ylab("Time to extinction"),
+
+       width=150, height=100,units='mm', dpi=300)
+```
+
+
+```{r}
 ggplot(paceparity, aes(x = as.factor(StPopSz), y = Time2Extinction))+ #, colour = as.factor(StPopSz)))+
   geom_boxplot()+
   facet_wrap(~ parity + speed)+
   theme_bw()
 
 ggplot(paceparity[paceparity$StPopSz == 50,], aes(interaction(speed, parity), Time2Extinction))+
-  geom_boxplot()
+  geom_boxplot()+
+  theme_bw()
 
 
 ggplot(paceparity, aes(interaction(speed, parity), Time2Extinction))+
@@ -382,53 +657,76 @@ ggplot(paceparity[paceparity$Extant == 0 & paceparity$Year <11,], aes(Time2Extin
   facet_wrap(~StPopSz)+
   theme_bw()
 
+```
+
+
+
+```{r}
+paceparity2 <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, 
+                                  semelfast_simulation, semelslow_simulation,
+                                  annuals_simulation))
+
+## bootstrap over rows
+paceparity3 <- paceparity2[!is.na(paceparity2$Time2Extinction),]
+x <- split(paceparity3,paceparity3[,c("StPopSz","speed","parity")])[[1]]
+
+
+ER_150yrs <- data.frame(ProjLength = "150 years",
+                        do.call(rbind, lapply(split(paceparity2, 
+                                                    paceparity2[,c("StPopSz","speed","parity")]),
+                                              function(x){
+                                                x <- x[!is.na(x$Time2Extinction)]
+                                                sample_n <- sample(1:nrow(x),size = 100, replace = TRUE)
+                                                
+                                              })))
+
 # how many extinct 
-ER_150yrs <- data.frame(ProjLength = "150 years",aggregate(Replicate ~ parity + speed + StPopSz, function(x) length(x)/100,
-          data =paceparity[!is.na(paceparity$Time2Extinction) &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1,]))
+ER_150yrs <- data.frame(ProjLength = "150 years",
+                        aggregate(Replicate ~ parity + speed + StPopSz, function(x) length(x)/100,
+                                  data =paceparity2[!is.na(paceparity2$Time2Extinction) &
+                                                      paceparity2$Year == 1,]))
+
+
  
 ER_100yrs <- data.frame(ProjLength = "100 years",aggregate(Replicate ~ parity + speed + StPopSz, function(x) length(x)/100,
-          data =paceparity[!is.na(paceparity$Time2Extinction) &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1 &
-                             paceparity$Time2Extinction < 101,]))
+          data =paceparity2[!is.na(paceparity2$Time2Extinction) &
+                             paceparity2$Year == 1 &
+                             paceparity2$Time2Extinction < 101,]))
 
 
 ER_10yrs <- data.frame(ProjLength = "10 years",aggregate(Replicate ~ parity + speed + StPopSz, function(x) length(x)/100,
-          data =paceparity[!is.na(paceparity$Time2Extinction) &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1 &
-                             paceparity$Time2Extinction < 11,]))
+          data =paceparity2[!is.na(paceparity2$Time2Extinction) &
+                             paceparity2$Year == 1 &
+                             paceparity2$Time2Extinction < 11,]))
 
 ER_3gen <- data.frame(ProjLength = "3 generations",aggregate(Replicate ~ parity + speed + StPopSz, function(x) length(x)/100,
-          data =paceparity[!is.na(paceparity$Time2Extinction)  &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1 &
-                             paceparity$Time2Extinction <  (round(paceparity$GenTime*3,2)+1),]))
+          data =paceparity2[!is.na(paceparity2$Time2Extinction)  &
+                             paceparity2$Year == 1 &
+                             paceparity2$Time2Extinction <  (round(paceparity2$GenTime*3,2)+1),]))
 
-table(paceparity$GenTime[!is.na(paceparity$Time2Extinction)  &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1 &
-                             paceparity$Time2Extinction <  ((paceparity$GenTime*3)+1)],
-      paceparity$Time2Extinction[!is.na(paceparity$Time2Extinction)  &
-                             # !duplicated(paceparity[,c("parity","speed","StPopSz","Replicate")]),]))
-                             paceparity$Year == 1 &
-                             paceparity$Time2Extinction <  ((paceparity$GenTime*3)+1)])
+table(paceparity2$GenTime[!is.na(paceparity2$Time2Extinction)  &
+                             paceparity2$Year == 1 &
+                             paceparity2$Time2Extinction <  ((paceparity2$GenTime*3)+1)],
+      paceparity2$Time2Extinction[!is.na(paceparity2$Time2Extinction)  &
+                             paceparity2$Year == 1 &
+                             paceparity2$Time2Extinction <  ((paceparity2$GenTime*3)+1)])
 
 
 
 projlengthER <- do.call(rbind, list(ER_100yrs, ER_10yrs, ER_150yrs, ER_3gen))
 projlengthER$ProjLength <- factor(projlengthER$ProjLength, levels = c("3 generations","10 years","100 years","150 years"))
 
-ggplot(projlengthER, aes(ProjLength, Replicate,  colour = interaction(speed, parity), group = interaction(speed, parity)))+
+ggplot(projlengthER, aes(ProjLength, Replicate,  colour = interaction(speed, parity), 
+                         shape = interaction(speed, parity),
+                         group = interaction(speed, parity)))+
   facet_grid(~StPopSz)+
-  geom_point()+
-  geom_line()+
+  geom_point(position = position_dodge(width = 1))+
+  # geom_line()+
   theme_bw()+
   ylab("ER")+
   scale_colour_discrete(name = "Speed \n Parity")+
   theme(axis.text.x=element_text(angle=90, hjust=1, vjust = 0.5))+
+  scale_shape_discrete(guide=FALSE)+
   xlab("")
 ```
 
