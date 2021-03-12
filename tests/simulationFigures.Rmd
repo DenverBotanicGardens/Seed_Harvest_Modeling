@@ -18,35 +18,7 @@ source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedH
 
 ```
 
-Uncertainty and bias heuristic
-```{r}
-# plot(sort(rpois(100, 1:100)),sort(rpois(100, 100)))
-# plot(1:100, rpois(100, 100:1100))
 
-(df <- data.frame(x = 1:150, y = rlnorm(150, log(1:150), 1)))
-
-ggplot(df, aes(x,y))+
-  geom_point()+
-  # stat_smooth(method = "lm", formula = y ~ x^2, se = 0.9)+
-  theme_bw()
-  # ylim(c(0,200))
-
-df <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(50),0.25))
-df2 <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(70),0.35))
-
-dens <- density(df$Time2Ext, adjust = 1, from = 0, to = 150)
-dens <- data.frame(Time2Ext = dens$x, y=dens$y)
-
-dens2 <- density(df2$Time2Ext, adjust = 1, from = 0, to = 150)
-dens2 <- data.frame(Time2Ext = dens2$x, y=dens2$y)
-
-ggplot(df, aes(Time2Ext))+
-  # stat_ecdf(size=0.5)+
-  geom_line(data=dens, aes(x=Time2Ext, y = cumsum(y)/sum(y)))+
-  geom_line(data=dens2, aes(x=Time2Ext, y = cumsum(y)/sum(y)), col = "red")+
-  xlim(0,150)+
-  theme_bw()
-```
 
 Have Dan check it to make sure logic and maths are sound - or one of his students. 
 time in years to generation time
@@ -241,22 +213,22 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
 Iteroparous fast
 ```{r}
 itfast <- lapply(1:1000, function(x){ 
-  # stage1 <- max(1,rpois(1,1))
   stage1 <- 1
-  stage2 <- stage1 + max(2,rpois(1,1))
-  print(paste(stage1, stage2))
-  # MPM_itero(params_itero, stage1 = stage1, stage2 = stage2)
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.01)
+  stage2 <- 3
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.34, maxSurvRep = 0.5, minSurv = 0.03) 
   })
 lambdaItFast <- lapply(itfast, function(x) x[[3]]$lam)
 MPMs <- lapply(itfast, function(x) x[[1]])
-MPMs<- MPMs[which(lambdaItFast < 1.1 & lambdaItFast > 0.9)]
-MPMs
+MPMsplus <- sample(MPMs[which(lambdaItFast < 1.1 & lambdaItFast >=1)], 100, replace = TRUE)
+hist(unlist(lapply(MPMsplus, function(x) lambda(x))))
+MPMsminus <- sample(MPMs[which(lambdaItFast <= 1 & lambdaItFast > 0.9)], 100, replace = TRUE)
+hist(unlist(lapply(MPMsminus, function(x) lambda(x))))
+MPMs_itfast <- do.call(c, list(MPMsplus, MPMsminus))
 
 
 
 iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs, speed = "fast", parity = "itero")
+  virtualPVA(StartPopSize, MPMs_itfast, speed = "fast", parity = "itero")
 }))
 
 plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
@@ -278,18 +250,22 @@ plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(R
 
 # iteroslow
 # ```{r}
-itslow <- lapply(1:100, function(x){
-  stage1 <- 2
-  stage2 <- 20
-  # stage1 <- max(4,rpois(1,4))
-  # stage2 <- stage1 + max(3,rpois(1,5))
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2,maxSurv = 0.8,minSurv = 0.3) #0.42 ; 0.25
+itslow <- lapply(1:1000, function(x){ 
+  stage1 <- 5
+  stage2 <- 9
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, 
+            maxSurvVeg = 0.97, maxSurvRep = 0.7,minSurv = 0.3) 
   })
 lambdaItslow <- lapply(itslow, function(x) x[[3]]$lam)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 (generation.time(mean(MPMs_itslow)))
-MPMs_itslow<- MPMs_itslow[which(lambdaItslow < 1.1 & lambdaItslow > 0.9)]
-MPMs_itslow
+MPMs_itslowplus <- sample(MPMs_itslow[which(lambdaItslow < 1.1 & lambdaItslow >=1)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_itslowplus, function(x) lambda(x))))
+MPMs_itslowminus <- sample(MPMs_itslow[which(lambdaItslow <= 1 & lambdaItslow > 0.9)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_itslowminus, function(x) lambda(x))))
+MPMs_itslow <- do.call(c, list(MPMs_itslowplus, MPMs_itslowminus))
+# MPMs_itslow<- MPMs_itslow[which(lambdaItslow < 1.1 & lambdaItslow > 0.9)]
+# MPMs_itslow
 
 iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs_itslow, speed = "slow", parity = "itero")
@@ -312,9 +288,8 @@ plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(R
 #annuals   
 #```{r}
 annuals <- lapply(1:1000, function(x) MPM_annual(paramsAll, maxSurv = 0.13, minSurv = 0.08, 
-                                                minGerm = 0.03, maxGerm = 0.09, persSeedBank = 5))
+                                                minGerm = 0.003, maxGerm = 0.09, persSeedBank = 5))
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
-
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
 median(lamannuals$lam)
 mean(lamannuals$lam)
@@ -322,8 +297,13 @@ sd(lamannuals$lam)
 generation.time(mean(MPMs_annuals), r=c(1,2), c=2) # because the rep can either produce seed or can produce reproductive
 mean(unlist(lapply(annuals, function(x) x[[3]]$gentim)))
 fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
-MPMs_annuals <- MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam > 0.9)]
-
+MPMs_annualsplus <- sample(MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam >=1)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_annualsplus, function(x) lambda(x))))
+MPMs_annualsminus <- sample(MPMs_annuals[which(lamannuals$lam <= 1 & lamannuals$lam > 0.9)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_annualsminus, function(x) lambda(x))))
+MPMs_annuals <- do.call(c, list(MPMs_annualsplus, MPMs_annualsminus))
+# MPMs_annuals <- MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam > 0.9)]
+hist(unlist(lapply(MPMs_annuals, function(x) lambda(x))))
 
 
 annuals_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
@@ -348,8 +328,13 @@ plotannual
 sefast <- lapply(1:1000, function(x){ 
   stage1 <- 1 # max(1,rpois(1,1))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.009) # because want really low survival to drive up fecudity
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.02) # because want really low survival to drive up fecudity
   })
+# sefast <- lapply(1:1000, function(x){ 
+#   stage1 <- 1 # max(1,rpois(1,1))
+#   stage2 <- stage1+1
+#   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.009) # because want really low survival to drive up fecudity
+#   })
 lamsefast <- lapply(sefast, function(x) x[[3]]$lam) 
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 MPMs_sefast <- MPMs_sefast[which(lamsefast < 1.1 & lamsefast > 0.9)]
@@ -373,11 +358,18 @@ plotSefast
 
 #Semelparous slow
 #```{r}
+# seslow <- lapply(1:1000, function(x){ 
+#   stage1 <- max(2,rpois(1,3))
+#   stage2 <- stage1+1
+#   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
+#   })
 seslow <- lapply(1:1000, function(x){ 
-  stage1 <- max(2,rpois(1,3))
+  stage1 <- 3
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.2)
   })
+# seslow <- lapply(1:100, function(x) MPM_semel(params = params_semel_slow, stage1 = stage1, stage2 = stage2))
+MPMs_seslow <- lapply(seslow, function(x) x[[1]])
 lamseslow <- lapply(seslow, function(x) x[[3]]$lam) 
 hist(unlist(lamseslow))
 hist(unlist(lamsefast))
@@ -407,6 +399,16 @@ plotSeslow
 
 
 
+Control for each would be a very large population size, then it is the change/reduction in population size?
+Or maybe I run one where I pick at random across all matrices regardless of speed and parity? 
+```{r}
+# alltypes_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+#   virtualPVA(StartPopSize, do.call(c, list(MPMs, MPMs_itslow, MPMs_sefast, MPMs_seslow)), speed = "all", parity = "all")
+# }))
+# 
+# head(alltypes_simulation)
+```
+
 
 
 
@@ -415,7 +417,7 @@ plotSeslow
 paceparity <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, 
                                   semelfast_simulation, semelslow_simulation,
                                   annuals_simulation))
-paceparity$speed[paceparity$speed == "annual"] <- "fast"
+# paceparity$speed[paceparity$speed == "annual"] <- "fast"
 
 
 str(paceparity)
@@ -440,6 +442,16 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
 
 
 ```{r}
+
+give.n <- function(x){
+   return(c(y = max(x)+1, label = length(x)))
+}
+
+ggplot(paceparity[paceparity$Year == 1,], aes(x = interaction(speed,parity), y = Time2Extinction))+
+  geom_boxplot()+
+  facet_wrap(~StPopSz)+
+  stat_summary(fun.data = give.n, geom = "text")
+
 ggplot(paceparity, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
   geom_line(show.legend = FALSE)+
   geom_rug(sides = "b", aes(Time2Extinction))+
@@ -507,6 +519,7 @@ Effect measures: risk ratio, odds ratio; or difference measures: mean difference
 Ratio: 1 represents no difference
 difference: vale 0 represents no difference
 
+
 Forest plot to plot risk or effect size
 ```{r}
 library(metafor)
@@ -517,6 +530,7 @@ library(metafor)
 
 ```
 
+<https://www.polyu.edu.hk/mm/effectsizefaqs/effect_size_equations2.html#:~:text=Effect%20size%20equations&text=To%20calculate%20the%20standardized%20mean,which%20the%20groups%20were%20sampled.> 
 ```{r}
 library(meta)
 
@@ -526,13 +540,54 @@ library(meta)
 # Hedges' g = mean(G1)-mean(G2)/SD_pooled *
 #     * SD_pooled = sqrt(( sum(G1-mean(G1))^2 + sum(G2-mean(G2))^2 )/ n_g1 + n_g2 -2)
 
+x <- split(paceparity[paceparity$speed != "all",], list(paceparity$StPopSz[paceparity$speed != "all"],
+                                                        paceparity$speed[paceparity$speed != "all"],
+                                                        paceparity$parity[paceparity$speed != "all"]))[[1]]
+SMD_paceparity <- do.call(rbind,lapply(split(paceparity[paceparity$speed != "all",],
+                                             list(paceparity$StPopSz[paceparity$speed != "all"],
+                                                  paceparity$speed[paceparity$speed != "all"],
+                                                  paceparity$parity[paceparity$speed != "all"])),
+                                       function(x){
+                                         data.frame(StPopSz = x$StPopSz[1], parity = x$parity[1], 
+                                                    speed = x$speed[1], 
+                                                    meanGenTime = mean(x$GenTime), 
+                                                    meannetrep = mean(x$netrep), 
+                                                    meanLam = mean(x$detlam),
+                                                    Gmean = mean(x$Time2Extinction[x$Year==1], na.rm = TRUE), 
+                                                    Gsd = sd(x$Time2Extinction[x$Year==1], na.rm = TRUE))
+                                         }))
 
+SMD_all <- do.call(rbind, lapply(split(paceparity[paceparity$speed == "all",],
+                                       paceparity$StPopSz[paceparity$speed == "all"]),
+                                 function(x){
+                                   data.frame(StPopSz = x$StPopSz[1], parity = x$parity[1], 
+                                                    speed = x$speed[1], 
+                                                    meanGenTime = mean(x$GenTime), 
+                                                    meannetrep = mean(x$netrep), 
+                                                    meanLam = mean(x$detlam),
+                                                    Gmean = mean(x$Time2Extinction[x$Year==1], na.rm = TRUE), 
+                                                    Gsd = sd(x$Time2Extinction[x$Year==1], na.rm = TRUE))
+                                 }))
+lapply(unique(SMD_all$StPopSz), function(i){
+  lapply()
+})
+  
+# [SMD_paceparity$parity == "itero" & SMD_paceparity$speed == "fast" & SMD_paceparity$StPopSz == 10]
+# SMD_paceparity$parity == "itero"  & SMD_paceparity$speed == "fast"& 
+m1 <- lapply(unique(SMD_paceparity$StPopSz), function(sps){
+  metacont(n.e = rep(100,4), 
+               mean.e = SMD_paceparity$Gmean[SMD_paceparity$StPopSz == sps],
+               sd.e = SMD_paceparity$Gsd[SMD_paceparity$StPopSz == sps],
+               n.c = 100,
+               mean.c = SMD_all$Gmean[SMD_all$StPopSz == sps],
+               sd.c = SMD_all$Gsd[SMD_all$StPopSz == sps],
+               studlab = interaction(SMD_paceparity$StPopSz, SMD_paceparity$parity, SMD_paceparity$speed)[1],
+               sm = "SMD")
+})
 meta::forest()
 
 ```
 
-Control for each would be a very large population size, then it is the change/reduction in population size?
-Or maybe I run one where I pick at random across all matrices regardless of speed and parity? 
 
 
 
