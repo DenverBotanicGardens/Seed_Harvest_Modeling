@@ -216,12 +216,11 @@ The wider the difference, the lower the transition should be
 # Iteroparous fast
 ```{r}
 # ------------------ Iteroparous fast ------------------------
-set.seed(123)
+
 itfast <- lapply(1:100, function(x){ 
   stage1 <- 1
   stage2 <- 3
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.34, maxSurvRep = 0.5, minSurv = 0.03) 
-  })
+  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.34, maxSurvRep = 0.5, minSurv = 0.03)})
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
 median(lamitfast$lam)
@@ -309,6 +308,9 @@ AddToTernary(points, Elasts_itfast_points, pch = 21)
               
 ```
 
+Caswell pg 38: individuals used to model population response assume all individuals experience the smae enviornemnt
+The effect of the population on the environment can be written as the sum of the contributions of the individuals. 
+with plants, each individual experiences a different environment depending on where located within and cannot be written as sum of individual effects. 
 
 # itero slow
 ```{r}
@@ -317,10 +319,11 @@ AddToTernary(points, Elasts_itfast_points, pch = 21)
 # Ages are end points of age
 set.seed(123)
 itslow <- lapply(1:100, function(x){ 
-  stage1 <- 5
-  stage2 <- 9
+  stage1 <- 8
+  stage2 <- 20
   MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, 
-            maxSurvVeg = 0.97, maxSurvRep = 0.7,minSurv = 0.3) 
+            # maxSurvVeg = 0.97, maxSurvRep = 0.7,minSurv = 0.3)
+            maxSurvVeg = 0.87, maxSurvRep = 0.8,minSurv = 0.11)
   })
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 
@@ -343,8 +346,8 @@ params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
 
 matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
-     width = 100, height = 100, units="mm", res = 300)
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
@@ -356,9 +359,9 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            type = "l",bty="n", col = "red",
            xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
            ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
-      lines(den$x,den$y, col = "grey70",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      # lines(den$x,den$y, col = "grey70",
+      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -368,7 +371,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            ylim = c(min(matrixmetrics$lam),max(matrixmetrics$lam)))
       points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
              matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey70")
-      legend("topright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
+      legend("bottomright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
       mtext("a)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
       par(mar=c(0,0,0,0))
@@ -381,9 +384,11 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey70",
            ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
-      lines(denlamslow$y, denlamslow$x, col = "red")
+      lines(denlamslow$y, denlamslow$x, col = "red",
+           ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
+           xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
 
-dev.off()
+# dev.off()
 # ---------------------------------------------
 ```
 
@@ -471,7 +476,7 @@ set.seed(123)
 sefast <- lapply(1:100, function(x){ 
   stage1 <- 1 # max(1,rpois(1,1))
   stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.04, minSurv = 0.02) # because want really low survival to drive up fecudity
+  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.3, minSurv = 0.01) # because want really low survival to drive up fecudity
   })
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
@@ -564,7 +569,7 @@ par(mar = c(0,0,0,0))
 # max(rpois(1000, 5)) # Stage1 center when stage2 is just double stage 1
 set.seed(123)
 seslow <- lapply(1:100, function(x){ 
-  stage1 <- 3
+  stage1 <- 5
   stage2 <- stage1+1
   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.2)
   })
@@ -839,9 +844,9 @@ for(i in 2:nrow(params_itero_slow)){
   lines(0:15, survivalTypeI(params_itero_slow[i,1], params_itero_slow[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_slow), alpha = 1)[i])
 }
 mtext("slow", adj=0.5, side = 2, line = 4)
-abline(v = 6) # 4:rpois(1,4); stage 2 = stage1 + [3,rpois(1,5)]
+abline(v = 5) # 4:rpois(1,4); stage 2 = stage1 + [3,rpois(1,5)]
 abline(v = mean(lamitslow$gentim), lty = 3) # stage1 + 1
-abline(v = 15)
+abline(v = 9)
 
 #### semelparous slow---------------------------------
 par(mar = c(4,3,1,2))
@@ -853,9 +858,9 @@ for(i in seq(2,nrow(params_semel_slow), by = 10)){
   lines(0:15, survivalTypeI(params_semel_slow[i,1], params_semel_slow[i,2], 0:15), type = "l",
         col = rainbow(nrow(params_semel_slow), alpha = 1)[i])
 }
-abline(v = 2) # 2:rpois(1,3); stage 2 = stage1 + 1
-abline(v = mean(lamseslow$AgeRep), lty = 3) # stage1 + 1
-
+abline(v = 3) 
+abline(v = mean(lamseslow$gentim), lty = 3) # stage1 + 1
+abline(v = 4)
 
 # Plot 5
 par(mar=c(4,4,3,2))
@@ -925,16 +930,16 @@ prob_kneg1 <- mu_j*theta_t
 
 ```
 
-
+Heuristic Box 1
 
 Cushing 2019 - Darwinian dynamic model - Evolutionarily Stable Strategy (ESS) maximum principle. 
 Slow and iteroparity is associated with more population stability (Lesica and Shelly 1995).  
 Heuristic of differences due to speed, parity, population size 
 Compared to a system where can freely evolve highest fitness
 ```{r}
-
+mid50 <- 0.5
 Hdf <- data.frame(Type = c("Iteroparous", "Semelparous", "fast","slow"), #,"small","large"), 
-                  meanTime2Ext = c(0.2,   -0.2,           0,     0),    #    0.4,   -0.9),
+                  meanTime2Ext = c(mid50 + 0.2, mid50 +   -0.2,         mid50 +   0,    mid50 +  0),    #    0.4,   -0.9),
                   sdTime2Ext =   c(0.1,    0.4,           0.4,   0.1)) #,   0.5,    0.08))
 Hdf$lower <- Hdf$meanTime2Ext - Hdf$sdTime2Ext
 Hdf$upper <- Hdf$meanTime2Ext + Hdf$sdTime2Ext
@@ -945,10 +950,15 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
       
 time2ext_LH <- ggplot(Hdf, aes(x = Type, y=meanTime2Ext, ymin = lower, ymax = upper))+
   geom_pointrange()+
-  geom_hline(yintercept = 0, lty=2)+
+  geom_hline(yintercept = 0.5, lty=2)+
   coord_flip()+
-  xlab("parity                    pace of life")+ #          population size")+
-  ylab("Time to Extinction\n \u2190 faster                                 slower \u2192")+ 
+  theme(#axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        panel.background = element_blank())+
+  xlab("parity                             pace of life")+ #          population size")+
+  ylab("           Extinction Risk\n Time to Extinction\n \u2190 overestimate                                 underestimate \u2192")+ 
+  labs(title = "Population size", subtitle = "                                 \u2190 smaller                                 larger \u2192", size=0.7)+
   theme_bw(),
 
 width = 150, height = 100, units='mm', dpi=300)
