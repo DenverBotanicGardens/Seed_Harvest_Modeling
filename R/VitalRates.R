@@ -26,6 +26,45 @@ paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
   }))
 }))
 
+
+survivalTypeIII <- function(alpha1, x){
+  exp(-alpha1 * x)
+}
+
+# exponentially declining survivorship curve with age with constant risk
+paramsAll_typeIII <- do.call(rbind, lapply(seq(0.01, 1, by = 0.01), function(a1){
+  data.frame(a1,age=1:30, survival = survivalTypeIII(a1, 1:30))
+}))
+
+plot(0:15, survivalTypeIII(paramsAll_typeIII[1,1], 0:15), type = "l", 
+     col = rainbow(nrow(paramsAll_typeIII), alpha = 1)[1],
+     xlab = "Age in years",
+     ylab = "Survival",
+     ylim = c(0,1))
+for(i in 2:nrow(paramsAll_typeIII)){
+  lines(0:15, survivalTypeIII(paramsAll_typeIII[i,1], 0:15), type = "l", 
+        col = rainbow(nrow(paramsAll_typeIII), alpha = 0.4)[i])
+}
+
+survivalTypeIII_b <- function(alpha1, alpha3, beta3, x){
+  exp(-alpha1 *x) * exp(-(alpha3/beta3)*(1-(exp(-beta3 * x))))
+}
+
+paramsAll_TypeIII_b <- do.call(rbind, lapply(seq(0.01, 1, by = 0.01), function(a1){
+  data.frame(a1,age=1:30, survival = survivalTypeIII(a1, 1:30))
+}))
+
+plot(0:15, survivalTypeIII(paramsAll_typeIII[1,1], 0:15), type = "l", 
+     col = rainbow(nrow(paramsAll_typeIII), alpha = 1)[1],
+     xlab = "Age in years",
+     ylab = "Survival",
+     ylim = c(0,1))
+for(i in 2:nrow(paramsAll_typeIII)){
+  lines(0:15, survivalTypeIII(paramsAll_typeIII[i,1], 0:15), type = "l", 
+        col = rainbow(nrow(paramsAll_typeIII), alpha = 0.4)[i])
+}
+
+
 #' @section Vital Rates (S)tasis, (G)rowth, and (R)eproduction
 #' @describeIn itero_fecundsurv Concave for iteroparous from Takada and Kawai 2020; represents the output of seed
 #'   but does not account for survival or recruitment to time t+1; upwardly convex and concave down ??? (0,0.8); 
@@ -76,35 +115,35 @@ D(D(se_fecsur,'s'),'s')
 
 # Test
 # alpha2 <- 0.76
-alpha2 <- 0.94
-beta2 < 0.27
+# alpha2 <- 0.94
+# beta2 < 0.27
 # beta2 <- 0.23
 # Age_first <- 2
 # Age_last <- 10
-Age_last <- 5
+# Age_last <- 5
 
-library(mvtnorm)
-library(MultiRNG)
-library(MASS)
-library(NonNorMvtDist)
+# library(mvtnorm)
+# library(MultiRNG)
+# library(MASS)
+# library(NonNorMvtDist)
 # library(Countr)
 # library(dplyr)
 # library(xtable)
-library(rWishart)
-library(DirichletReg)
+# library(rWishart)
+# library(DirichletReg)
 # These functions provide information about the multivariate normal distribution 
 # with mean equal to mean and covariance matrix sigma. 
 # dmvnorm gives the density and rmvnorm generates random deviates.
 
-beta_mom <- function(mean, var){
-  term <- mean * (1 - mean)/var - 1
-  alpha <- mean * term
-  beta <- (1 - mean) * term
-  if (var >= mean * (1 - mean)) stop("var must be less than mean * (1 - mean)")
-  return(list(alpha = alpha, beta = beta))
-}
-beta.pars <- mapply(function(mu,v) beta_mom(mean = mu, var = v),
-                                            apply(varcovdf, 2, mean), apply(varcovdf, 2, var))
+# beta_mom <- function(mean, var){
+#   term <- mean * (1 - mean)/var - 1
+#   alpha <- mean * term
+#   beta <- (1 - mean) * term
+#   if (var >= mean * (1 - mean)) stop("var must be less than mean * (1 - mean)")
+#   return(list(alpha = alpha, beta = beta))
+# }
+# beta.pars <- mapply(function(mu,v) beta_mom(mean = mu, var = v),
+#                                             apply(varcovdf, 2, mean), apply(varcovdf, 2, var))
 
 
 # Do both stasis and growth for each surival curve - bivariate distribution 
@@ -115,10 +154,10 @@ beta.pars <- mapply(function(mu,v) beta_mom(mean = mu, var = v),
 # three dimensional for iteroparous, semel is 2D
 # params1 across all curves
 # jointly distributed values
-Age_first_stage2 <- 3
-Age_last_stage2 <- 9
+# Age_first_stage2 <- 2
+# Age_last_stage2 <- 2
 
-plot(0:15, survivalTypeI(params1[1,1], params1[1,2], 0:15), type = "l", col = rainbow(nrow(params_itero_fast), alpha = 1)[1],
+plot(0:15, survivalTypeI(params1[1,1], params1[1,2], 0:15), type = "l", col = rainbow(nrow(params1), alpha = 1)[1],
      xlab = "Age in years",
      ylab = "Survival",
      ylim = c(0,1))
@@ -138,7 +177,7 @@ IteroStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
     muStasis1 <- integrate(survivalcurve, lower = 1, upper = (Age_first_stage2 -1))$value/length(1:(Age_first_stage2-1))
     muStasis2 <- integrate(survivalcurve, lower = Age_first_stage2, upper = Age_last_stage2)$value/
       length(Age_first_stage2:Age_last_stage2)
-    muGrowth <- survivalTypeI(alpha2, beta2, Age_first_stage2 -1)
+    muGrowth <- (survivalTypeI(alpha2, beta2, Age_first_stage2-1)/(sum(survivalTypeI(alpha2, beta2, 0:(Age_first_stage2-1)))))
     muDeath1 <- 1 - (muStasis1 + muGrowth)
     data.frame(muSurv1,muStasis1,muStasis2,muGrowth,muDeath1)
     }))
@@ -146,10 +185,29 @@ IteroStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
   varcovdf
 }
 
-hist(varcovdf$muStasis1)
-hist(varcovdf$muStasis2)
-hist(varcovdf$muGrowth)
-hist(varcovdf$muDeath1)
+
+# SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = params1){
+#   varcovdf <- do.call(rbind,lapply(1:nrow(params1), function(i){
+#     alpha2 <- params1$a2[i]
+#     beta2 <- params1$b2[i]
+#     survivalcurve <- function(x){
+#       survivalTypeI(alpha2, beta2, x)
+#     }
+#     muSurv1 <- survivalTypeI(alpha2, beta2, 1)
+#     muStasis1 <- integrate(survivalcurve, lower = 1, upper = (Age_first_stage2 -1))$value/length(1:(Age_first_stage2-1))
+#     muGrowth <- (survivalTypeI(alpha2, beta2, Age_first_stage2-1)/(sum(survivalTypeI(alpha2, beta2, 0:(Age_first_stage2-1)))))
+#     muDeath1 <- 1 - (muStasis1 + muGrowth)
+#     data.frame(muSurv1,muStasis1,muGrowth,muDeath1)
+#   }))
+#   # just bootstrap; copula
+#   varcovdf
+# }
+
+# hist(varcovdf$muStasis1)
+# hist(varcovdf$muStasis2)
+# hist(varcovdf$muGrowth)
+# hist(varcovdf$muDeath1)
+# hist(sum(varcovdf[,c(2,4,5)]))
 # variance <- apply(varcovdf,2,var)
 # covariance <- cov(varcovdf)
 # vcov(lm(rep(1,nrow(varcovdf)) ~ muStasis1 + muStasis2 + muGrowth, data = varcovdf))
@@ -188,11 +246,11 @@ SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
 
 
 
-Stasis <- function(Age_first, Age_last, alpha2, beta2){
-  if(Age_first < Age_last){
-    survivalcurve <- function(x){
-      survivalTypeI(alpha2, beta2, x)
-    }
+# Stasis <- function(Age_first, Age_last, alpha2, beta2){
+#   if(Age_first < Age_last){
+#     survivalcurve <- function(x){
+#       survivalTypeI(alpha2, beta2, x)
+#     }
     # df <- get stasis1 mu, growth mu, and stasis 2 mu - paired with survival curve for each survival curve
     # or Nx3 matrix 
     # get 3D vector and return 
@@ -202,22 +260,22 @@ Stasis <- function(Age_first, Age_last, alpha2, beta2){
     # rmvnorm multivariate norm to pick from the variance/covariance that will pick the three values based on mus and var/cov structure
     
     
-    mu <- (integrate(survivalcurve, lower = Age_first, upper = Age_last)$value) # /((Age_last+1) - Age_first)
+    # mu <- (integrate(survivalcurve, lower = Age_first, upper = Age_last)$value) # /((Age_last+1) - Age_first)
       # survivalcurve(integrate(survivalcurve, lower = Age_first, upper = Age_last)$value)
       # DescTools::AUC(x = 1:20, y = survivalTypeI(alpha2, beta2, 1:20), from = Age_first, to = Age_last)
     # sig2 <- var(survivalTypeI(alpha2, beta2, Age_first:Age_last))
     # sig2 <- (sum(survivalTypeI(alpha2, beta2, Age_first:Age_last)-mu)^2)/((Age_last+1)-Age_first)
       # sigma(lm(survivalTypeI(alpha2, beta2, Age_first:Age_last)~ c(Age_first:Age_last)))^2
-    alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-    beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-    stasis <- rbeta(1,alpha1, beta1)
+    # alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
+    # beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
+    # stasis <- rbeta(1,alpha1, beta1)
       # rbeta(100,alpha1/(alpha1 + beta1), (alpha1 * beta1)/((alpha1 + beta1)^2 * (alpha1 + beta1 + 1)) )
       # beta(alpha1/(alpha1 + beta1), (alpha1 * beta1)/((alpha1 + beta1)^2 * (alpha1 + beta1 + 1)))
       # rbeta(1,shape1 = alpha1, shape2 = beta1)
 
-    } else stasis <- 0 
-    stasis
-}
+#     } else stasis <- 0 
+#     stasis
+# }
 
 
 
@@ -230,27 +288,27 @@ Stasis <- function(Age_first, Age_last, alpha2, beta2){
 
 # alpha2 <- .82
 # beta2 <- .35
-Age_first <- stage1
-Age_last <- stage2-1
+# Age_first <- stage1
+# Age_last <- stage2-1
 # params1 
-alpha2 <- params1$a2[1000]
-beta2 <- params1$b2[1000]
+# alpha2 <- params1$a2[1000]
+# beta2 <- params1$b2[1000]
 
-Growth <- function(Age_first, Age_last, params1, alpha2, beta2){
-  # mu 
-  if(Age_last > Age_first){
-  mu <- matching_proportion <- survivalTypeI(alpha2, beta2, Age_last) #/ # probability of promotion
-    # sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
-  sig2 <- sum((sapply(1:nrow(params1), function(i){
-      survivalTypeI(params1[i,1], params1[i,2], Age_last)/
-        sum(survivalTypeI(params1[i,1], params1[i,2], Age_first:Age_last))
-      }) - mu)^2 )/nrow(params1)
-  alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-  beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-  rbeta(1,alpha1,beta1)
-  } else {
-    survivalTypeI(alpha2, beta2, Age_last)
-  }
+# Growth <- function(Age_first, Age_last, params1, alpha2, beta2){
+#   # mu 
+#   if(Age_last > Age_first){
+#   mu <- matching_proportion <- survivalTypeI(alpha2, beta2, Age_last) #/ # probability of promotion
+#     # sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
+#   sig2 <- sum((sapply(1:nrow(params1), function(i){
+#       survivalTypeI(params1[i,1], params1[i,2], Age_last)/
+#         sum(survivalTypeI(params1[i,1], params1[i,2], Age_first:Age_last))
+#       }) - mu)^2 )/nrow(params1)
+#   alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
+#   beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
+#   rbeta(1,alpha1,beta1)
+#   } else {
+#     survivalTypeI(alpha2, beta2, Age_last)
+#   }
   
   # matching_proportion
   # matching_proportion * (integrate(survivalcurve, lower = Age_first, upper = Age_last)$value)/(Age_last - Age_first)
