@@ -37,14 +37,6 @@ source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedH
 # Convex for semelparous - see Farrell 2020 and Takada and Kawai 2020
 ```{r}
 # Concave for iteroparous from Takada and Kawai 2020 
-# itero_fecundsurv <- function(s){
-#   -12.5*((s + 0.1)^2) + 10.125
-# }
-# 
-# semel_fecundsurv <- function(s){
-#   12.5*((s - 0.9)^2) - 0.125
-# }
-
 ## Caswell 2014 As cohort ages, frail individual die sooner, progressively dominated by indivs with lower frailty. 
 ## Stasis: survival - treat this as less than perfect survival, need some juvenile mortality 
 # Fujiwara and Diaz-Lopez 2017 
@@ -70,126 +62,10 @@ Then the length of time to or proportion that grow to reprodutive can be sped up
 The wider the difference, the lower the transition should be
      S_11 * (1-G)   R
      G              S_22
-```{r}
-# Fujiwara and Diaz-Lopez 2017: Transition rate, matching duration
-# that many survive to each additional year from first age of stage1 to first age of stage 2
 
-# Kendall et al 2019: if stage duration are fixed (like only 1 year veg) mean stage duration equals the fixed stage duration in the life history. When variable - then the 
-# growth is the fraction of individuals in the stage that have spent enough time to mature, depends on implicit age structure within the stage. When at stable stage distribution, the asymptotic growth rate is the observed population growth rate
-# Need: (1) stage-specific mortality - how a cohort shrinks as it ages within a stage, (2) asymmptotic growth rate, the degree to which a cohort entering from previous stage in one year larger or smaller than the previous year under stable stage distribution
-# iterative approach - guess at lambda, calculate growth, calculate dominant eigenvalue as the guess for lambda_1 (the observed lambda) and keep going until lambda stabilizes. 
-# This is the fraction that mature from stage i
-# The proportion that survives through the vegetative stage to the reproductive stage grow. However many will transition reduced by the average survival (some death) of indivduials in the stage
-# Stationary age-within-stage structure (SAS) from Kendall et al 2019 and from Fujiwara Dias-Lopez 2017
-
-# Age_first <- 2
-# Age_last <- 3
-# alpha2 <- 0.1
-# beta2 <- 0.1
-# rm(Age_first);rm(Age_last);rm(alpha2);rm(beta2)
-# Growth <- function(Age_first, Age_last, alpha2, beta2){
-#   # matching_duration <- 1-(1/(Age_first_2-Age_first_1))
-#   # 
-#   matching_proportion <- survivalTypeI(alpha2, beta2, (Age_last))/
-#     sum(survivalTypeI(alpha2,beta2,Age_first:Age_last))
-#   # matching_proportion *  prod(survivalTypeI(alpha2, beta2, 
-#   #                      Age_first_1:(Age_first_2 - 1)))^(1/((Age_first_2)-Age_first_1))
-#   matching_proportion * sum(survivalTypeI(alpha2, beta2, 
-#                        Age_first:Age_last))/(length(Age_first:Age_last))
-#   # prod(survivalTypeI(alpha2, beta2, 
-#                        # Age_first:Age_last))^(1/(Age_last - Age_first))
-# }
-
-# The proportion that survive to the end of the vegetative stage are the ones that have remained vegetative
-# Stasis <- function(Age_first, Age_last, alpha2, beta2){
-#   survivalTypeI(alpha2, beta2, Age_last)/sum(survivalTypeI(alpha2, beta2, Age_first:Age_last))
-# }
-
-# stage-specific survival rate geometric mean, but if they all transition. The fraction that mature but do not grow 
-# Fixed and 100 percent grow if age veg is only 1 year. some stay when 2 or more
-# Fujiwara and Diaz-Lopez 2017 point out that some stage-transition are age-independent as in some plants but are not addressed in their paper. 
-# Age_first <- 5
-# Age_last <- 10
-# alpha2 <- 0.1
-# beta2 <- 0.1
-# rm(Age_first);rm(Age_last);rm(alpha2);rm(beta2)
-# Stasis <- function(Age_first, Age_last, alpha2, beta2){
-#   # sum(survivalTypeI(alpha2, beta2, (Age_first+1):Age_last))/(Age_last-Age_first)
-#   # if(Age_first < Age_last){
-#   #   0
-#   # } else {
-#   #   prod(survivalTypeI(alpha2, beta2,
-#   #                      Age_first:(Age_last-1)))^(1/((Age_last -1)- Age_first))
-#   # }
-#   if(Age_first < Age_last){
-#     stasis <- prod(unlist(lapply(Age_first:(Age_last -1), function(i){
-#       survivalTypeI(alpha2, beta2,i+1)/survivalTypeI(alpha2, beta2,i)
-#     })))
-#     } else stasis <- 0 
-#     stasis
-# }
-
-# Growth+Stasis < 1
-# define stage 1 and stage 2 as the *end* points, not the middle
-
-
-# params <- paramsAll
-# stage1 <- 5 #max(1,rpois(1,1))
-# stage2 <- 10 #stage1 + max(2,rpois(1,1))
-# minSurv <- 0.001
-# maxSurv <- 0.4
-# rm(params);rm(stage1);rm(stage2);rm(minSurv)
-### Iteroparous ----------------------------------------------
-# MPM_itero <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.001){
-#   possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < 0.8 & 
-#                                                           params$survival > minSurv & params$age == stage1+1 &
-#                                                           !is.na(params$survival)],]
-#   possibleParams <- possibleParams[possibleParams$survival < maxSurv & possibleParams$age == stage1,]
-#   # S_all <- sapply(1:nrow(possibleParams),function(x){
-#   #   Stasis(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2], Age_first = 1, Age_last = stage1)
-#   #   })
-#   # # if vegetative is only the first year then 100 percent transition to reproductive
-#   # G_all <- sapply(1:nrow(possibleParams),function(x){
-#   #   Growth(alpha2 = possibleParams[x,1], beta2 = possibleParams[x,2],
-#   #          Age_first_1 = 1, Age_first_2 = stage1+1)
-#   #   })
-#   # params1 <- possibleParams[(S_all + G_all) < maxSurv,]
-#   params1 <- possibleParams
-#   i <- sample(1:nrow(params1),1)
-#   S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
-#   S2 <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = stage1+1, Age_last = stage2)
-#   # (f <- itero_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage1+1))) # first survival of rep
-#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
-#   f <- itero_fecundsurv(S2) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
-#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
-#   t_ij <- matrix(c(S, G,
-#                    f, S2),
-#                  nrow = 2)
-#   print(t_ij)
-#   print(colSums(t_ij))
-#   (lambda1 <- lambda(t_ij))
-#   (e_ij <- popbio::elasticity(t_ij))
-#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
-#   growthElast <- sum(e_ij[which(generic_mat == "G")])
-#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
-#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-#                                     gentim = generation.time(t_ij)), params1)
-#   return(listout)
-# }
-```
 
 
 ### ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to the managment of plant populations for conservation"
-```{r}
-# generic_mat <- matrix(c("L","G",
-#                         "F","L"), nrow = 2)
-# # Stasis 
-# which(generic_mat == "L")
-# # Growth
-# which(generic_mat == "G")
-# # Fecundity
-# which(generic_mat == "F")
-```
 
 ```{r}
 # Type 3
@@ -217,10 +93,7 @@ The wider the difference, the lower the transition should be
 ```{r}
 # ------------------ Iteroparous fast ------------------------
 
-itfast <- lapply(1:100, function(x){ 
-  stage1 <- 1
-  stage2 <- 3
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.34, maxSurvRep = 0.5, minSurv = 0.03)})
+itfast <- MPM_itero(params = paramsAll, stage1 = 1, stage2 = 3, maxSurvVeg = 0.5, maxSurvRep = 0.12, minSurv = 0.01, NumMats = 100)
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
 median(lamitfast$lam)
@@ -269,7 +142,7 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 ```{r}
 params_itero_fast <- do.call(rbind,lapply(itfast, function(x) x[[4]]))
 params_itero_fast <- params_itero_fast[!duplicated(params_itero_fast[,1:2]),]
-dev.off()
+# dev.off()
 
 plot(0:26, survivalTypeI(params_itero_fast[1,1], params_itero_fast[1,2], 0:26), type = "l", 
      col = rainbow(nrow(params_itero_fast), alpha = 0.5)[1],
@@ -286,7 +159,7 @@ for(i in 2:nrow(params_itero_fast)){
 
 ```{r}
 #Elasticities
-# dev.off()
+dev.off()
 Elasts_itfast <- data.frame(do.call(rbind,lapply(itfast, function(x) x[[3]])),
                             parity = "iteroparous", speed = "fast")
 Elasts_itfast_points <- lapply(itfast, function(x) as.numeric(x[[3]][,c("G","S","R")])) # in abc format each a vector of three
@@ -317,14 +190,9 @@ with plants, each individual experiences a different environment depending on wh
 
 # ---------------------------- Iteroparous Slow ---------------------
 # Ages are end points of age
-set.seed(123)
-itslow <- lapply(1:100, function(x){ 
-  stage1 <- 8
+  stage1 <- 10
   stage2 <- 20
-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, 
-            # maxSurvVeg = 0.97, maxSurvRep = 0.7,minSurv = 0.3)
-            maxSurvVeg = 0.87, maxSurvRep = 0.8,minSurv = 0.11)
-  })
+itslow <- MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.99, maxSurvRep = 0.6,minSurv = 0.1, NumMats = 100)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 
 lamitslow <-data.frame(do.call(rbind, lapply(itslow, function(x) x[[3]])), parity = "itero", speed = "slow") 
@@ -469,15 +337,8 @@ dev.off()
 semelparous get to reproductive and die so stage 1 [1,7] is set and to be in the middle, stage 2 is one year double that of stage1 [2,14]
 max 0.04, min 0.009
 ```{r}
-
-# get 100 runs
-# make it be a biennial
-set.seed(123)
-sefast <- lapply(1:100, function(x){ 
-  stage1 <- 1 # max(1,rpois(1,1))
-  stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.3, minSurv = 0.01) # because want really low survival to drive up fecudity
-  })
+sefast <- MPM_semel(paramsAll, stage1 = 1, stage2 = 2, maxSurv = 0.6, minSurv = 0.00001, vegminSurv = 0.3, vegmaxSurv = 0.4,
+                    NumMats = 100)
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
 median(lamsefast$lam)
@@ -564,15 +425,9 @@ par(mar = c(0,0,0,0))
 # Semel slow
 ```{r}
 # ---------------------------- Semelparous Slow ---------------------
-# hist(rpois(100,5))
-# max(rpois(1000,3)) # about 13, so 26 as reproductive age
-# max(rpois(1000, 5)) # Stage1 center when stage2 is just double stage 1
-set.seed(123)
-seslow <- lapply(1:100, function(x){ 
-  stage1 <- 5
-  stage2 <- stage1+1
-  MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.4, minSurv = 0.2)
-  })
+stage1 <- 5
+stage2 <- stage1 + 1
+seslow <- MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, minSurv = 0.1, maxSurv = 0.8, vegminSurv = 0.1, vegmaxSurv = 0.85, NumMats = 100)
 # seslow <- lapply(1:100, function(x) MPM_semel(params = params_semel_slow, stage1 = stage1, stage2 = stage2))
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
 
