@@ -172,13 +172,6 @@ Ternary::TernaryPlot(point = "up",
                      grid.minor.lines = 0)
 AddToTernary(points, Elasts_itfast_points, pch = 21)
 
- # ggtern::ggtern(Elasts_itfast, aes(R, G, S, colour = lam))+ #, size = floor(gentim)))+ #, size = as.factor(floor(GenTime))))+ #lam))+
- #                  geom_point(shape = 16)+
- #                  scale_color_viridis_c(name = expression(lambda))+
- #   scale_size_continuous(name = "Generation time\n (years binned)")+
- #                  theme_showarrows()+
- #                  theme_clockwise()
-              
 ```
 
 Caswell pg 38: individuals used to model population response assume all individuals experience the smae enviornemnt
@@ -212,16 +205,16 @@ params_itero_slow <- do.call(rbind,lapply(itslow, function(x) x[[4]]))
 params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
 
 
-matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
+matrixmetrics_itero <- do.call(rbind, list(lamitslow, lamitfast))
 
-# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
-#      width = 100, height = 100, units="mm", res = 300)
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
     # Plot 1 density generation time
-      den <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
-      denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
+      den <- density(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "fast"])
+      denslow <- density(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "slow"])
       par(mar=c(0,4,0,0))
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", xaxt = "n", yaxt = "n", 
            type = "l",bty="n", col = "red",
@@ -232,21 +225,21 @@ matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
       #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
-      plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
+      plot(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "slow"],matrixmetrics_itero$lam[matrixmetrics_itero$speed == "slow"], 
            ylab = expression(lambda), xlab = "generation time",
            main = "", pch = 16, col = "red",
-           xlim = c(min(matrixmetrics$gentim),max(matrixmetrics$gentim)),
-           ylim = c(min(matrixmetrics$lam),max(matrixmetrics$lam)))
-      points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
-             matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey70")
+           xlim = c(min(matrixmetrics_itero$gentim),max(matrixmetrics_itero$gentim)),
+           ylim = c(min(matrixmetrics_itero$lam),max(matrixmetrics_itero$lam)))
+      points(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "fast"], 
+             matrixmetrics_itero$lam[matrixmetrics_itero$speed == "fast"], pch = 2, col = "grey70")
       legend("bottomright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
       mtext("a)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
       par(mar=c(0,0,0,0))
       frame()
     # Plot 4 lambda density
-      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"])
-      denlamslow <- density(matrixmetrics$lam[matrixmetrics$speed == "slow"])
+      denlamfast <- density(matrixmetrics_itero$lam[matrixmetrics_itero$speed == "fast"])
+      denlamslow <- density(matrixmetrics_itero$lam[matrixmetrics_itero$speed == "slow"])
       par(mar=c(4,0,0,0))
       plot(denlamfast$y, denlamfast$x, xlab = "",ylab="", main="", 
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "grey70",
@@ -256,7 +249,7 @@ matrixmetrics <- do.call(rbind, list(lamitslow, lamitfast))
            ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
 
-# dev.off()
+dev.off()
 # ---------------------------------------------
 ```
 
@@ -296,41 +289,6 @@ par(mar = c(0,0,0,0))
         
 dev.off()
        
-```
-
-```{r}
-
-
-#Test
-# params <- paramsAll
-# (stage1 <- max(1,rpois(1,1)))
-# (stage2 <- stage1+1)
-# maxSurv <- 0.8
-# minSurv <- 0.0001
-### Semelparous ----------------------------------------------
-# MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001){
-#  possibleParams <- params[params$survival < maxSurv & params$survival > minSurv & params$age == stage1+1 &
-#                              !is.na(params$survival),]
-#  params1 <- possibleParams
-#  i <- sample(1:nrow(params1),1)
-#  S <- Stasis(alpha2 = params1[i,1], beta2 = params1[i,2], Age_first = 1, Age_last = stage1)
-#   # Kendall et al 2019: fecundity multiplied by the survival of the offspring for prebreeding census (i.e. f = b_x * sigma_0 where parent in class x produces b_x seed after the census which surviv to the end of the timestep at rate sigma_0)
-#   f <- semel_fecundsurv(survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = stage2)) * survivalTypeI(alpha2 = params1[i,1], beta2 = params1[i,2], x = 1)
-#   (G <- Growth(alpha2 = params1[i,1], beta2 = params1[i,2],Age_first = 1, Age_last = stage1))
-#   t_ij <- matrix(c(S, G,
-#                    f, 0),
-#                  nrow = 2)
-#   print(t_ij)
-#   print(colSums(t_ij))
-#   (lambda1 <- lambda(t_ij))
-#   (e_ij <- popbio::elasticity(t_ij))
-#   survivalElast <- sum(e_ij[which(generic_mat == "L")])
-#   growthElast <- sum(e_ij[which(generic_mat == "G")])
-#   fecundElast <- sum(e_ij[which(generic_mat == "F")])
-#   listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-#                                     gentim = generation.time(t_ij)), params1)
-#   return(listout)
-# }
 ```
 
 # semel fast
@@ -544,8 +502,11 @@ dev.off()
 
 # Annuals
 ```{r}
-annuals <- lapply(1:100, function(x) MPM_annual(paramsAll, maxSurv = 0.1, minSurv = 0.08, 
-                                                minGerm = 0.03, maxGerm = 0.09, persSeedBank = 5))
+stage1 <- 3 # years in the seed bank
+stage2 <- stage1+1
+
+annuals <- MPM_annual(maxSurv = 0.78, minSurv = 0.68, 
+                      seedminSurv = 0.001, seedmaxSurv = 0.1, stage1 = stage1, stage2 = stage2, NumMats = 100)
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
@@ -555,23 +516,24 @@ sd(lamannuals$lam)
 generation.time(mean(MPMs_annuals), r=c(1,2), c=2)
 mean(unlist(lapply(annuals, function(x) x[[3]]$gentim)))
 fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
-
+dev.off()
 
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
 
-# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SemelAnnual_lambdagenerationtime.jpg",
-#      width = 100, height = 100, units="mm", res = 300)
+jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/SemelAnnual_lambdagenerationtime.jpg",
+     width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 
     # Plot 1 density generation time
       den <- density(matrixmetrics$gentim[matrixmetrics$speed == "annual"])
+      denfast <- density(matrixmetrics$gentim[matrixmetrics$speed == "fast"])
       denslow <- density(matrixmetrics$gentim[matrixmetrics$speed == "slow"])
       par(mar=c(0,4,0,0))
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red",
-           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-           ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
+           xlim = c(min(c(den$x, denslow$x, denfast$x)), max(c(den$x, denslow$x, denfast$x))),
+           ylim = c(min(c(den$y, denslow$y, denfast$y)), max(c(denslow$y)))) #den$y, denfast$y, 
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -582,13 +544,13 @@ matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
       points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
              matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey40")
       points(matrixmetrics$gentim[matrixmetrics$speed == "annual"], 
-             matrixmetrics$lam[matrixmetrics$speed == "annual"], pch = 2, col = "grey40", cex= 0.75)
-      legend("topright", legend = c("slow","fast"), col = c("red","grey40"), pch = c(16,2))
+             matrixmetrics$lam[matrixmetrics$speed == "annual"], pch = 2, col = "blue", cex= 0.75)
+      legend("topright", legend = c("slow","fast", "annual"), col = c("red","grey40","blue"), pch = c(16,2,2))
       mtext("b)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
       frame()
     # Plot 4 lambda density
-      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed %in% c("fast","annual")])
+      denlamfast <- density(matrixmetrics$lam[matrixmetrics$speed == "fast"]) # %in% c("fast","annual")])
       denlamslow <- density(matrixmetrics$lam[matrixmetrics$speed == "slow"])
       denlamannual <- density(matrixmetrics$lam[matrixmetrics$speed == "annual"])
       par(mar=c(4,0,0,0))
@@ -599,11 +561,11 @@ matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast, lamannuals))
       lines(denlamslow$y, denlamslow$x, col = "red",
            ylim = c(min(c(denlamfast$x, denlamslow$x, denlamannual$x)), max(c(denlamfast$x, denlamslow$x, denlamannual$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y, denlamannual$y)), max(c(denlamfast$y, denlamslow$y, denlamannual$y))))
-      lines(denlamfast$y, denlamannual$x, col = "grey10",
+      lines(denlamfast$y, denlamannual$x, col = "blue",
            ylim = c(min(c(denlamfast$x, denlamslow$x, denlamannual$x)), max(c(denlamfast$x, denlamslow$x, denlamannual$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y, denlamannual$y)), max(c(denlamfast$y, denlamslow$y, denlamannual$y))))
 
-# dev.off()
+dev.off()
 
 ```
 
