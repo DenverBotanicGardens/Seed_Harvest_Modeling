@@ -57,11 +57,11 @@ MPM_itero <- function(params, stage1, stage2, maxSurvVeg = 0.99, maxSurvRep = 0.
 #' @describeIn MPM_semel
 
 # test
-# params <- paramsAll
-# maxSurv <- 0.4
-# minSurv <- 0.0001
-# stage1 <- 1 # max(1,rpois(1,1))
-# stage2 <- stage1+1
+params <- paramsAll
+maxSurv <- 0.4
+minSurv <- 0.0001
+stage1 <- 1 
+stage2 <- stage1+1
 
 MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001, vegminSurv = 0.9, vegmaxSurv = 0.99, NumMats = 100){
   possibleParams <- params[params$a2b2 %in% params$a2b2[params$survival < maxSurv & params$survival > minSurv & 
@@ -88,7 +88,8 @@ MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001, v
     growthElast <- sum(e_ij[which(generic_mat == "G")])
     fecundElast <- sum(e_ij[which(generic_mat == "F")])
     listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                          gentim = generation.time(t_ij), 
+                                          gentim = generation.time(t_ij, r = 1, c = 2), 
+                                          lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c = 2)$meaneta),
                                           netrep = net.reproductive.rate(t_ij),
                                           AgeRep = stage1+1, lifelength = stage2), params1)
   })
@@ -98,17 +99,29 @@ MPM_semel <- function(params, stage1, stage2, maxSurv = 0.8, minSurv = 0.0001, v
 
 #' @describeIn MPM_annual One seed bank stage and one above ground reproductive stage
 
-MPM_annual <- function(repSurv = 0.8, minSurv = 0.0001, seedminSurv = 0.001, 
-                       seedmaxSurv = 0.99, NumMats = 100){
+germRatemu = 0.1; germRatesig2 = 0.01; seedSurvmu = 0.1; seedSurvsig2 = 0.01; NumMats = 100; survS2mu = 0.5; survS2sig2 = 0.01
+rm(germRatemu);rm(germRatesig2);rm(seedSurvmu);rm(seedSurvsig2);rm(survS2mu);rm(survS2sig2)
+
+MPM_annual <- function(germRatemu = 0.01, germRatesig2 = 0.01, seedSurvmu = 0.01, seedSurvsig2 = 0.01,
+                       survS2mu = 0.5, survS2sig2 = 0.01, NumMats = 100){
+  alpha <- function(mu, sig2){
+    ((mu^2) - (mu^3) - (mu*sig2))/sig2
+  }
+  beta <- function(mu, sig2){
+    (mu - (2 * mu^2) + (mu^3) -(sig2) + (mu * sig2))/sig2
+  }
+  seedPersist <- rbeta(NumMats, shape1 = alpha(seedSurvmu, seedSurvsig2), shape2 = beta(seedSurvmu, seedSurvsig2))
+  seedGerm <- rbeta(NumMats, shape1 = alpha(germRatemu, germRatesig2), shape2 = beta(germRatemu, germRatesig2))
+  seedDeath <- rbeta(NumMats, shape1 = alpha((1-seedSurvmu), seedSurvsig2), shape2 = beta((1-seedSurvmu), seedSurvsig2))
   # soil seed bank, death, germination
-  Stasis <- rdirichlet(NumMats, alpha = matrix(c(runif(NumMats, seedminSurv, seedmaxSurv),
-                                          rep(1-((seedmaxSurv+seedminSurv)/2), NumMats),
-                                          rep(1-((maxSurv+minSurv)/2), NumMats)), nrow = NumMats))
+  Stasis <- rdirichlet(NumMats, alpha = matrix(c(seedPersist,
+                                                 seedDeath,
+                                                 seedGerm), nrow = NumMats))
   
   mats <- lapply(1:NumMats, function(i){
     S <- Stasis[i,1]
     G <- Stasis[i,ncol(Stasis)] # germination
-    S2 <- runif(1, 0, 0.1)
+    S2 <- rbeta(1, shape1 = alpha(survS2mu,survS2sig2), shape2 = beta(survS2mu,survS2sig2))
     f <- itero_fecundsurv(S2) # Seed production that either goes into the soil seed bank or to rep # loss to dispersal and death
     Fecund <- rdirichlet(1, alpha = c(f,f,(1-S))) # a proportion goes to the seed bank, a proportion germinates, a portion dies
     t_ij <- matrix(c(S, G,
@@ -121,6 +134,7 @@ MPM_annual <- function(repSurv = 0.8, minSurv = 0.0001, seedminSurv = 0.001,
     fecundElast <- sum(e_ij[c(3,4)])
     listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
                                           gentim = generation.time(t_ij, r=c(1,2), c=2),
+                                          lifeexpectancy = fundamental.matrix(t_ij, r = c(1,2), c=2)$meaneta[2],
                                           netrep = net.reproductive.rate(t_ij, r=c(1,2), c=2),
                                           AgeRep = 1, lifelength = 1))
   })
@@ -136,3 +150,44 @@ Ternary::TernaryPlot(point = "up",
                      alab = "Seed bank \u2192", blab = "Death \u2192", clab = "\u2190 germination", # with arrows
                      grid.minor.lines = 0) 
 AddToTernary(points, Stasis, col = "red", pch = 16, cex = 1) 
+
+
+
+#### Try with constant risk survival curves
+stage1 <- 3
+stage2 <- 5
+params <- paramsAll_typeIII
+
+MPM_itero <- function(params = paramsAll_typeIII, stage1, stage2, lambdarange = c(0.99,1.01)){
+  possibleParams <- params[params$a1 %in% params$a1[params$survival < 0.8 & params$age == stage1+1],]
+  # possibleParams <- possibleParams[possibleParams$a1 %in%
+  #                                    possibleParams$a1[possibleParams$survival < maxSurvVeg & possibleParams$age == 1],]
+  params1 <- possibleParams
+
+  vitalrates <- do.call(rbind, lapply(unique(params1$a1), function(a1){
+    IteroStasisGrowth_typeI(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, alpha1 = a1)
+  }))
+  mats <- lapply(1:nrow(vitalrates), function(i){
+  # mats <- lapply(sample(1:nrow(vitalrates), size = NumMats, replace = TRUE), function(i){
+  # for(i in 1:nrow(vitalrates)){
+    S <- vitalrates$muStasis1[i]
+    G <- vitalrates$muGrowth[i]
+    S2 <- vitalrates$muStasis2[i]
+    f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+    t_ij <- matrix(c(S, G,
+                     f, S2),
+                   nrow = 2)
+    (lambda1 <- lambda(t_ij))
+    if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2]){
+      (e_ij <- popbio::elasticity(t_ij))
+      survivalElast <- sum(e_ij[which(generic_mat == "L")])
+      growthElast <- sum(e_ij[which(generic_mat == "G")])
+      fecundElast <- sum(e_ij[which(generic_mat == "F")])
+      listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+                                            gentim = generation.time(t_ij), 
+                                            netrep = net.reproductive.rate(t_ij),
+                                            AgeRep = stage1+1, lifelength = stage2, alpha1 = params1$a1[i]))
+      }
+    })
+  return(mats[!is.null(mats)])
+}
