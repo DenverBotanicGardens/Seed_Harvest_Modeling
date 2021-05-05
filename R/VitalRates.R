@@ -17,6 +17,19 @@ survivalTypeI <- function(alpha2, beta2, x){
   exp((alpha2/beta2)*(1-(exp(beta2*x))))
 }
 
+# constant risk of mortality with age
+survivalConstant <- function(alpha1, x){
+  exp(-alpha1 * x)
+}
+
+paramsConstant <- do.call(rbind, lapply(seq(0.01, 1, by=0.01), function(a1){
+  survivalConstant(a1, 1:30)
+}))
+
+survivaldelayed <- function(alpha1, alpha3, beta3, x)
+
+
+
 #' @describeIn paramsAll This creates a data frame of the parameter values and survival at ages 1:30 years
 
 paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
@@ -32,37 +45,61 @@ survivalTypeIII <- function(alpha1, x){
 }
 
 # exponentially declining survivorship curve with age with constant risk
-paramsAll_typeIII <- do.call(rbind, lapply(seq(0.01, 1, by = 0.01), function(a1){
+paramsAll_typeIII <- do.call(rbind, lapply(seq(0.0001, 1, by = 0.0001), function(a1){
   data.frame(a1,age=1:30, survival = survivalTypeIII(a1, 1:30))
 }))
 
-plot(0:15, survivalTypeIII(paramsAll_typeIII[1,1], 0:15), type = "l", 
-     col = rainbow(nrow(paramsAll_typeIII), alpha = 1)[1],
+
+paramsAll_typeIII_a1 <- paramsAll_typeIII[!duplicated(paramsAll_typeIII$a1),]
+paramsAll_sub <- paramsAll_typeIII_a1[paramsAll_typeIII_a1$survival < 0.99,]
+
+plot(0:15, survivalConstant(paramsAll_sub[1,1], 0:15), type = "l",
+     col = rainbow(nrow(paramsAll_sub), alpha = 1)[1],
      xlab = "Age in years",
      ylab = "Survival",
      ylim = c(0,1))
-for(i in 2:nrow(paramsAll_typeIII)){
-  lines(0:15, survivalTypeIII(paramsAll_typeIII[i,1], 0:15), type = "l", 
-        col = rainbow(nrow(paramsAll_typeIII), alpha = 0.4)[i])
+for(i in 2:nrow(paramsAll_sub)){
+  # for(i in 1:6){
+  lines(0:15, survivalConstant(paramsAll_sub[i,1], 0:15), type = "l",
+        col = rainbow(nrow(paramsAll_sub), alpha = 0.4)[i])
 }
 
-survivalTypeIII_b <- function(alpha1, alpha3, beta3, x){
-  exp(-alpha1 *x) * exp(-(alpha3/beta3)*(1-(exp(-beta3 * x))))
-}
+# survivalTypeIII_b <- function(alpha1, alpha3, beta3, x){
+#   exp(-alpha1 *x) * exp(-(alpha3/beta3)*(1-(exp(-beta3 * x))))
+# }
+# 
+# paramsAll_TypeIII_b <- do.call(rbind, lapply(seq(0.01, 1, by = 0.05), function(a1){
+#   do.call(rbind, lapply(seq(0.01,1, by = 0.05), function(a3){
+#     do.call(rbind, lapply(seq(0.01,1,by=0.05), function(b3){
+#     data.frame(a1,a3,b3,age=1:30, survival = survivalTypeIII_b(a1,a3,b3, 1:30))
+#     }))
+#   }))
+# }))
 
-paramsAll_TypeIII_b <- do.call(rbind, lapply(seq(0.01, 1, by = 0.01), function(a1){
-  data.frame(a1,age=1:30, survival = survivalTypeIII(a1, 1:30))
-}))
+# plot(0:15, survivalTypeIII_b(paramsAll_TypeIII_b[1,1], paramsAll_TypeIII_b[1,2],paramsAll_TypeIII_b[1,3],0:15), type = "l", 
+#      col = rainbow(nrow(paramsAll_TypeIII_b), alpha = 1)[1],
+#      xlab = "Age in years",
+#      ylab = "Survival",
+#      ylim = c(0,1))
+# for(i in 2:nrow(paramsAll_TypeIII_b)){
+#   lines(0:15, survivalTypeIII_b(paramsAll_TypeIII_b[i,1],paramsAll_TypeIII_b[i,2],paramsAll_TypeIII_b[i,3], 0:15), type = "l", 
+#         col = rainbow(nrow(paramsAll_TypeIII_b), alpha = 0.4)[i])
+# }
 
-plot(0:15, survivalTypeIII(paramsAll_typeIII[1,1], 0:15), type = "l", 
-     col = rainbow(nrow(paramsAll_typeIII), alpha = 1)[1],
-     xlab = "Age in years",
-     ylab = "Survival",
-     ylim = c(0,1))
-for(i in 2:nrow(paramsAll_typeIII)){
-  lines(0:15, survivalTypeIII(paramsAll_typeIII[i,1], 0:15), type = "l", 
-        col = rainbow(nrow(paramsAll_typeIII), alpha = 0.4)[i])
-}
+# Newton-Raphson finding roots of nonlinear equations, the point where f(X) = 0
+# initial guess is x0 and true root is r
+# r = x0 + h where h is how far the guess is from the true value of the root
+# a linear tangent line used to approximate teh cloation fo the root 
+# 0 = f(r) = f(xo + h) ~ f(x0) + hf'(x0)
+# h ~ f(x0)/f'(x0)
+# r = x0 + h ~ x0 - f(x0)/f'(x0)
+
+# survFun <- function(x){
+#   survivalConstant(0.5, x)
+# }
+
+
+# uniroot(Euler-Lotka,  c(1,4)) # does not cross zero
 
 
 #' @section Vital Rates (S)tasis, (G)rowth, and (R)eproduction
@@ -130,7 +167,7 @@ D(D(se_fecsur,'s'),'s')
 # library(dplyr)
 # library(xtable)
 # library(rWishart)
-# library(DirichletReg)
+library(DirichletReg)
 # These functions provide information about the multivariate normal distribution 
 # with mean equal to mean and covariance matrix sigma. 
 # dmvnorm gives the density and rmvnorm generates random deviates.
@@ -157,33 +194,60 @@ D(D(se_fecsur,'s'),'s')
 # Age_first_stage2 <- 2
 # Age_last_stage2 <- 2
 
-plot(0:15, survivalTypeI(params1[1,1], params1[1,2], 0:15), type = "l", col = rainbow(nrow(params1), alpha = 1)[1],
-     xlab = "Age in years",
-     ylab = "Survival",
-     ylim = c(0,1))
-for(i in 2:nrow(params1)){
-  lines(0:15, survivalTypeI(params1[i,1], params1[i,2], 0:15), type = "l", col = rainbow(nrow(params1), alpha = 0.4)[i])
-}
+# plot(0:15, survivalTypeI(params1[1,1], params1[1,2], 0:15), type = "l", col = rainbow(nrow(params1), alpha = 1)[1],
+#      xlab = "Age in years",
+#      ylab = "Survival",
+#      ylim = c(0,1))
+# for(i in 2:nrow(params1)){
+#   lines(0:15, survivalTypeI(params1[i,1], params1[i,2], 0:15), type = "l", col = rainbow(nrow(params1), alpha = 0.4)[i])
+# }
+
+#Test
+
 
 # assuming equal proportion of individuals within each age within a stage class 
-IteroStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = params1){
-  varcovdf <- do.call(rbind,lapply(1:nrow(params1), function(i){
-    alpha2 <- params1$a2[i]
-    beta2 <- params1$b2[i]
-    survivalcurve <- function(x){
-      survivalTypeI(alpha2, beta2, x)
-    }
-    muSurv1 <- survivalTypeI(alpha2, beta2, 1)
-    muStasis1 <- integrate(survivalcurve, lower = 1, upper = (Age_first_stage2 -1))$value/length(1:(Age_first_stage2-1))
-    muStasis2 <- integrate(survivalcurve, lower = Age_first_stage2, upper = Age_last_stage2)$value/
-      length(Age_first_stage2:Age_last_stage2)
-    muGrowth <- (survivalTypeI(alpha2, beta2, Age_first_stage2-1)/(sum(survivalTypeI(alpha2, beta2, 0:(Age_first_stage2-1)))))
-    muDeath1 <- 1 - (muStasis1 + muGrowth)
-    data.frame(muSurv1,muStasis1,muStasis2,muGrowth,muDeath1)
-    }))
-  # just bootstrap; copula
-  varcovdf
+# IteroStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = params1){
+#   varcovdf <- do.call(rbind,lapply(1:nrow(params1), function(i){
+#     alpha2 <- params1$a2[i]
+#     beta2 <- params1$b2[i]
+#     survivalcurve <- function(x){
+#       survivalTypeI(alpha2, beta2, x)
+#     }
+#     muSurv1 <- survivalTypeI(alpha2, beta2, 1)
+#     muStasis1 <- integrate(survivalcurve, lower = 1, upper = (Age_first_stage2 -1))$value/length(1:(Age_first_stage2-1))
+#     # muWeightedArithmetic <- 
+#     muStasis2 <- integrate(survivalcurve, lower = Age_first_stage2, upper = Age_last_stage2)$value/
+#       length(Age_first_stage2:Age_last_stage2)
+#     muGrowth <- (survivalTypeI(alpha2, beta2, Age_first_stage2-1)/(sum(survivalTypeI(alpha2, beta2, 0:(Age_first_stage2-1)))))
+#     muDeath1 <- 1 - (muStasis1 + muGrowth)
+#     data.frame(muSurv1,muStasis1,muStasis2,muGrowth,muDeath1)
+#     }))
+#   # just bootstrap; copula
+#   varcovdf
+# }
+
+# Test
+Age_first_stage2 = 2
+Age_last_stage2 = 2
+
+IteroStasisGrowth_constant <- function(Age_first_stage2, Age_last_stage2, alpha1 = 0.009){
+  # Weighted arithmetic mean where weight (proportion of individuals at that age) is survival at that age
+  muSurv1 <- sum(survivalConstant(alpha1, 1)*survivalConstant(alpha1, 1))/(sum(survivalConstant(alpha1, 1)))
+  muStasis1 <- sum(survivalConstant(alpha1, 1:(Age_first_stage2 -1) )* survivalConstant(alpha1, 1:(Age_first_stage2 -1) ))/
+    (sum(survivalConstant(alpha1, 1:(Age_first_stage2 -1)))) 
+  muStasis2 <- sum(survivalConstant(alpha1, Age_first_stage2:Age_last_stage2)* survivalConstant(alpha1, Age_first_stage2:Age_last_stage2 ))/
+    (sum(survivalConstant(alpha1, Age_first_stage2:Age_last_stage2))) 
+  muGrowth <- (survivalConstant(alpha1, Age_first_stage2-1)/(sum(survivalConstant(alpha1, 1:(Age_first_stage2-1)))))
+  muDeath1 <- 1 - (muStasis1 + muGrowth)
+  if(muDeath1 < 0){
+    Dirichletvital <- rdirichlet(1, c(muStasis1, muGrowth, 0.01))
+    muStasis1 <- Dirichletvital[1]
+    muGrowth <- Dirichletvital[2]
+    muDeath1 <- Dirichletvital[3]
+  }
+  data.frame(muSurv1,muStasis1,muStasis2,muGrowth,muDeath1)
 }
+
 
 
 # SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = params1){
@@ -223,14 +287,14 @@ IteroStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
 # Icmix::mvgamma(1, mu = mlest(varcovdf)$muhat, Sigma =  mlest(varcovdf)$sigmahat)
 ## Dirichlet
 # mean
-alpha_stasis <- varcovdf$muStasis1 
+# alpha_stasis <- varcovdf$muStasis1 
 # precision
-rdirichlet(100, alpha = c(mean(varcovdf$muStasis1), mean(varcovdf$muGrowth), mean(varcovdf$muDeath1)))
-dircl <- rdirichlet(100, alpha = c(mean(varcovdf$muStasis1), mean(varcovdf$muGrowth), mean(varcovdf$muDeath1)))
-plot(1:100,dircl[,1],type = "l")
-lines(1:100, dircl[,2], type = "l", col="red")
+# rdirichlet(100, alpha = c(mean(varcovdf$muStasis1), mean(varcovdf$muGrowth), mean(varcovdf$muDeath1)))
+# dircl <- rdirichlet(100, alpha = c(mean(varcovdf$muStasis1), mean(varcovdf$muGrowth), mean(varcovdf$muDeath1)))
+# plot(1:100,dircl[,1],type = "l")
+# lines(1:100, dircl[,2], type = "l", col="red")
 
-SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = params1){
+SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = paramsAll_typeIII_a1){
   varcovdf <- do.call(rbind,lapply(1:nrow(params1), function(i){
     alpha2 <- params1$a2[i]
     beta2 <- params1$b2[i]
@@ -244,6 +308,9 @@ SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
   round(MASS::mvrnorm(1, mu = mlest(varcovdf)$muhat, Sigma =  mlest(varcovdf)$sigmahat),4)
 }
 
+
+eulerlotka <- function(r) sum(L * m * exp(-r * x)) - 1
+res <- uniroot(f = eulerlotka, interval = c(1, stage2))
 
 
 # Stasis <- function(Age_first, Age_last, alpha2, beta2){
@@ -316,7 +383,7 @@ SemelStasisGrowth <- function(Age_first_stage2, Age_last_stage2, params1 = param
   # these are beta - proportions 
   # matching_proportion * sum(survivalTypeI(alpha2, beta2, 
   #                                         Age_first:Age_last))/(length(Age_first:Age_last))
-}
+# }
 
 #' @describeIn matrix_elast Make a matrix of specified dimensions to sum growth, stasis, and reproductive vital rates
 #'   from matrix elements
