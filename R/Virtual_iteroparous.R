@@ -19,7 +19,7 @@
 stage1 <- 1
 stage2 <- 3
  
-MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), nummats = 100){
+MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), nummats = 100){
   if(fast){
     # paramsAll type I: x is age Fujiwara and Diaz-Lopez 2017; hazard is h(x) = alpha2*exp(beta2*x); 
     # exponentially increasing risk of mortality with age, risk due to aging
@@ -29,7 +29,6 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
                                         possibleParams$a2, possibleParams$b2, SIMPLIFY = FALSE))
   } else {
     # Slow paramsAll_typeIII
-    # possibleParams <- params[params$a1 %in% params$a1[params$survival < 0.8 & params$age == stage1+1],]
     possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
     a1 <- unique(possibleParams$a1)
 
@@ -40,62 +39,40 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
   
   vitalrates <- vitalrates[!duplicated(vitalrates$muSurv1),]
   
-  ## select mid point, then mid above or below depending on lambda
   start <- 1
   end <- nrow(vitalrates)
   lambdavec <- 1
   i_list <- c()
-  # start forming list of i index that is close, then make matrices
+  
   while(length(i_list)<=nummats){
-    (i_list);(start);(end)
     i <- sample(start:end, 1)
     S <- vitalrates$muStasis1[i]
     G <- vitalrates$muGrowth[i]
     S2 <- vitalrates$muStasis2[i]
-    f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+    if(itero){
+      f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+    } else {
+      f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
+    }
     t_ij <- matrix(c(S, G,
                      f, S2),
                    nrow = 2)
     (lambda1 <- lambda(t_ij))
     if(lambda1 >= lambdarange[1] & lambda1 <= lambdarange[2]){
       i_list <- c(i_list,i)
-      } # else {
-        # (lambdavec <- c(lambdavec, lambda1))
-        # if(lambda1 > 1){
-        #   if(lambdavec[length(lambdavec)-1] < lambda1){ 
-        #     end <- i
-        #   } else {
-        #     # if in the right direction, keep going
-        #     if(lambda1 > lambdarange[2]){
-        #       end <- i
-        #     } else {
-        #       start <- i
-        #     }
-        #   }
-        #   i <- floor((end-start)/2)
-        #   # i_list <- c(i_list, i)
-        # } else {
-        #   if(lambdavec[length(lambdavec)-1] < lambda1){
-        #     start <- i
-        #   }
-        #   if(lambdavec[length(lambdavec)-1] > lambda1){
-        #     end <- i
-        #   }
-        #   i <- floor((end-start)/2)
-        #   # i_list <- c(i_list, i)
-        # }
-        # 
-        # } # end lambda outside of range
+      }
     } # end while building index list
-    
-    # if(!is.na(generation.time(t_ij))){
-    # mats <- unlist(lapply(sample(1:nrow(vitalrates),nummats), function(i){
-    mats <- unlist(lapply(i_list, function(i){
+  
+  mats <- unlist(lapply(i_list, function(i){
       if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2] & generation.time(t_ij) <= stage2){
         S <- vitalrates$muStasis1[i]
         G <- vitalrates$muGrowth[i]
         S2 <- vitalrates$muStasis2[i]
-        f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+        if(itero){
+          f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+        } else {
+          f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
+        }
         t_ij <- matrix(c(S, G,
                          f, S2),
                        nrow = 2)
@@ -116,8 +93,11 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
             mu <- vitalrates$muSurv1[i]
             alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
             beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-            f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-  
+            if(itero){
+              f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
+            } else {
+              f <- semel_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
+            } 
             listout <- lapply(1:nummats, function(x){
               t_ij <- matrix(c(diri[x,1], diri[x,2],
                                f[x], S2beta[x]), nrow = 2)
@@ -150,69 +130,6 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
   return(mats[!sapply(mats, is.null)])
 }
 
-
-#' @describeIn MPM_semel
-
-# test
-params <- paramsAll
-head(params)
-stage1 <- 1
-stage2 <- 2
-
-MPM_semel <- function(params = paramsAll, stage1, stage2, lambdarange = c(0.5, 1.5), nummats = 100){
-  # a1 <- unique(params$a1[params$survival < 0.8 & params$age == stage2])
-  params <- params[params$survival < 0.8 & params$age == stage2,]
-  
-  vitalrates <- do.call(rbind, lapply(1:nrow(params), function(params_i){
-    SemelStasisGrowth_typeI(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, 
-                               alpha2 = params$a2[params_i],
-                               beta2 = params$b2[params_i])
-  }))
-  mats <- unlist(lapply(1:nrow(vitalrates), function(i){
-    S <- vitalrates$muStasis1[i]
-    G <- vitalrates$muGrowth[i]
-    S2 <- vitalrates$muStasis2[i]
-    f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
-    t_ij <- matrix(c(S, G,
-                     f, 0),
-                   nrow = 2)
-    (lambda1 <- lambda(t_ij))
-    if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2] & generation.time(t_ij) < stage2){
-      D <- max((1-(S+G)), 0.01)
-      diri <- rdirichlet(nummats, c(S,G,D))
-      mu <- S2
-      sig2 <- 0.01
-      alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-      beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-      S2beta <- sapply(rbeta(nummats,alpha1, beta1), function(rb) min(rb,0.79))
-      mu <- vitalrates$muSurv1[i]
-      alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-      beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-      f <- semel_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-      
-      listout <- lapply(1:nummats, function(x){
-        t_ij <- matrix(c(diri[x,1], diri[x,2],
-                         f[x], 0), nrow = 2)
-        if(generation.time(t_ij) <= stage2+1 & generation.time(t_ij) >= stage1){
-          (e_ij <- popbio::elasticity(t_ij))
-          survivalElast <- sum(e_ij[which(generic_mat == "L")])
-          growthElast <- sum(e_ij[which(generic_mat == "G")])
-          fecundElast <- sum(e_ij[which(generic_mat == "F")])
-          
-          list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                     gentim = generation.time(t_ij),
-                                     lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
-                                     netrep = net.reproductive.rate(t_ij),
-                                     AgeRep = stage1+1, lifelength = stage2, alpha2 = params$a2[i],
-                                     beta2 = params$b2[i]))
-        } # end if generation time less than stage 2
-      }) # end making list for stochasticity
-      listout
-    } # end if lambda and gen time before adding stochasticity
-  }), recursive=FALSE) # end mats
-  
-  return(mats[!sapply(mats, is.null)])
-}
 
 
 #' @describeIn MPM_annual One seed bank stage and one above ground reproductive stage
