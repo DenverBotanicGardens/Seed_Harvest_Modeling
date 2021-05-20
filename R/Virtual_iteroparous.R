@@ -41,15 +41,14 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
   vitalrates <- vitalrates[!duplicated(vitalrates$muSurv1),]
   
   ## select mid point, then mid above or below depending on lambda
-  # mats <- unlist(lapply(sample(1:nrow(vitalrates),nummats), function(i){
   start <- 1
   end <- nrow(vitalrates)
   lambdavec <- 1
-  # i_list <- c()
-  i <- i_list <- floor((end - start)/2)
-  
-  mats <- unlist(while(length(listout) < nummats){
-    (i_list)
+  i_list <- c()
+  # start forming list of i index that is close, then make matrices
+  while(length(i_list)<=nummats){
+    (i_list);(start);(end)
+    i <- sample(start:end, 1)
     S <- vitalrates$muStasis1[i]
     G <- vitalrates$muGrowth[i]
     S2 <- vitalrates$muStasis2[i]
@@ -58,85 +57,95 @@ MPM_itero <- function(fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), num
                      f, S2),
                    nrow = 2)
     (lambda1 <- lambda(t_ij))
-    (lambdavec <- c(lambdavec, lambda1))
-    (start);(end);(i_list)
-    if(!is.na(generation.time(t_ij))){
+    if(lambda1 >= lambdarange[1] & lambda1 <= lambdarange[2]){
+      i_list <- c(i_list,i)
+      } # else {
+        # (lambdavec <- c(lambdavec, lambda1))
+        # if(lambda1 > 1){
+        #   if(lambdavec[length(lambdavec)-1] < lambda1){ 
+        #     end <- i
+        #   } else {
+        #     # if in the right direction, keep going
+        #     if(lambda1 > lambdarange[2]){
+        #       end <- i
+        #     } else {
+        #       start <- i
+        #     }
+        #   }
+        #   i <- floor((end-start)/2)
+        #   # i_list <- c(i_list, i)
+        # } else {
+        #   if(lambdavec[length(lambdavec)-1] < lambda1){
+        #     start <- i
+        #   }
+        #   if(lambdavec[length(lambdavec)-1] > lambda1){
+        #     end <- i
+        #   }
+        #   i <- floor((end-start)/2)
+        #   # i_list <- c(i_list, i)
+        # }
+        # 
+        # } # end lambda outside of range
+    } # end while building index list
+    
+    # if(!is.na(generation.time(t_ij))){
+    # mats <- unlist(lapply(sample(1:nrow(vitalrates),nummats), function(i){
+    mats <- unlist(lapply(i_list, function(i){
       if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2] & generation.time(t_ij) <= stage2){
-        # i_list <- c(i_list,i)
-        i <- sample(start:end, 1)
-        i_list <- c(i_list,i)
-        D <- max((1-(S+G)), 0.1)
-        diri <- rdirichlet(nummats, c(S,G,D))
-        mu <- S2
-        sig2 <- 0.01
-        alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-        beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-        # when alpha1 and or beta1 is negative, get NA for rbeta
-        if(alpha1 < 0 && beta1 < 0){
-          alpha1 <- 0.01
-          beta1 <- 0.01
-        }
-          S2beta <- sapply(rbeta(nummats,alpha1, beta1), function(rb) min(rb,0.79))
-          mu <- vitalrates$muSurv1[i]
-          alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-          beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-          f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-
-          listout <- lapply(1:nummats, function(x){
-            t_ij <- matrix(c(diri[x,1], diri[x,2],
-                             f[x], S2beta[x]), nrow = 2)
-            if(is.na(generation.time(t_ij))) print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
-            if(!is.na(generation.time(t_ij))){
-              if(generation.time(t_ij) <= stage2 & generation.time(t_ij) > stage1){
-                (e_ij <- popbio::elasticity(t_ij))
-                survivalElast <- sum(e_ij[which(generic_mat == "L")])
-                growthElast <- sum(e_ij[which(generic_mat == "G")])
-                fecundElast <- sum(e_ij[which(generic_mat == "F")])
-                
-                list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                           gentim = generation.time(t_ij),
-                                           lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
-                                           netrep = net.reproductive.rate(t_ij),
-                                           AgeRep = stage1+1, lifelength = stage2, 
-                                           survparams = if(fast){
-                                             possibleParams$a2b2[i]
-                                           } else {
-                                             a1[i]}
-                                           ))
-                } # end if generation time between stage 1 and stage 2
-              } # end if generation.time worked or not
-            }) # end making list for stochasticity
-        listout
-        } else { # end if lambda and gen time before adding stochasticity
-    # want to see if lambda getting higher or lower to move up or down
-        if(lambda1 > 1){
-          if(lambdavec[length(lambdavec)-1] < lambda1){ 
-            end <- i
-            }
-          if(lambdavec[length(lambdavec)-1] > lambda1){
-            # if in the right direction, keep going
-            if(lambda1 > lambdarange[2]){
-              end <- i
-            } else {
-              start <- i
-            }
+        S <- vitalrates$muStasis1[i]
+        G <- vitalrates$muGrowth[i]
+        S2 <- vitalrates$muStasis2[i]
+        f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+        t_ij <- matrix(c(S, G,
+                         f, S2),
+                       nrow = 2)
+        (lambda1 <- lambda(t_ij))
+        
+          D <- max((1-(S+G)), 0.1)
+          diri <- rdirichlet(nummats, c(S,G,D))
+          mu <- S2
+          sig2 <- 0.01
+          alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
+          beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
+          # when alpha1 and or beta1 is negative, get NA for rbeta
+          if(alpha1 < 0 && beta1 < 0){
+            alpha1 <- 0.01
+            beta1 <- 0.01
           }
-          i <- floor((end-start)/2)
-          i_list <- c(i_list, i)
-        } else {
-          if(lambdavec[length(lambdavec)-1] < lambda1){
-            # end <- i
-            start <- i
-            }
-          if(lambdavec[length(lambdavec)-1] > lambda1){
-            # start <- i
-            end <- i
-            }
-          i <- floor((end-start)/2)
-          i_list <- c(i_list, i)
-          }
-          } # end pick a different index
-      } # end first if generation.time worked before taking and adding stochasticity
+            S2beta <- sapply(rbeta(nummats,alpha1, beta1), function(rb) min(rb,0.79))
+            mu <- vitalrates$muSurv1[i]
+            alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
+            beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
+            f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
+  
+            listout <- lapply(1:nummats, function(x){
+              t_ij <- matrix(c(diri[x,1], diri[x,2],
+                               f[x], S2beta[x]), nrow = 2)
+              if(is.na(generation.time(t_ij))) print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
+              if(!is.na(generation.time(t_ij))){
+                if(generation.time(t_ij) <= stage2 & generation.time(t_ij) > stage1){
+                  (e_ij <- popbio::elasticity(t_ij))
+                  survivalElast <- sum(e_ij[which(generic_mat == "L")])
+                  growthElast <- sum(e_ij[which(generic_mat == "G")])
+                  fecundElast <- sum(e_ij[which(generic_mat == "F")])
+                  
+                  list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
+                                             gentim = generation.time(t_ij),
+                                             lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+                                             netrep = net.reproductive.rate(t_ij),
+                                             AgeRep = stage1+1, lifelength = stage2, 
+                                             survparams = if(fast){
+                                               possibleParams$a2b2[i]
+                                             } else {
+                                               a1[i]}
+                                             ))
+                  } # end if generation time between stage 1 and stage 2
+                } # end if generation.time worked or not
+              }) # end making list for stochasticity
+          listout
+          } # else { # end if lambda and gen time before adding stochasticity
+      
+      # } # end first if generation.time worked before taking and adding stochasticity
     }), recursive=FALSE) # end mats
   return(mats[!sapply(mats, is.null)])
 }
