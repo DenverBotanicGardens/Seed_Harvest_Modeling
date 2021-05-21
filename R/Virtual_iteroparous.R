@@ -30,9 +30,14 @@ MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarang
                                         possibleParams$a2, possibleParams$b2, SIMPLIFY = FALSE))
   } else {
     # Slow paramsAll_typeIII
-    possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
-    a1 <- unique(possibleParams$a1)
-
+    if(itero){
+      possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
+      a1 <- unique(possibleParams$a1)
+    } else {
+        possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.99 & 
+                                                                                             paramsAll_typeIII$age == 1],]
+        possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
+      }
     vitalrates <- do.call(rbind, lapply(a1, function(a1){
       SlowVitalRates(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, alpha1 = a1)
     }))
@@ -113,10 +118,10 @@ MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarang
                 t_ij <- matrix(c(diri[x,1], diri[x,2],
                                  f[x], 0), nrow = 2)
               }
-              if(is.na(generation.time(t_ij))) print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
+              if(is.na(generation.time(t_ij))) print(t_ij) # print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
               if(!is.na(generation.time(t_ij))){
                 # if(generation.time(t_ij) <= stage2 & generation.time(t_ij) > stage1){
-                if(!is.infinite(generation.time(t_ij)) && generation.time(t_ij) < stage2*2){
+                if(!is.infinite(generation.time(t_ij)) & generation.time(t_ij) < stage2*3){
                   (e_ij <- popbio::elasticity(t_ij))
                   survivalElast <- sum(e_ij[which(generic_mat == "L")])
                   growthElast <- sum(e_ij[which(generic_mat == "G")])
@@ -181,7 +186,7 @@ MPM_annual <- function(germRatemu = 0.01, germRatesig2 = 0.01, seedSurvmu = 0.01
                                           gentim = generation.time(t_ij, r=c(1,2), c=2),
                                           lifeexpectancy = fundamental.matrix(t_ij, r = c(1,2), c=2)$meaneta[2],
                                           netrep = net.reproductive.rate(t_ij, r=c(1,2), c=2),
-                                          AgeRep = 1, lifelength = 1))
+                                          AgeRep = 1, lifelength = 1, survparams = NA ))
   })
   return(mats)
 }
