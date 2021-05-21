@@ -31,28 +31,6 @@ source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedH
 
 #Trade-off between survival and fecundity from Takada and Kawai (2020) 
 
-# ------------------------------------------------ constrain lambda ---------------------------
-# functions 
-# Takada and Kawai 2020; s would be s_33
-# Convex for semelparous - see Farrell 2020 and Takada and Kawai 2020
-```{r}
-# Concave for iteroparous from Takada and Kawai 2020 
-## Caswell 2014 As cohort ages, frail individual die sooner, progressively dominated by indivs with lower frailty. 
-## Stasis: survival - treat this as less than perfect survival, need some juvenile mortality 
-# Fujiwara and Diaz-Lopez 2017 
-# The x's represent the median age of the stage class
-# Salguero-Gomez has signs flipped, type I is the area where rare plants fall; equation 2 from Fujiwara and Diaz-Lopez 2017; hazard is
-# h(x) = alpha2*exp(beta2*x); exponentially increasing risk of mortality with age, risk due to aging
-# survivalTypeI <- function(alpha2, beta2, x){
-#   exp((alpha2/beta2)*(1-(exp(beta2*x))))
-# }
-# 
-# 
-# survivalTypeIII <- function(alpha1,alpha3,beta3,x){
-#   exp(-alpha1*x) * exp((alpha3/beta3)*(1-exp(beta3 * x)))
-# }
-
-```
 
 Caswell MPM 2001 - Age-specific survival
 mean and variance of time spent in each stage, mean and variance of time to death
@@ -67,35 +45,16 @@ The wider the difference, the lower the transition should be
 
 ### ie. Silvertown et al 1996 "Interpretation of Elasticity Matrices as an aid to the managment of plant populations for conservation"
 
-```{r}
-# Type 3
-# paramsAllType3 <- do.call(rbind, lapply(seq(0,0.7, by=0.05), function(a1){
-#   outa2 <- do.call(rbind, lapply(seq(0, 0.7, by = 0.05), function(a3){
-#     outb3 <- do.call(rbind, lapply(seq(0,0.7, by=0.05), function(b3){
-#       surv <- survivalTypeIII(a1, a3, b3, x =seq(0.5,30,by=0.5))
-#       data.frame(a1, a3, b3, age = seq(0.5,30,by=0.5), survival = surv, a1a3b3 = paste(a1,a3,b3,sep=""))
-#       }))
-#     }))
-#   }))
-
-
-# Type 1
-# paramsAll <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(a2){
-#   outb2 <- do.call(rbind, lapply(seq(0.01,1, by=0.01), function(b2){
-#     surv <- survivalTypeI(a2, b2, 1:30)
-#     data.frame(a2, b2, age = 1:30, survival = surv, a2b2 = paste(a2,b2,sep=""))
-#   }))
-# }))
-```
-
 
 # Iteroparous fast
 ```{r}
 # ------------------ Iteroparous fast ------------------------
-
-itfast <- MPM_itero(params = paramsAll, stage1 = 1, stage2 = 3, maxSurvVeg = 0.5, maxSurvRep = 0.12, minSurv = 0.01, NumMats = 100)
+itfast <- MPM_iterosemel(itero = TRUE, fast = TRUE, stage1 = 1, stage2 = 3, lambdarange = c(0.8, 1.2), nummats = 50)
 MPMs_itfast <- lapply(itfast, function(x) x[[1]]) # The first item is the MPM
 lamitfast <-data.frame(do.call(rbind, lapply(itfast, function(x) x[[3]])), parity = "itero", speed = "fast") 
+MPMs_itfast <- MPMs_itfast[lamitfast$gentim <= 3]
+lamitfast <- lamitfast[lamitfast$gentim <= 3,]
+itfast <- itfast[lamitfast$gentim <= 3]
 median(lamitfast$lam)
 mean(lamitfast$lam)
 sd(lamitfast$lam)
@@ -139,23 +98,6 @@ layout(matrix(c(1,2,3,4), 2,2),widths = c(6,2), heights = c(2,6))
 # ---------------------------------------------
 ```
 
-```{r}
-params_itero_fast <- do.call(rbind,lapply(itfast, function(x) x[[4]]))
-params_itero_fast <- params_itero_fast[!duplicated(params_itero_fast[,1:2]),]
-# dev.off()
-
-plot(0:26, survivalTypeI(params_itero_fast[1,1], params_itero_fast[1,2], 0:26), type = "l", 
-     col = rainbow(nrow(params_itero_fast), alpha = 0.5)[1],
-     # xlab = "",xaxt = "n", 
-     xlab = "Age in years",
-     ylab = "Survival (stasis)",
-     ylim = c(0,1))
-for(i in 2:nrow(params_itero_fast)){
-  lines(0:26, survivalTypeI(params_itero_fast[i,1], params_itero_fast[i,2], 0:26), type = "l", 
-        col = rainbow(nrow(params_itero_fast), alpha = 0.5)[i])
-}
-
-```
 
 ```{r}
 #Elasticities
@@ -185,10 +127,12 @@ with plants, each individual experiences a different environment depending on wh
 # Ages are end points of age
   stage1 <- 10
   stage2 <- 20
-itslow <- MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.99, maxSurvRep = 0.6,minSurv = 0.1, NumMats = 100)
+itslow <- MPM_iterosemel(itero = TRUE, fast = FALSE, stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
-
-lamitslow <-data.frame(do.call(rbind, lapply(itslow, function(x) x[[3]])), parity = "itero", speed = "slow") 
+lamitslow <- data.frame(do.call(rbind, lapply(itslow, function(x) x[[3]])), parity = "itero", speed = "slow") 
+lamitslow <- lamitslow[lamitslow$gentim <= stage2]
+MPMs_itslow <- MPMs_itslow[lamitslow$gentim <= stage2]
+itslow <- itslow[lamitslow$gentim <= stage2]
 median(lamitslow$lam)
 mean(lamitslow$lam)
 sd(lamitslow$lam)
@@ -201,10 +145,6 @@ fundamental.matrix(MPMs_itslow[[1]], r = 1) # $meaneta mean of time to death by 
 netreprorate <- unlist(lapply(MPMs_itslow, function(x) net.reproductive.rate(x)))
 mean(netreprorate)
 
-params_itero_slow <- do.call(rbind,lapply(itslow, function(x) x[[4]]))
-params_itero_slow <- params_itero_slow[!duplicated(params_itero_slow[,1:2]),]
-
-
 matrixmetrics_itero <- do.call(rbind, list(lamitslow, lamitfast))
 
 jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
@@ -213,6 +153,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
     # Plot 1 density generation time
+    
       den <- density(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "fast"])
       denslow <- density(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "slow"])
       par(mar=c(0,4,0,0))
@@ -220,9 +161,9 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            type = "l",bty="n", col = "red",
            xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
            ylim = c(min(c(den$y, denslow$y)), max(c(denslow$y))))
-      # lines(den$x,den$y, col = "grey70",
-      #      xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
-      #      ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
+      lines(den$x,den$y, col = "grey70",
+           xlim = c(min(c(den$x, denslow$x)), max(c(den$x, denslow$x))),
+           ylim = c(min(c(den$y, denslow$y)), max(c(den$y, denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "slow"],matrixmetrics_itero$lam[matrixmetrics_itero$speed == "slow"], 
@@ -232,7 +173,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            ylim = c(min(matrixmetrics_itero$lam),max(matrixmetrics_itero$lam)))
       points(matrixmetrics_itero$gentim[matrixmetrics_itero$speed == "fast"], 
              matrixmetrics_itero$lam[matrixmetrics_itero$speed == "fast"], pch = 2, col = "grey70")
-      legend("bottomright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
+      legend("topright", legend = c("slow","fast"), col = c("red","grey70"), pch = c(16,2))
       mtext("a)", 3, line = 0.5,adj = -0.25)
     # Plot 3 blank
       par(mar=c(0,0,0,0))
@@ -292,30 +233,14 @@ dev.off()
 ```
 
 # semel fast
-semelparous get to reproductive and die so stage 1 [1,7] is set and to be in the middle, stage 2 is one year double that of stage1 [2,14]
-max 0.04, min 0.009
 ```{r}
-sefast <- MPM_semel(paramsAll, stage1 = 1, stage2 = 2, maxSurv = 0.6, minSurv = 0.00001, vegminSurv = 0.3, vegmaxSurv = 0.4,
-                    NumMats = 100)
+sefast <- MPM_iterosemel(itero = FALSE, fast = TRUE, stage1 = 1, stage2 = 2, lambdarange = c(0.8, 1.2),nummats = 100)
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
 lamsefast <-data.frame(do.call(rbind, lapply(sefast, function(x) x[[3]])), parity = "semel", speed = "fast") 
 median(lamsefast$lam)
 mean(lamsefast$lam)
 sd(lamsefast$lam)
 generation.time(mean(MPMs_sefast))
-
-
-params_semel_fast <- do.call(rbind, lapply(sefast, function(x) x[[4]]))
-# plot(0:26, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:26), type = "l", 
-#      col = rainbow(nrow(params_semel), alpha = 1)[1],
-#      # xlab = "",xaxt = "n", 
-#      xlab = "Age in years",
-#      ylab = "Survival (stasis)",
-#      ylim = c(0,1))
-# for(i in 2:nrow(params_semel)){
-#   lines(0:26, survivalTypeI(params_semel[i,1], params_semel[i,2], 0:26), type = "l", 
-#         col = rainbow(nrow(params_semel), alpha = 1)[i])
-# }
 
 # dev.off()
 # ---------------------------------------------
@@ -370,8 +295,6 @@ par(mar = c(0,0,0,0))
                      col = cols[as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
                                                                    Elasts_sefast$lam > 0.8], 
                                                breaks = 50))], cex = 2) 
-        # AddToTernary(points, Elasts_itslow_points, pch = 17, 
-        #              col = cols2(50)[as.numeric(cut(Elasts_itslow$lam, breaks = 50))], cex = 1) 
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
                         pch = c(16,17), col = "black", cex = 1.25)
         
@@ -385,31 +308,20 @@ par(mar = c(0,0,0,0))
 # ---------------------------- Semelparous Slow ---------------------
 stage1 <- 5
 stage2 <- stage1 + 1
-seslow <- MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, minSurv = 0.1, maxSurv = 0.8, vegminSurv = 0.1, vegmaxSurv = 0.85, NumMats = 100)
-# seslow <- lapply(1:100, function(x) MPM_semel(params = params_semel_slow, stage1 = stage1, stage2 = stage2))
+seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE, stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
-
 lamseslow <-data.frame(do.call(rbind, lapply(seslow, function(x) x[[3]])), parity = "semel", speed = "slow") 
+# lamseslow <- lamseslow[lamseslow$gentim < 10,]
+# lamseslow <- lamseslow[!is.infinite(lamseslow$gentim),]
+# seslow <- seslow[!is.infinite(lamseslow$gentim)]
+# seslow <- seslow[lamseslow$gentim < 10]
+# MPMs_seslow <- MPMs_seslow[lamseslow$gentim < 10]
 median(lamseslow$lam)
 mean(lamseslow$lam)
 sd(lamseslow$lam)
 generation.time(mean(MPMs_seslow))
 mean(unlist(lapply(seslow, function(x) x[[3]]$gentim)))
 fundamental.matrix(mean(MPMs_seslow))
-
-params_semel_slow <- do.call(rbind,lapply(seslow, function(x) x[[4]]))
-params_semel_slow <- params_semel_slow[!duplicated(params_semel_slow[,1:2]),]
-
-# plot(0:26, survivalTypeI(params_semel[1,1], params_semel[1,2], 0:26), type = "l", 
-#      col = rainbow(nrow(params_semel), alpha = 1)[1],
-#      # xlab = "",xaxt = "n", 
-#      xlab = "Age in years",
-#      ylab = "Survival (stasis)",
-#      ylim = c(0,1))
-# for(i in 2:nrow(params_semel)){
-#   lines(0:26, survivalTypeI(params_semel[i,1], params_semel[i,2], 0:26), type = "l", 
-#         col = rainbow(nrow(params_semel), alpha = 1)[i])
-# }
 
 matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
 
@@ -434,7 +346,7 @@ matrixmetrics <- do.call(rbind, list(lamseslow, lamsefast))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
            ylab = expression(lambda), xlab = "generation time",
            main = "", pch = 16, col = "red",
-           xlim = c(min(matrixmetrics$gentim),max(matrixmetrics$gentim)),
+           # xlim = c(min(matrixmetrics$gentim),max(matrixmetrics$gentim)),
            ylim = c(min(matrixmetrics$lam),max(matrixmetrics$lam)))
       points(matrixmetrics$gentim[matrixmetrics$speed == "fast"], 
              matrixmetrics$lam[matrixmetrics$speed == "fast"], pch = 2, col = "grey70")
@@ -502,11 +414,8 @@ dev.off()
 
 # Annuals
 ```{r}
-stage1 <- 3 # years in the seed bank
-stage2 <- stage1+1
-
-annuals <- MPM_annual(maxSurv = 0.78, minSurv = 0.68, 
-                      seedminSurv = 0.001, seedmaxSurv = 0.1, stage1 = stage1, stage2 = stage2, NumMats = 100)
+annuals <- MPM_annual(germRatemu = 0.1, germRatesig2 = 0.01, seedSurvmu = 0.0001, seedSurvsig2 = 0.00001, 
+                      survS2mu = 0.7, survS2sig2 = 0.0001, NumMats = 100)
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
@@ -533,7 +442,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
       plot(denslow$x, denslow$y, xlab = "",ylab="", main="", 
            xaxt = "n", yaxt = "n", type = "l",bty="n", col = "red",
            xlim = c(min(c(den$x, denslow$x, denfast$x)), max(c(den$x, denslow$x, denfast$x))),
-           ylim = c(min(c(den$y, denslow$y, denfast$y)), max(c(denslow$y)))) #den$y, denfast$y, 
+           ylim = c(min(c(den$y, denslow$y, denfast$y)), max(c(denslow$y))))
     # Plot 2 scatter plot
       par(mar=c(4,4,0,0))
       plot(matrixmetrics$gentim[matrixmetrics$speed == "slow"],matrixmetrics$lam[matrixmetrics$speed == "slow"], 
@@ -591,10 +500,10 @@ par(mar = c(0,0,0,0))
                      col = cols[as.numeric(cut(Elasts_sefast$lam, breaks = 50))], cex = 2) 
         AddToTernary(points, Elasts_seslow_points, pch = 17, 
                      col = cols[as.numeric(cut(Elasts_seslow$lam, breaks = 50))], cex = 1)
-        AddToTernary(points, Elasts_annual_points, pch = 18,
+        AddToTernary(points, Elasts_annual_points, pch = 2,
                      col = cols[as.numeric(cut(Elasts_annual$lam, breaks = 50))], cex = 2)
-        legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
-                        pch = c(16,17), col = "black", cex = 0.85)
+        legend("topright", legend = c("Semelparous fast", "Semelparous slow", "Annuals"),
+                        pch = c(16,17,2), col = "black", cex = 0.85)
         # Lambda color ramp
         par(mar = c(8,2,2,2))
         legend_image <- as.raster(matrix(cols[1:50]), ncol=1)
@@ -648,7 +557,7 @@ for(i in seq(2,nrow(params_semel_fast), by = 5000)){
 }
 mtext("semelparous", adj=0.5, cex = 0.75)
 abline(v = 1)
-abline(v = mean(lamsefast$gentim), lty = 3) # stage1 + 1
+abline(v = mean(lamsefast$gentim)+0.01, lty = 3, lwd = 1.5) # stage1 + 1
 abline(v = 2)
 
 ### itero slow
@@ -661,9 +570,9 @@ for(i in 2:nrow(params_itero_slow)){
   lines(0:15, survivalTypeI(params_itero_slow[i,1], params_itero_slow[i,2], 0:15), type = "l", col = rainbow(nrow(params_itero_slow), alpha = 1)[i])
 }
 mtext("slow", adj=0.5, side = 2, line = 4)
-abline(v = 5) # 4:rpois(1,4); stage 2 = stage1 + [3,rpois(1,5)]
+abline(v = 10) 
 abline(v = mean(lamitslow$gentim), lty = 3) # stage1 + 1
-abline(v = 9)
+abline(v = 20)
 
 #### semelparous slow---------------------------------
 par(mar = c(4,3,1,2))
@@ -675,9 +584,9 @@ for(i in seq(2,nrow(params_semel_slow), by = 10)){
   lines(0:15, survivalTypeI(params_semel_slow[i,1], params_semel_slow[i,2], 0:15), type = "l",
         col = rainbow(nrow(params_semel_slow), alpha = 1)[i])
 }
-abline(v = 3) 
-abline(v = mean(lamseslow$gentim), lty = 3) # stage1 + 1
-abline(v = 4)
+abline(v = 5) 
+abline(v = mean(lamseslow$gentim), lty = 3)
+abline(v = 6)
 
 # Plot 5
 par(mar=c(4,4,3,2))
