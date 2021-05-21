@@ -271,18 +271,13 @@ frame()
 #Elasticities
 ```{r}
 dev.off()
+cols <-  viridis(50, alpha = 0.75, begin = 0, end = 1)
 Elasts_sefast <- data.frame(do.call(rbind,lapply(sefast, function(x) x[[3]])), 
                             parity = "semelparous", speed = "fast")
 
 
 Elasts_sefast_points <- lapply(sefast, function(x) as.numeric(x[[3]][,c("G","S","R")]))[Elasts_sefast$lam < 1.2 &
-                                                                                          Elasts_sefast$lam > 0.8]
-
-Elasts_seall <- do.call(rbind, list(Elasts_sefast))
- max(Elasts_sefast$S)
-min(Elasts_sefast$S)
- max(Elasts_sefast$R)
-min(Elasts_sefast$R)
+                                                                                           Elasts_sefast$lam > 0.8]
 
 par(mar = c(0,0,0,0))
         Ternary::TernaryPlot(point = "up",
@@ -291,12 +286,12 @@ par(mar = c(0,0,0,0))
                              ctip = "R",
                              alab = "Growth \u2192", blab = "Stasis \u2192", clab = "\u2190 fecundity", # with arrows
                              grid.minor.lines = 0) 
-        AddToTernary(points, Elasts_sefast_points, pch = 16, 
+        AddToTernary(points, Elasts_sefast_points, pch = 21, 
                      col = cols[as.numeric(cut(Elasts_sefast$lam[Elasts_sefast$lam < 1.2 &
                                                                    Elasts_sefast$lam > 0.8], 
                                                breaks = 50))], cex = 2) 
         legend("topright", legend = c("Semelparous fast", "Semelparous slow"),
-                        pch = c(16,17), col = "black", cex = 1.25)
+                        pch = c(21,24), col = "black", cex = 1.25)
         
         
 ```
@@ -306,16 +301,11 @@ par(mar = c(0,0,0,0))
 # Semel slow
 ```{r}
 # ---------------------------- Semelparous Slow ---------------------
-stage1 <- 5
+stage1 <- 10
 stage2 <- stage1 + 1
 seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE, stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
 lamseslow <-data.frame(do.call(rbind, lapply(seslow, function(x) x[[3]])), parity = "semel", speed = "slow") 
-# lamseslow <- lamseslow[lamseslow$gentim < 10,]
-# lamseslow <- lamseslow[!is.infinite(lamseslow$gentim),]
-# seslow <- seslow[!is.infinite(lamseslow$gentim)]
-# seslow <- seslow[lamseslow$gentim < 10]
-# MPMs_seslow <- MPMs_seslow[lamseslow$gentim < 10]
 median(lamseslow$lam)
 mean(lamseslow$lam)
 sd(lamseslow$lam)
