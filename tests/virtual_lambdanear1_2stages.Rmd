@@ -130,9 +130,9 @@ with plants, each individual experiences a different environment depending on wh
 itslow <- MPM_iterosemel(itero = TRUE, fast = FALSE, stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 lamitslow <- data.frame(do.call(rbind, lapply(itslow, function(x) x[[3]])), parity = "itero", speed = "slow") 
-lamitslow <- lamitslow[lamitslow$gentim <= stage2]
-MPMs_itslow <- MPMs_itslow[lamitslow$gentim <= stage2]
-itslow <- itslow[lamitslow$gentim <= stage2]
+# itslow <- itslow[lamitslow$gentim <= stage2]
+# lamitslow <- lamitslow[lamitslow$gentim <= stage2]
+# MPMs_itslow <- MPMs_itslow[lamitslow$gentim <= stage2]
 median(lamitslow$lam)
 mean(lamitslow$lam)
 sd(lamitslow$lam)
@@ -147,8 +147,8 @@ mean(netreprorate)
 
 matrixmetrics_itero <- do.call(rbind, list(lamitslow, lamitfast))
 
-jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
-     width = 100, height = 100, units="mm", res = 300)
+# jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Itero_lambdagenerationtime.jpg",
+#      width = 100, height = 100, units="mm", res = 300)
 
     layout(matrix(c(1,2,3,4), 2,2),widths = c(6,1), heights = c(1,6))
 
@@ -190,7 +190,7 @@ jpeg("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/U
            ylim = c(min(c(denlamfast$x, denlamslow$x)), max(c(denlamfast$x, denlamslow$x))),
            xlim = c(min(c(denlamfast$y, denlamslow$y)), max(c(denlamfast$y, denlamslow$y))))
 
-dev.off()
+# dev.off()
 # ---------------------------------------------
 ```
 
@@ -301,7 +301,7 @@ par(mar = c(0,0,0,0))
 # Semel slow
 ```{r}
 # ---------------------------- Semelparous Slow ---------------------
-stage1 <- 10
+stage1 <- 2
 stage2 <- stage1 + 1
 seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE, stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
@@ -406,6 +406,10 @@ dev.off()
 ```{r}
 annuals <- MPM_annual(germRatemu = 0.1, germRatesig2 = 0.01, seedSurvmu = 0.0001, seedSurvsig2 = 0.00001, 
                       survS2mu = 0.7, survS2sig2 = 0.0001, NumMats = 100)
+MPMs_annuals <- lapply(annuals, function(x) x[[1]])
+
+lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
+annuals <- annuals[lamannuals$lam <= 1.2 & lamannuals$lam >= 0.8]
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
