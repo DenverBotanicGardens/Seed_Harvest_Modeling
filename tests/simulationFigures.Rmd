@@ -124,19 +124,20 @@ Iteroparous fast
   stage1 <- 1
   stage2 <- 3
   
-itfast <- MPM_iterosemel(itero = TRUE, fast = TRUE, stage1 = 1, stage2 = 3, nummats = 1000)
+itfast <- MPM_iterosemel(itero = TRUE, fast = TRUE, stage1 = 1, stage2 = 3, nummats = 100)
 lambdaItFast <- lapply(itfast, function(x) x[[3]]$lam)
 MPMs <- lapply(itfast, function(x) x[[1]])
-MPMsplus <- sample(MPMs[which(lambdaItFast < 1.1 & lambdaItFast >=1)], 100, replace = TRUE)
+# take 100 above and 100 below lambda = 1
+MPMsplus <- sample(MPMs[which(lambdaItFast <= 1.2 & lambdaItFast >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMsplus, function(x) lambda(x))))
-MPMsminus <- sample(MPMs[which(lambdaItFast <= 1 & lambdaItFast > 0.9)], 100, replace = TRUE)
+MPMsminus <- sample(MPMs[which(lambdaItFast <= 1 & lambdaItFast >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMsminus, function(x) lambda(x))))
 MPMs_itfast <- do.call(c, list(MPMsplus, MPMsminus))
 
 
 
 iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_itfast, speed = "fast", parity = "itero")
+  virtualPVA(StartPopSize, MPMs_itfast, speed = "fast", parity = "itero", reps = 1000)
 }))
 
 plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
@@ -158,20 +159,19 @@ plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(R
 
 # iteroslow
 # ```{r}
-itslow <-  MPM_itero(paramsAll, stage1 = stage1, stage2 = stage2, maxSurvVeg = 0.99, maxSurvRep = 0.6,minSurv = 0.1, 
-                     NumMats = 1000)
+itslow <-  MPM_iterosemel(itero = TRUE, fast = FALSE, stage1 = 10, stage2 = 20, lambdarange = c(0.8,1.2), nummats = 100)
 lambdaItslow <- lapply(itslow, function(x) x[[3]]$lam)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 (generation.time(mean(MPMs_itslow)))
-MPMs_itslowplus <- sample(MPMs_itslow[which(lambdaItslow < 1.1 & lambdaItslow >=1)], 100, replace = TRUE)
+MPMs_itslowplus <- sample(MPMs_itslow[which(lambdaItslow <= 1.2 & lambdaItslow >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_itslowplus, function(x) lambda(x))))
-MPMs_itslowminus <- sample(MPMs_itslow[which(lambdaItslow <= 1 & lambdaItslow > 0.9)], 100, replace = TRUE)
+MPMs_itslowminus <- sample(MPMs_itslow[which(lambdaItslow <= 1 & lambdaItslow >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_itslowminus, function(x) lambda(x))))
 MPMs_itslow <- do.call(c, list(MPMs_itslowplus, MPMs_itslowminus))
 
 
 iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_itslow, speed = "slow", parity = "itero")
+  virtualPVA(StartPopSize, MPMs_itslow, speed = "slow", parity = "itero", reps = 1000)
 }))
 
 plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
@@ -190,8 +190,12 @@ plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(R
 #Semelparous
 #annuals   
 #```{r}
+### COME BACK TO THIS!!
 annuals <- MPM_annual(germRatemu = 0.1, germRatesig2 = 0.01, seedSurvmu = 0.0001, seedSurvsig2 = 0.00001, 
                       survS2mu = 0.7, survS2sig2 = 0.0001, NumMats = 1000)
+MPMs_annuals <- lapply(annuals, function(x) x[[1]])
+lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
+annuals <- annuals[lamannuals$lam <= 1.2 & lamannuals$lam >= 0.8]
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
 lamannuals <-data.frame(do.call(rbind, lapply(annuals, function(x) x[[3]])), parity = "semel", speed = "annual") 
 median(lamannuals$lam)
@@ -200,9 +204,9 @@ sd(lamannuals$lam)
 generation.time(mean(MPMs_annuals), r=c(1,2), c=2) # because the rep can either produce seed or can produce reproductive
 mean(unlist(lapply(annuals, function(x) x[[3]]$gentim)))
 fundamental.matrix(mean(MPMs_annuals), r=c(1,2), c=2)
-MPMs_annualsplus <- sample(MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam >=1)], 100, replace = TRUE)
+MPMs_annualsplus <- sample(MPMs_annuals[which(lamannuals$lam <= 1.2 & lamannuals$lam >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_annualsplus, function(x) lambda(x))))
-MPMs_annualsminus <- sample(MPMs_annuals[which(lamannuals$lam <= 1 & lamannuals$lam > 0.9)], 100, replace = TRUE)
+MPMs_annualsminus <- sample(MPMs_annuals[which(lamannuals$lam < 1 & lamannuals$lam >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_annualsminus, function(x) lambda(x))))
 MPMs_annuals <- do.call(c, list(MPMs_annualsplus, MPMs_annualsminus))
 # MPMs_annuals <- MPMs_annuals[which(lamannuals$lam < 1.1 & lamannuals$lam > 0.9)]
@@ -210,7 +214,7 @@ hist(unlist(lapply(MPMs_annuals, function(x) lambda(x))))
 
 
 annuals_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_annuals, speed = "annual", parity = "semel", annualYN = TRUE)
+  virtualPVA(StartPopSize, MPMs_annuals, speed = "annual", parity = "semel", annualYN = TRUE, reps = 1000)
 }))
 
 plotannual <- ggplot(annuals_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
@@ -228,14 +232,13 @@ plotannual
 
 #biennials
 #```{r}
-sefast <- MPM_semel(paramsAll, stage1 = 1, stage2 = 2, maxSurv = 0.6, minSurv = 0.00001, vegminSurv = 0.3, vegmaxSurv = 0.4,
-                    NumMats = 1000)
+sefast <- MPM_iterosemel(itero = FALSE, fast = TRUE, stage1 = 1, stage2 = 2, lambdarange = c(0.8, 1.2),nummats = 100)
 
 lamsefast <- lapply(sefast, function(x) x[[3]]$lam) 
 MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
-MPMs_sefastplus <- sample(MPMs_sefast[which(lamsefast < 1.1 & lamsefast >=1)], 100, replace = TRUE)
+MPMs_sefastplus <- sample(MPMs_sefast[which(lamsefast <= 1.2 & lamsefast >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_sefastplus, function(x) lambda(x))))
-MPMs_sefastminus <- sample(MPMs_sefast[which(lamsefast <= 1 & lamsefast > 0.9)], 100, replace = TRUE)
+MPMs_sefastminus <- sample(MPMs_sefast[which(lamsefast <= 1 & lamsefast >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_sefastminus, function(x) lambda(x))))
 MPMs_sefast <- do.call(c, list(MPMs_sefastplus, MPMs_sefastminus))
 # MPMs_sefast <- MPMs_sefast[which(lamsefast < 1.1 & lamsefast > 0.9)]
@@ -243,7 +246,7 @@ MPMs_sefast <- do.call(c, list(MPMs_sefastplus, MPMs_sefastminus))
 
 
 semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_sefast, speed = "fast", parity = "semel")
+  virtualPVA(StartPopSize, MPMs_sefast, speed = "fast", parity = "semel", reps = 1000)
 }))
 
 plotSefast <- ggplot(semelfast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
@@ -264,24 +267,24 @@ plotSefast
 #   stage2 <- stage1+1
 #   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
 #   })
-stage1 <- 5
+stage1 <- 2
 stage2 <- stage1 + 1
-seslow <- MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, minSurv = 0.1, maxSurv = 0.8, vegminSurv = 0.1, vegmaxSurv = 0.85, NumMats = 1000)
+seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE,  stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
 MPMs_seslow <- lapply(seslow, function(x) x[[1]])
 lamseslow <- lapply(seslow, function(x) x[[3]]$lam) 
-hist(unlist(lamseslow))
-hist(unlist(lamsefast))
-hist(unlist(lambdaItFast))
-hist(unlist(lambdaItslow))
-hist(lamannuals$lam)
-MPMs_seslowplus <- sample(MPMs_seslow[which(lamseslow < 1.1 & lamseslow >=1)], 100, replace = TRUE)
+# hist(unlist(lamseslow))
+# hist(unlist(lamsefast))
+# hist(unlist(lambdaItFast))
+# hist(unlist(lambdaItslow))
+# hist(lamannuals$lam)
+MPMs_seslowplus <- sample(MPMs_seslow[which(lamseslow <= 1.2 & lamseslow >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_seslowplus, function(x) lambda(x))))
-MPMs_seslowminus <- sample(MPMs_seslow[which(lamseslow <= 1 & lamseslow > 0.9)], 100, replace = TRUE)
+MPMs_seslowminus <- sample(MPMs_seslow[which(lamseslow <= 1 & lamseslow >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_seslowminus, function(x) lambda(x))))
 MPMs_seslow <- do.call(c, list(MPMs_seslowplus, MPMs_seslowminus))
 
 semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_seslow, speed = "slow", parity = "semel")
+  virtualPVA(StartPopSize, MPMs_seslow, speed = "slow", parity = "semel", reps = 1000)
 }))
 
 plotSeslow <- ggplot(semelslow_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
