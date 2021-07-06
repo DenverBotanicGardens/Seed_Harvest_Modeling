@@ -21,27 +21,47 @@
 # itero = FALSE
 # fast = FALSE
 # 
-# stage1 <- 1
-# stage2 <- 3
+# stage1 <- 25
+# stage2 <- 26
+# itero <- FALSE
+# fast <- FALSE 
+# if slow, then for iteroparous need to restrict survival to 0.8 at transition to reproductive (stage 1 + 1) while for semelparous need to , I'd say do same for both
+# Slow paramsAll_typeIII
+# if(itero){
+#   possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
+#   a1 <- unique(possibleParams$a1)
+# } else {
+# In Fujiwara and Diaz-Lopez early maturation is this curve so should be fast... 
+# under constant risk, exponentially declining survivorship curve Type III
 
- 
 MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarange = c(0.8,1.2), nummats = 100, fastslowcutoff = 5){
   if(fast){
     # paramsAll type I: x is age Fujiwara and Diaz-Lopez 2017; hazard is h(x) = alpha2*exp(beta2*x); 
     # exponentially increasing risk of mortality with age, risk due to aging
     possibleParams <- paramsAll[paramsAll$survival < 0.8 & paramsAll$age == stage1+1,]
-    vitalrates <- do.call(rbind, mapply(function(a2, b2) FastVitalRates(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, alpha2 = a2, beta2 = b2),
+    vitalrates <- do.call(rbind, mapply(function(a2, b2) FastVitalRates(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, 
+                                                                        alpha2 = a2, beta2 = b2),
                                         possibleParams$a2, possibleParams$b2, SIMPLIFY = FALSE))
   } else {
-    # if slow, then for iteroparous need to restrict survival to 0.8 at transition to reproductive (stage 1 + 1) while for semelparous need to , I'd say do same for both
-    # Slow paramsAll_typeIII
-    # if(itero){
-    #   possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
-    #   a1 <- unique(possibleParams$a1)
-    # } else {
-        possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.99 & 
+# moved above
+    if(itero){
+        possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & 
                                                                                              paramsAll_typeIII$age == 1],]
-        possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.8 & paramsAll_typeIII$age == stage1+1],]
+    } else {
+      #semel
+      possibleParams <- paramsAll_typeIII[paramsAll_typeIII$a1 %in% paramsAll_typeIII$a1[paramsAll_typeIII$survival < 0.93 & 
+                                                                                           paramsAll_typeIII$age == 1],]
+        }
+        # possibleParams <- possibleParams[possibleParams$a1 %in% possibleParams$a1[possibleParams$survival < 0.8 & 
+        #                                                                             possibleParams$age == stage1+1],]
+        if(itero){
+        possibleParams <- possibleParams[possibleParams$survival < 0.2 & # 0.8 & 
+                                           possibleParams$age == stage1 + 1,]
+        a1 <- possibleParams$a1
+        } else {
+          possibleParams <- possibleParams[possibleParams$survival < 0.8 & possibleParams$age == stage1 + 1,]
+          a1 <- possibleParams$a1
+        }
       # }
     vitalrates <- do.call(rbind, lapply(a1, function(a1){
       SlowVitalRates(Age_first_stage2 = stage1+1, Age_last_stage2 = stage2, alpha1 = a1)
@@ -50,7 +70,6 @@ MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarang
   
   start <- 1
   end <- nrow(vitalrates)
-  # lambdavec <- 1
   i_list <- c()
   
   while(length(i_list)<=nummats){
@@ -64,6 +83,7 @@ MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarang
                        f, S2),
                      nrow = 2)
     } else {
+      if(!fast) S2 <- runif(1, 0.001, 0.01)
       f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
       t_ij <- matrix(c(S, G,
                        f, 0),
@@ -84,157 +104,42 @@ MPM_iterosemel <- function(itero = TRUE, fast = TRUE, stage1, stage2, lambdarang
       }
     } # end while building index list
 
-  mats <- unlist(lapply(i_list, function(i){
-    if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2]){ # } & generation.time(t_ij) <= stage2){
-      S <- vitalrates$muStasis1[i]
-      G <- vitalrates$muGrowth[i]
-      S2 <- vitalrates$muStasis2[i]
+  mats <- #unlist(
+    lapply(i_list, function(i){
       if(itero){
         f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
+        t_ij <- matrix(c(S, G,
+                         f, S2),
+                       nrow = 2)
       } else {
         f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
-      }
-      if(itero){
         t_ij <- matrix(c(S, G,
-                         f, S2), nrow = 2)
-      } else {
-        t_ij <- matrix(c(S, G,
-                         f, 0), nrow = 2)
+                         f, 0),
+                       nrow = 2)
       }
-      (lambda1 <- lambda(t_ij))
       
-      D <- max((1-(S+G)), 0.1)
-      diri <- rdirichlet(nummats, c(S,G,D))
-      mu <- S2
-      sig2 <- 0.01
-      alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-      beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-      # when alpha1 and or beta1 is negative, get NA for rbeta
-      if(alpha1 < 0 && beta1 < 0){
-        alpha1 <- 0.01
-        beta1 <- 0.01
-      }
-      S2beta <- sapply(rbeta(nummats,alpha1, beta1), function(rb) min(rb,0.79))
-      mu <- vitalrates$muSurv1[i]
-      alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-      beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-      if(itero){
-        f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-      } else {
-        f <- semel_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-      } 
-      listout <- lapply(1:nummats, function(x){
-        if(itero){
-          t_ij <- matrix(c(diri[x,1], diri[x,2],
-                           f[x], S2beta[x]), nrow = 2)
-        } else {
-          t_ij <- matrix(c(diri[x,1], diri[x,2],
-                           f[x], 0), nrow = 2)
-        }
-        if(is.na(generation.time(t_ij))) print(t_ij) # print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
-        if(!is.na(generation.time(t_ij))){
-          # if(generation.time(t_ij) <= stage2 & generation.time(t_ij) > stage1){
-          if(!is.infinite(generation.time(t_ij)) & generation.time(t_ij) < stage2*3){
-            (e_ij <- popbio::elasticity(t_ij))
-            survivalElast <- sum(e_ij[which(generic_mat == "L")])
-            growthElast <- sum(e_ij[which(generic_mat == "G")])
-            fecundElast <- sum(e_ij[which(generic_mat == "F")])
-            
-            list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-                                       gentim = generation.time(t_ij),
-                                       lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
-                                       netrep = net.reproductive.rate(t_ij),
-                                       AgeRep = stage1+1, lifelength = stage2, 
-                                       survparams = if(fast){
-                                         possibleParams$a2b2[i]
-                                       } else {
-                                         a1[i]}
-            ))
-          } # end if generation time is not infinite and not huge; from between stage 1 and stage 2
-        } # end if generation.time worked or not
-      }) # end making list for stochasticity
+      e_ij <- popbio::elasticity(t_ij)
+      survivalElast <- sum(e_ij[which(generic_mat == "L")])
+      growthElast <- sum(e_ij[which(generic_mat == "G")])
+      fecundElast <- sum(e_ij[which(generic_mat == "F")])
+      
+      listout <- list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, 
+                                            lam = lambda(t_ij), gentim = generation.time(t_ij),
+                                            lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+                                            netrep = net.reproductive.rate(t_ij),
+                                            AgeRep = stage1+1, lifelength = stage2, 
+                                            survparams = if(fast){
+                                              possibleParams$a2b2[i]
+                                              } else {
+                                                a1[i]
+                                                }
+                                            ))
       listout
-    } # else { # end if lambda and gen time before adding stochasticity
-    
-    # } # end first if generation.time worked before taking and adding stochasticity
-  }), recursive=FALSE) # end mats
-    
-  # mats <- unlist(lapply(i_list, function(i){
-  #     if(lambda1 > lambdarange[1] & lambda1 < lambdarange[2]){ # } & generation.time(t_ij) <= stage2){
-  #       S <- vitalrates$muStasis1[i]
-  #       G <- vitalrates$muGrowth[i]
-  #       S2 <- vitalrates$muStasis2[i]
-  #       if(itero){
-  #         f <- itero_fecundsurv(S2) * vitalrates$muSurv1[i]
-  #       } else {
-  #         f <- semel_fecundsurv(S2) * vitalrates$muSurv1[i]
-  #       }
-  #       if(itero){
-  #       t_ij <- matrix(c(S, G,
-  #                        f, S2), nrow = 2)
-  #       } else {
-  #         t_ij <- matrix(c(S, G,
-  #                          f, 0), nrow = 2)
-  #       }
-  #       (lambda1 <- lambda(t_ij))
-  #       
-  #         D <- max((1-(S+G)), 0.1)
-  #         diri <- rdirichlet(nummats, c(S,G,D))
-  #         mu <- S2
-  #         sig2 <- 0.01
-  #         alpha1 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-  #         beta1 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-  #         # when alpha1 and or beta1 is negative, get NA for rbeta
-  #         if(alpha1 < 0 && beta1 < 0){
-  #           alpha1 <- 0.01
-  #           beta1 <- 0.01
-  #         }
-  #           S2beta <- sapply(rbeta(nummats,alpha1, beta1), function(rb) min(rb,0.79))
-  #           mu <- vitalrates$muSurv1[i]
-  #           alpha2 <- ((mu^2) - (mu^3) - (mu*sig2))/sig2
-  #           beta2 <- (mu - 2*mu^2 + mu^3 - sig2 + mu*sig2)/sig2
-  #           if(itero){
-  #             f <- itero_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-  #           } else {
-  #             f <- semel_fecundsurv(S2beta) * rbeta(nummats, alpha2, beta2)
-  #           } 
-  #           listout <- lapply(1:nummats, function(x){
-  #             if(itero){
-  #               t_ij <- matrix(c(diri[x,1], diri[x,2],
-  #                                f[x], S2beta[x]), nrow = 2)
-  #             } else {
-  #               t_ij <- matrix(c(diri[x,1], diri[x,2],
-  #                                f[x], 0), nrow = 2)
-  #             }
-  #             if(is.na(generation.time(t_ij))) print(t_ij) # print(paste("alpha1",alpha1, "beta1", beta1, "mu",mu))
-  #             if(!is.na(generation.time(t_ij))){
-  #               # if(generation.time(t_ij) <= stage2 & generation.time(t_ij) > stage1){
-  #               if(!is.infinite(generation.time(t_ij)) & generation.time(t_ij) < stage2*3){
-  #                 (e_ij <- popbio::elasticity(t_ij))
-  #                 survivalElast <- sum(e_ij[which(generic_mat == "L")])
-  #                 growthElast <- sum(e_ij[which(generic_mat == "G")])
-  #                 fecundElast <- sum(e_ij[which(generic_mat == "F")])
-  #                 
-  #                 list(t_ij,e_ij, data.frame(S = survivalElast, G = growthElast, R = fecundElast, lam = lambda1,
-  #                                            gentim = generation.time(t_ij),
-  #                                            lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
-  #                                            netrep = net.reproductive.rate(t_ij),
-  #                                            AgeRep = stage1+1, lifelength = stage2, 
-  #                                            survparams = if(fast){
-  #                                              possibleParams$a2b2[i]
-  #                                            } else {
-  #                                              a1[i]}
-  #                                            ))
-  #                 } # end if generation time is not infinite and not huge; from between stage 1 and stage 2
-  #               } # end if generation.time worked or not
-  #             }) # end making list for stochasticity
-  #         listout
-  #         } # else { # end if lambda and gen time before adding stochasticity
-  #     
-  #     # } # end first if generation.time worked before taking and adding stochasticity
-  #   }), recursive=FALSE) # end mats
-  return(mats[!sapply(mats, is.null)])
+      }) # , recursive=FALSE) # end mats
+  # return(mats[!sapply(mats, is.null)])
+  return(mats)
 }
+
 
 
 
