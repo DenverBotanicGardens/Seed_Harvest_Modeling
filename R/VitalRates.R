@@ -87,24 +87,31 @@ D(D(se_fecsur,'s'),'s')
 
 library(DirichletReg)
 # Test
-Age_first_stage2 = 7
-Age_last_stage2 = 7
+# Age_first_stage2 = 6
+# Age_last_stage2 = 7
+# Age_last_stage2 <- 20
 
-
-
-# IteroStasisGrowth_constant <- function(Age_first_stage2, Age_last_stage2, alpha1 = 0.009){
-SlowVitalRates <- function(Age_first_stage2, Age_last_stage2, alpha1 = 0.009){
+SlowVitalRates <- function(Age_first_stage2, Age_last_stage2, alpha1 = 0.201){
   # Weighted arithmetic mean where weight (proportion of individuals at that age) is survival at that age
   muSurv1 <- survivalTypeIII(alpha1, 1)
-  muStasis1 <- sum(survivalTypeIII(alpha1, 1:(Age_first_stage2 -1) )* survivalTypeIII(alpha1, 1:(Age_first_stage2 -1) ))/
+  # age specific survival to next age from last one
+  s_x <- unlist(lapply(1:(Age_first_stage2 - 1), function(x){ 
+    survivalTypeIII(alpha1,x+1)/survivalTypeIII(alpha1,x)
+    }))
+  w_vegx <- survivalTypeIII(alpha1,1:(Age_first_stage2 -1))
+  muStasis1 <- sum(apply(cbind(s_x,w_vegx), 1, function(x) prod(x)))/
     (sum(survivalTypeIII(alpha1, 1:(Age_first_stage2 -1)))) 
-  muStasis2 <- sum(survivalTypeIII(alpha1, Age_first_stage2:Age_last_stage2)*
-                     survivalTypeIII(alpha1, Age_first_stage2:Age_last_stage2 ))/
+  
+  s_xrep <- unlist(lapply(Age_first_stage2:Age_last_stage2, function(x){
+    survivalTypeIII(alpha1, x+1)/survivalTypeIII(alpha1, x)
+  }))
+  w_vegxrep <- survivalTypeIII(alpha1, Age_first_stage2:Age_last_stage2)
+  muStasis2 <- sum(apply(cbind(s_xrep,w_vegxrep), 1, function(x) prod(x)))/
                         (sum(survivalTypeIII(alpha1, Age_first_stage2:Age_last_stage2))) 
   # Growth should be of surviving at final age, what percent of that grows? 
-  muGrowth <- (survivalTypeIII(alpha1, Age_first_stage2-1)/
-                 (sum(survivalTypeIII(alpha1, 1:(Age_first_stage2-1)))))*survivalTypeIII(alpha1, Age_first_stage2-1)
-  if(muGrowth > 0.99) muGrowth <- survivalTypeIII(alpha1, Age_first_stage2-1)
+  muGrowth <- survivalTypeIII(alpha1, Age_first_stage2-1)/
+                 (sum(survivalTypeIII(alpha1, 1:(Age_first_stage2-1)))) 
+  # if(muGrowth > 0.99) muGrowth <- survivalTypeIII(alpha1, Age_first_stage2-1)
   # if(muStasis1 > 0.99) muStasis1 <- survivalTypeIII(alpha1, 1)
   muDeath1 <- 1 - (muStasis1 + muGrowth)
   if(muDeath1 < 0){
@@ -113,22 +120,29 @@ SlowVitalRates <- function(Age_first_stage2, Age_last_stage2, alpha1 = 0.009){
     muGrowth <- Dirichletvital[2]
     muDeath1 <- Dirichletvital[3]
   }
+  
   data.frame(muSurv1,muStasis1,muStasis2,muGrowth,muDeath1)
 }
 
-Age_first_stage2 <- 2
-Age_last_stage2 <- 2
+# Age_first_stage2 <- 1
+# Age_last_stage2 <- 3
 
-# SemelStasisGrowth_typeI <- function(Age_first_stage2, Age_last_stage2, alpha2 = 0.05, beta2 = 0.91){
+
 FastVitalRates <- function(Age_first_stage2, Age_last_stage2, alpha2 = 0.05, beta2 = 0.91){
   # Weighted arithmetic mean where weight (proportion of individuals at that age) is survival at that age
   muSurv1 <- sum(survivalTypeI(alpha2, beta2, 1)*survivalTypeI(alpha2, beta2, 1))/(sum(survivalTypeI(alpha2, beta2, 1)))
-  muStasis1 <- sum(survivalTypeI(alpha2, beta2, 1:(Age_first_stage2 -1) )* survivalTypeI(alpha2, beta2, 1:(Age_first_stage2 -1) ))/
+  s_x <- unlist(lapply(1:(Age_first_stage2 - 1), function(x){ 
+    survivalTypeIII(alpha2, beta2, x+1)/survivalTypeIII(alpha2, beta2, x)
+  }))
+  w_vegx <- survivalTypeIII(alpha2, beta2,1:(Age_first_stage2 -1))
+  
+  muStasis1 <- sum( survivalTypeI(alpha2, beta2, 1:(Age_first_stage2 -1)) * survivalTypeI(alpha2, beta2, 1:(Age_first_stage2 -1)) )/
     (sum(survivalTypeI(alpha2, beta2, 1:(Age_first_stage2 -1)))) 
   muStasis2 <- sum(survivalTypeI(alpha2, beta2, Age_first_stage2:Age_last_stage2)* survivalTypeI(alpha2, beta2, Age_first_stage2:Age_last_stage2 ))/
     (sum(survivalTypeI(alpha2, beta2, Age_first_stage2:Age_last_stage2))) 
   muGrowth <- (survivalTypeI(alpha2, beta2, Age_first_stage2-1)/(sum(survivalTypeI(alpha2, beta2, 1:(Age_first_stage2-1)))))
   if(muGrowth > 0.99) muGrowth <- survivalTypeI(alpha2, beta2, Age_first_stage2-1)
+  if(muStasis1 > 0.99) muStasis1 <- survivalTypeI(alpha2, beta2, Age_first_stage2-1)
   muDeath1 <- 1 - (muStasis1 + muGrowth)
   if(muDeath1 < 0){
     Dirichletvital <- rdirichlet(1, c(muStasis1, muGrowth, 0.01))
