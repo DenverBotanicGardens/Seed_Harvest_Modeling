@@ -24,7 +24,94 @@ Have Dan check it to make sure logic and maths are sound - or one of his student
 time in years to generation time
 ```{r}
 
-ExtRisk <- data.frame(Time2Ext = rpois(1000, 30))
+# ExtRisk <- data.frame(Time2Ext = rpois(1000, 30))
+years <- seq(50, 1500, by = 150)
+ExtRisk <- data.frame(Interval = rep(1:10, each = 1000), Time = rep(years, each = 1000), Time2Ext = unlist(lapply(years, function(x) rpois(1000, x))))
+
+# Extinction risk probability and cummulative distirbution function
+ggplot(ExtRisk, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  geom_density()+
+  theme(legend.position = "none")
+
+# Illustrate large population vs. small
+largesmall <- ExtRisk[ExtRisk$Interval %in% c(3,10),]
+table(largesmall$Time, largesmall$Time2Ext)
+largesmall$Time2Ext[largesmall$Interval == 10] <- largesmall$Time2Ext[largesmall$Interval == 10] - 1000
+
+
+rho1 <- ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  geom_density()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+
+
+cdf1 <- ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF.jpg",
+       rho1 / cdf1,
+       width=70, height=140,units='mm', dpi=300)
+
+ExtRisk_error <- do.call(rbind, lapply(1:100, function(repl) data.frame(Replicate = paste(rep(c(350,1400), each = 1000),repl, sep = "_"), Interval = rep(c(350,1400), each = 1000), Time = rep(c(350,1400), each = 1000), Time2Ext = unlist(lapply(c(350,1400), function(x) rpois(1000, x))))))
+
+# (ExtRisk_error$Time2Ext^2)/100000
+ 
+# ggplot(ExtRisk_error, aes((Time2Ext^2)/100000))+
+#   geom_histogram()
+
+ExtRisk_error$Time2Ext <- unlist(lapply(ExtRisk_error$Time2Ext, function(x) rnorm(1, mean = x, sd = (x^2)/(100000)))) # +exp(x)))))
+ExtRisk_error$Time2Ext[ExtRisk_error$Interval == 1400] <- ExtRisk_error$Time2Ext[ExtRisk_error$Interval == 1400] - 1000
+
+
+
+rho1_error <- ggplot(ExtRisk_error, aes(Time2Ext, colour = as.factor(Time), group = Replicate))+
+  # stat_smooth()
+  geom_density()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+rho1_error
+
+cdf1_error <- ggplot(ExtRisk_error, aes(Time2Ext, colour = as.factor(Time), group = Replicate))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF_error.jpg",
+       rho1_error / cdf1_error,
+       width=70, height=140,units='mm', dpi=300)
+
 
 df <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(50),0.35),
                  Time2Ext2 = rpois(1000, 30))
@@ -86,6 +173,7 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
     popsz <- c()
     detlam <- c()
     Time2Ext <- NA
+    # for(i in 1:300){
     for(i in 1:150){
       yr[i] <- i
       mats[[i]] <- sample(MPMs,size = 1)[[1]]
@@ -121,24 +209,74 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
 
 Iteroparous fast
 ```{r}
-  stage1 <- 1
-  stage2 <- 3
-  
-itfast <- MPM_iterosemel(itero = TRUE, fast = TRUE, stage1 = 1, stage2 = 3, nummats = 100)
-lambdaItFast <- lapply(itfast, function(x) x[[3]]$lam)
-MPMs <- lapply(itfast, function(x) x[[1]])
+  # stage1 <- 1
+  # stage2 <- 3
+# itfast <- MPM_iterosemel(itero = TRUE, fast = TRUE, stage1 = 1, stage2 = 3, nummats = 100)
+iteroslow <- RandomMatrix(itero=TRUE, fast=FALSE, nummats = 1000)
+iterofast <- RandomMatrix(itero = TRUE, fast=TRUE, nummats = 1000)
+semelslow <- RandomMatrix(itero=FALSE, fast=FALSE, nummats = 1000)
+semelfast <- RandomMatrix(itero = FALSE, fast=TRUE, nummats = 100)
+
+# lambdaItFast <- unlist(lapply(itfast, function(x) x[[3]]$lam))
+lambdaItFast <- iterofast[[3]]$lam
+# MPMs <- lapply(itfast, function(x) x[[1]])
+MPMs <- iterofast[[1]]
+hist(lambdaItFast)
 # take 100 above and 100 below lambda = 1
 MPMsplus <- sample(MPMs[which(lambdaItFast <= 1.2 & lambdaItFast >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMsplus, function(x) lambda(x))))
 MPMsminus <- sample(MPMs[which(lambdaItFast <= 1 & lambdaItFast >= 0.8)], 100, replace = TRUE)
 hist(unlist(lapply(MPMsminus, function(x) lambda(x))))
+
 MPMs_itfast <- do.call(c, list(MPMsplus, MPMsminus))
+
+bins2sample <- seq(0.75,1.25,0.1)
+MPMsplus_unif <- do.call(c, lapply(2:length(bins2sample), function(b){ 
+  sample(MPMs[which(lambdaItFast >= bins2sample[b-1] & lambdaItFast <= bins2sample[b])], 10, replace = TRUE)
+  }))
+hist(unlist(lapply(MPMsplus_unif, function(x) lambda(x))))
 
 
 
 iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
   virtualPVA(StartPopSize, MPMs_itfast, speed = "fast", parity = "itero", reps = 1000)
 }))
+
+save(iterofast_simulation, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA.Rda")
+
+# Probability density function
+rho1_iterofast <- ggplot(iterofast_simulation[iterofast_simulation$StPopSz < 500,], aes(Time2Extinction)) + #, colour = as.factor(Replicate)))+
+  # stat_smooth()
+  geom_density()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 7)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+
+
+cdf1_iterofast <- ggplot(iterofast_simulation[iterofast_simulation$StPopSz < 500,], aes(Time2Extinction))+ #, colour = as.factor(Replicate)
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+
+
+## MAke one after all with a line colour by interaction parity, speed
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IteroFastRhoCDF.jpg",
+       rho1_iterofast / cdf1_iterofast,
+       width=150, height=100,units='mm', dpi=300)
+##################################################################
 
 plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
   geom_line(show.legend = FALSE)+
@@ -156,13 +294,17 @@ plotItFast <- ggplot(iterofast_simulation, aes(Year, detlam, group = as.factor(R
  # 
  # maybe get rid of 500 at least or mixed model with pop size 
  # glm(time2ext ~ stpopsize + MVP + parity + speed)
+```
 
-# iteroslow
-# ```{r}
-itslow <-  MPM_iterosemel(itero = TRUE, fast = FALSE, stage1 = 10, stage2 = 20, lambdarange = c(0.8,1.2), nummats = 100)
+
+iteroslow
+```{r}
+itslow <-  MPM_iterosemel(itero = TRUE, fast = FALSE, stage1 = 5, stage2 = 10,nummats = 100)
+# lambdarange = c(0.8,1.2), 
 lambdaItslow <- lapply(itslow, function(x) x[[3]]$lam)
 MPMs_itslow <- lapply(itslow, function(x) x[[1]])
 (generation.time(mean(MPMs_itslow)))
+hist(unlist(lambdaItslow))
 MPMs_itslowplus <- sample(MPMs_itslow[which(lambdaItslow <= 1.2 & lambdaItslow >=1)], 100, replace = TRUE)
 hist(unlist(lapply(MPMs_itslowplus, function(x) lambda(x))))
 MPMs_itslowminus <- sample(MPMs_itslow[which(lambdaItslow <= 1 & lambdaItslow >= 0.8)], 100, replace = TRUE)
@@ -174,6 +316,41 @@ iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000
   virtualPVA(StartPopSize, MPMs_itslow, speed = "slow", parity = "itero", reps = 1000)
 }))
 
+
+# Probability density function
+rho1_iteroslow <- ggplot(iteroslow_simulation[iteroslow_simulation$StPopSz < 500,], aes(Time2Extinction)) + #, colour = as.factor(Replicate)))+
+  # stat_smooth()
+  geom_density()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 7)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+
+
+cdf1_iteroslow <- ggplot(iteroslow_simulation[iteroslow_simulation$StPopSz < 500,], aes(Time2Extinction))+ #, colour = as.factor(Replicate)
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+
+
+## MAke one after all with a line colour by interaction parity, speed
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IteroslowRhoCDF.jpg",
+       rho1_iteroslow / cdf1_iteroslow,
+       width=150, height=100,units='mm', dpi=300)
+##################################################################
+
 plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
   geom_line(show.legend = FALSE)+
   geom_rug(sides = "b", aes(Time2Extinction))+
@@ -184,13 +361,137 @@ plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(R
 # plotItSlow
 #```
 
+```
 
 
 
-#Semelparous
-#annuals   
+
+biennials
+```{r}
+sefast <- MPM_iterosemel(itero = FALSE, fast = TRUE, stage1 = 1, stage2 = 2, lambdarange = c(0.8, 1.2),nummats = 100)
+
+lamsefast <- lapply(sefast, function(x) x[[3]]$lam) 
+MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
+MPMs_sefastplus <- sample(MPMs_sefast[which(lamsefast <= 1.2 & lamsefast >=1)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_sefastplus, function(x) lambda(x))))
+MPMs_sefastminus <- sample(MPMs_sefast[which(lamsefast <= 1 & lamsefast >= 0.8)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_sefastminus, function(x) lambda(x))))
+MPMs_sefast <- do.call(c, list(MPMs_sefastplus, MPMs_sefastminus))
+
+semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_sefast, speed = "fast", parity = "semel", reps = 1000)
+}))
+
+# Probability density function
+rho1_semelfast <- ggplot(semelfast_simulation[semelfast_simulation$StPopSz < 500,], aes(Time2Extinction)) + 
+  geom_density()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 7)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+
+
+cdf1_semelfast <- ggplot(semelfast_simulation[semelfast_simulation$StPopSz < 500,], aes(Time2Extinction))+ #, colour = as.factor(Replicate)
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+
+allparitypace <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, semelfast_simulation))
+
+
+
+plotSefast <- ggplot(semelfast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
+  geom_line(show.legend = FALSE)+
+  geom_rug(sides = "b", aes(Time2Extinction))+
+  theme_bw()+
+  scale_colour_viridis_c(name = "Time to extinction")+
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression(biennial~lambda[det]))
+
+plotSefast
+```
+
+Add semelparous slow once it works
+```{r}
+allparitypace <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, semelfast_simulation))
+
+# rho1_semelfast <- 
+ggplot(allparitypace[allparitypace$StPopSz < 500,], aes(Time2Extinction, fill = interaction(parity, speed))) + 
+  geom_density()+
+  # scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 7)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab(expression(rho))+
+  xlab("T")
+
+
+cdf1_semelfast <- ggplot(semelfast_simulation[semelfast_simulation$StPopSz < 500,], aes(Time2Extinction))+ #, colour = as.factor(Replicate)
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  # theme_void()+
+  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  # scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("CDF")+
+  xlab("T")
+
+```
+
+
+Semelparous slow
+```{r}
+stage1 <- 19 #10 15 was close
+stage2 <- stage1 + 1
+seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE,  stage1 = stage1, stage2 = stage2, #lambdarange = c(0.8,1.2), 
+                         nummats = 100)
+MPMs_seslow <- lapply(seslow, function(x) x[[1]])
+lamseslow <- lapply(seslow, function(x) x[[3]]$lam) 
+lapply(seslow, function(x) x[[3]]$gentim)
+hist(unlist(lamseslow))
+
+MPMs_seslowplus <- sample(MPMs_seslow[which(lamseslow <= 1.2 & lamseslow >=1)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_seslowplus, function(x) lambda(x))))
+MPMs_seslowminus <- sample(MPMs_seslow[which(lamseslow <= 1 & lamseslow >= 0.8)], 100, replace = TRUE)
+hist(unlist(lapply(MPMs_seslowminus, function(x) lambda(x))))
+MPMs_seslow <- do.call(c, list(MPMs_seslowplus, MPMs_seslowminus))
+
+semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_seslow, speed = "slow", parity = "semel", reps = 1000)
+}))
+
+plotSeslow <- ggplot(semelslow_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
+  geom_line(show.legend = FALSE)+
+  geom_rug(sides = "b", aes(Time2Extinction))+
+  theme_bw()+
+  scale_colour_viridis_c(name = "Time to extinction")+
+  facet_wrap(~StPopSz, ncol = 7)+
+  ylab(expression("Semelparous slow "~lambda[det]))
+
+plotSeslow
+
+```
+Semelparous
+annuals   
+
 #```{r}
-### COME BACK TO THIS!!
+
 annuals <- MPM_annual(germRatemu = 0.1, germRatesig2 = 0.01, seedSurvmu = 0.0001, seedSurvsig2 = 0.00001, 
                       survS2mu = 0.7, survS2sig2 = 0.0001, NumMats = 1000)
 MPMs_annuals <- lapply(annuals, function(x) x[[1]])
@@ -228,76 +529,6 @@ plotannual <- ggplot(annuals_simulation, aes(Year, detlam, group = as.factor(Rep
 plotannual
 #```
 
-
-
-#biennials
-#```{r}
-sefast <- MPM_iterosemel(itero = FALSE, fast = TRUE, stage1 = 1, stage2 = 2, lambdarange = c(0.8, 1.2),nummats = 100)
-
-lamsefast <- lapply(sefast, function(x) x[[3]]$lam) 
-MPMs_sefast <- lapply(sefast, function(x) x[[1]]) # The first item is the MPM
-MPMs_sefastplus <- sample(MPMs_sefast[which(lamsefast <= 1.2 & lamsefast >=1)], 100, replace = TRUE)
-hist(unlist(lapply(MPMs_sefastplus, function(x) lambda(x))))
-MPMs_sefastminus <- sample(MPMs_sefast[which(lamsefast <= 1 & lamsefast >= 0.8)], 100, replace = TRUE)
-hist(unlist(lapply(MPMs_sefastminus, function(x) lambda(x))))
-MPMs_sefast <- do.call(c, list(MPMs_sefastplus, MPMs_sefastminus))
-# MPMs_sefast <- MPMs_sefast[which(lamsefast < 1.1 & lamsefast > 0.9)]
-
-
-
-semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_sefast, speed = "fast", parity = "semel", reps = 1000)
-}))
-
-plotSefast <- ggplot(semelfast_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
-  geom_line(show.legend = FALSE)+
-  geom_rug(sides = "b", aes(Time2Extinction))+
-  theme_bw()+
-  scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 7)+
-  ylab(expression(biennial~lambda[det]))
-
-plotSefast
-#```
-
-#Semelparous slow
-#```{r}
-# seslow <- lapply(1:1000, function(x){ 
-#   stage1 <- max(2,rpois(1,3))
-#   stage2 <- stage1+1
-#   MPM_semel(paramsAll, stage1 = stage1, stage2 = stage2, maxSurv = 0.78, minSurv = 0.2)
-#   })
-stage1 <- 2
-stage2 <- stage1 + 1
-seslow <- MPM_iterosemel(itero = FALSE, fast = FALSE,  stage1 = stage1, stage2 = stage2, lambdarange = c(0.8,1.2), nummats = 100)
-MPMs_seslow <- lapply(seslow, function(x) x[[1]])
-lamseslow <- lapply(seslow, function(x) x[[3]]$lam) 
-# hist(unlist(lamseslow))
-# hist(unlist(lamsefast))
-# hist(unlist(lambdaItFast))
-# hist(unlist(lambdaItslow))
-# hist(lamannuals$lam)
-MPMs_seslowplus <- sample(MPMs_seslow[which(lamseslow <= 1.2 & lamseslow >=1)], 100, replace = TRUE)
-hist(unlist(lapply(MPMs_seslowplus, function(x) lambda(x))))
-MPMs_seslowminus <- sample(MPMs_seslow[which(lamseslow <= 1 & lamseslow >= 0.8)], 100, replace = TRUE)
-hist(unlist(lapply(MPMs_seslowminus, function(x) lambda(x))))
-MPMs_seslow <- do.call(c, list(MPMs_seslowplus, MPMs_seslowminus))
-
-semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
-  virtualPVA(StartPopSize, MPMs_seslow, speed = "slow", parity = "semel", reps = 1000)
-}))
-
-plotSeslow <- ggplot(semelslow_simulation, aes(Year, detlam, group = as.factor(Replicate), colour = Time2Extinction))+
-  geom_line(show.legend = FALSE)+
-  geom_rug(sides = "b", aes(Time2Extinction))+
-  theme_bw()+
-  scale_colour_viridis_c(name = "Time to extinction")+
-  facet_wrap(~StPopSz, ncol = 7)+
-  ylab(expression("Semelparous slow "~lambda[det]))
-
-plotSeslow
-
-```
 
 
 
