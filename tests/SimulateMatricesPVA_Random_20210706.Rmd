@@ -4,6 +4,8 @@ author: "Michelle DePrenger-Levin"
 date: "7/6/2021"
 output: html_document
 ---
+
+/c/Users...
 ```{r}
 
 library(popbio)
@@ -396,13 +398,20 @@ load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHar
 
 ```
 
+tests/SimulateMatricesPVA_Random_20210706.Rmd
 2021-08-04
 ## updated to 2021-09-22
 ```{r}
-load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA2021-08-04.Rda")
-load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA2021-08-04.Rda")
-load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA2021-08-04.Rda")
-load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA2021-08-04.Rda")
+# load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA2021-08-04.Rda")
+# load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA2021-08-04.Rda")
+# load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA2021-08-04.Rda")
+# load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA2021-08-04.Rda")
+
+
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA2021-09-22.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA2021-09-22.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA2021-09-22.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA2021-09-22.Rda")
 
 
 ```
@@ -416,34 +425,76 @@ load("Q:/Research/MEDL_folder/Dissertation/ProjLengthRfiles/semelfast_PVA300.Rda
 
 ```
 
-
+  parity speed  GenTime
+1  itero  fast 3.525153
+2  semel  fast 2.099019
+3  itero  slow 7.034366
+4  semel  slow 7.547198
 ```{r}
+# Lambda by generation time instead of year
+# population size change every generation
+head(iterofast_simulation)
+x <- split(iterofast_simulation, 
+           list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz))[[1]]
+iterofast_gentime_lam <- do.call(rbind,lapply(split(iterofast_simulation, 
+                                      list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
+                                      drop = TRUE),
+                                function(x){
+                                  out <- x[seq(1,nrow(x), 4),]
+                                  dfout <- rbind(out, x[x$Extant == 0,])
+                                  dfout
+                                  }))
+
+## What is the change in growth rate (lambda) every generation?
+iterofast_genlam <- do.call(rbind,lapply(split(iterofast_simulation, 
+                                      list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
+                                      drop = TRUE),
+                                function(x){
+                                  annlam <- x$PopSize[-1]/x$PopSize[-nrow(x)]
+                                  out <- x[seq(1,nrow(x), 4),]
+                                  dfout <- rbind(out, x[x$Extant == 0,])
+                                  # if already captured extinction
+                                  dfout <- dfout[!duplicated(dfout),]
+                                  data.frame(speed = x$speed[1], parity = x$parity[1], rep = x$Replicate[1],
+                                             Time2Ext = x$Time2Extinction[1], GenTimeAvg = mean(x$GenTime),
+                                             detlamAvg = mean(x$detlam), netrepAvg = mean(x$netrep),
+                                             annlamAvg = mean(annlam), 
+                                             genlamAvg = mean(dfout$PopSize[-1]/dfout$PopSize[-nrow(dfout)]))
+                                  }))
+                        
+head(iterofast_genlam)
+library(tidyr)
+## wide to long with tidyr
+iterofast_genlamlong <- gather(iterofast_genlam, index, value, Time2Ext:genlamAvg, factor_key = TRUE)
+head(iterofast_genlamlong)
+
+  
+ggplot(iterofast_genlamlong[grep("lam", iterofast_genlamlong$index),], 
+       aes(index, value, colour = interaction(speed, parity)))+
+  geom_boxplot()+
+  theme_bw()
+
+ggplot(iterofast_gentime_lam, aes(Time2Extinction))+
+  stat_ecdf()+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  ylab("Extinction Risk")+
+  xlab("Generation Time")
+
+ggplot(iterofast_gentime_lam, aes(Year, log(PopSize), colour = as.factor(Replicate)))+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  scale_colour_discrete(guide = FALSE)
+
+                                
 all_simulation <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation))
 
+rm(iterofast_simulation);rm(iteroslow_simulation);rm(semelfast_simulation);rm(semelslow_simulation)
 
-
-# PDF_all <- ggplot(all_simulation[all_simulation$StPopSz < 5000 & all_simulation$StPopSz > 10,], aes(Time2Extinction, fill = interaction(parity, speed))) + 
-#   geom_density(alpha = 0.3)+
-#   # scale_colour_discrete(guide=FALSE)+
-#   theme_bw()+
-#   facet_wrap(~StPopSz, ncol = 5)+ #, scales = "free")+
-#   # theme_void()+
-#   # scale_x_discrete(labels = NULL, breaks = NULL)+ 
-#   # scale_y_continuous(labels = NULL, breaks = NULL)+
-#   ylab(expression(rho))+
-#   xlab("T")+
-#   # ylim(c(0,0.15))+
-#   # scale_fill_discrete("Parity and Pace") #, labels = c("Iteroparous \nfast", "Semelparous \nfast",
-#                                                             # "Iteroparous \nslow", "Semelparous \nslow")).
-# scale_fill_discrete(name = "Pace and Parity",
-#                         labels = c("Iteroparous fast",
-#                                    "Semelparous fast",
-#                                    "Iteroparous slow",
-#                                    "Semelparous slow"))
-
-# aggregate(GenTime ~ as.factor(StPopSz) + parity + speed,
 aggregate(GenTime ~ parity + speed,
           data = all_simulation, FUN = mean)
+
 
 all_simu_10yr_3gen <- all_simulation[!duplicated(all_simulation[,c(-2)]),]
 # all_simu_scaled <- all_simu_10yr_3gen
@@ -496,41 +547,48 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
 
        width=200, height=60,units='mm', dpi=300)
 
+# all_simulation$StPopSz < 5001 &
 CDF_allfast <-
-  ggplot(all_simulation[all_simulation$StPopSz < 5000 & all_simulation$speed == "fast",],
+  ggplot(all_simulation[ all_simulation$speed == "fast" & 
+                          all_simulation$Extant == 0,],
           aes(Time2Extinction, colour =interaction(parity, speed)))+
     # stat_smooth()
     stat_ecdf()+
     theme_bw()+
-    facet_wrap(~StPopSz, ncol = 5)+
+    facet_wrap(~StPopSz, ncol = 6)+
      scale_colour_discrete(name = "Fast",
                           labels = c("Iteroparous",
                                      "Semelparous"))+
-    ylab("CDF")+
+    # ylab("CDF")+
+    ylab("Extinction Risk")+
     xlab("T")+
     geom_hline(yintercept = 0.05, linetype = "dashed")+
      geom_vline(xintercept = 10, linetype = "dashed")+
   geom_vline(xintercept = 100)
 
+
+# all_simulation$StPopSz < 5010 & 
 CDF_allslow <-
-  ggplot(all_simulation[all_simulation$StPopSz < 5000 & all_simulation$speed == "slow",], # all_simulation$StPopSz > 10,], 
+  ggplot(all_simulation[all_simulation$speed == "slow" &
+                          all_simulation$Extant == 0,],
           aes(Time2Extinction, colour =interaction(parity, speed)))+
     # stat_smooth()
     stat_ecdf()+
     theme_bw()+
-    facet_wrap(~StPopSz, ncol = 5)+
+    facet_wrap(~StPopSz, ncol = 6)+
      scale_colour_discrete(name = "Slow",
                           labels = c("Iteroparous",
                                      "Semelparous"))+
-    ylab("CDF")+
+    # ylab("CDF")+
+    ylab("Extinction Risk")+
     xlab("T")+
     geom_hline(yintercept = 0.05, linetype = "dashed")+
      geom_vline(xintercept = 21, linetype = "dashed")+
   geom_vline(xintercept = 100)
 
-ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/CDFSimfast_slow.jpg",
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/CDFSimfast_slow_2021-09-23.jpg",
 
-       CDF_allfast/CDF_allslow,
+       CDF_allfast/CDF_allslow ,
 
        width=250, height=120,units='mm', dpi=300)
 
@@ -546,7 +604,8 @@ ggplot(all_simulation[all_simulation$StPopSz < 5000 & all_simulation$StPopSz > 1
                                    "Semelparous fast",
                                    "Iteroparous slow",
                                    "Semelparous slow"))+
-  ylab("CDF")+
+    # ylab("CDF")+
+    ylab("Extinction Risk")+
   xlab("T")+
   geom_hline(yintercept = 0.05, linetype = "dashed")+
    geom_vline(xintercept = 10, col = "green")+
