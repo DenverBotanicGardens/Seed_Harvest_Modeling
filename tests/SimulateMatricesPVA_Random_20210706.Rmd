@@ -7,7 +7,7 @@ output: html_document
 
 /c/Users...
 ```{r}
-
+library(tidyr)
 library(popbio)
 library(ggplot2)
 library(devtools)
@@ -433,40 +433,40 @@ load("Q:/Research/MEDL_folder/Dissertation/ProjLengthRfiles/semelfast_PVA300.Rda
 ```{r}
 # Lambda by generation time instead of year
 # population size change every generation
-head(iterofast_simulation)
-x <- split(iterofast_simulation, 
-           list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz))[[1]]
-iterofast_gentime_lam <- do.call(rbind,lapply(split(iterofast_simulation, 
-                                      list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
-                                      drop = TRUE),
-                                function(x){
-                                  out <- x[seq(1,nrow(x), 4),]
-                                  dfout <- rbind(out, x[x$Extant == 0,])
-                                  dfout
-                                  }))
+# head(iterofast_simulation)
+# x <- split(iterofast_simulation, 
+#            list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz))[[1]]
+# iterofast_gentime_lam <- do.call(rbind,lapply(split(iterofast_simulation, 
+#                                       list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
+#                                       drop = TRUE),
+#                                 function(x){
+#                                   gentime <- round(mean(x$GenTime),0)
+#                                   out <- x[seq(1,nrow(x), 4),]
+#                                   dfout <- rbind(out, x[x$Extant == 0,])
+#                                   dfout
+#                                   }))
 
 ## What is the change in growth rate (lambda) every generation?
-iterofast_genlam <- do.call(rbind,lapply(split(iterofast_simulation, 
-                                      list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
-                                      drop = TRUE),
-                                function(x){
-                                  annlam <- x$PopSize[-1]/x$PopSize[-nrow(x)]
-                                  out <- x[seq(1,nrow(x), 4),]
-                                  dfout <- rbind(out, x[x$Extant == 0,])
-                                  # if already captured extinction
-                                  dfout <- dfout[!duplicated(dfout),]
-                                  data.frame(speed = x$speed[1], parity = x$parity[1], rep = x$Replicate[1],
-                                             Time2Ext = x$Time2Extinction[1], GenTimeAvg = mean(x$GenTime),
-                                             detlamAvg = mean(x$detlam), netrepAvg = mean(x$netrep),
-                                             annlamAvg = mean(annlam), 
-                                             genlamAvg = mean(dfout$PopSize[-1]/dfout$PopSize[-nrow(dfout)]))
-                                  }))
-                        
-head(iterofast_genlam)
-library(tidyr)
+# iterofast_genlam <- do.call(rbind,lapply(split(iterofast_simulation, 
+#                                       list(iterofast_simulation$Replicate, iterofast_simulation$StPopSz),
+#                                       drop = TRUE),
+#                                 function(x){
+#                                   annlam <- x$PopSize[-1]/x$PopSize[-nrow(x)]
+#                                   out <- x[seq(1,nrow(x), 4),]
+#                                   dfout <- rbind(out, x[x$Extant == 0,])
+#                                   # if already captured extinction
+#                                   dfout <- dfout[!duplicated(dfout),]
+#                                   data.frame(speed = x$speed[1], parity = x$parity[1], rep = x$Replicate[1],
+#                                              Time2Ext = x$Time2Extinction[1], GenTimeAvg = mean(x$GenTime),
+#                                              detlamAvg = mean(x$detlam), netrepAvg = mean(x$netrep),
+#                                              annlamAvg = mean(annlam), 
+#                                              genlamAvg = mean(dfout$PopSize[-1]/dfout$PopSize[-nrow(dfout)]))
+#                                   }))
+#                         
+# head(iterofast_genlam)
+
 ## wide to long with tidyr
 iterofast_genlamlong <- gather(iterofast_genlam, index, value, Time2Ext:genlamAvg, factor_key = TRUE)
-head(iterofast_genlamlong)
 
   
 ggplot(iterofast_genlamlong[grep("lam", iterofast_genlamlong$index),], 
@@ -491,6 +491,207 @@ ggplot(iterofast_gentime_lam, aes(Year, log(PopSize), colour = as.factor(Replica
 all_simulation <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation))
 
 rm(iterofast_simulation);rm(iteroslow_simulation);rm(semelfast_simulation);rm(semelslow_simulation)
+
+genlam <- do.call(rbind,lapply(split(all_simulation, 
+                                      list(all_simulation$Replicate, all_simulation$StPopSz,
+                                           all_simulation$parity, all_simulation$speed),
+                                     drop = TRUE),
+                                function(x){
+                                  annlam <- x$PopSize[-1]/x$PopSize[-nrow(x)]
+                                  out <- x[seq(1,nrow(x), 4),]
+                                  dfout <- rbind(out, x[x$Extant == 0,])
+                                  # if already captured extinction
+                                  dfout <- dfout[!duplicated(dfout),]
+                                  data.frame(speed = x$speed[1], parity = x$parity[1], 
+                                             rep = x$Replicate[1], StPopSz = x$StPopSz[1],
+                                             Time2Ext = x$Time2Extinction[1], 
+                                             GenTimeAvg = mean(x$GenTime),
+                                             detlamAvg = mean(x$detlam), netrepAvg = mean(x$netrep),
+                                             annlamAvg = mean(annlam), 
+                                             genlamAvg = mean(dfout$PopSize[-1]/dfout$PopSize[-nrow(dfout)]))
+                                  }))
+
+genlamlong <- gather(genlam, index, value, Time2Ext:genlamAvg, factor_key = TRUE)
+
+  
+ggplot(genlamlong[grep("lam", genlamlong$index),], aes(index, value, colour = interaction(speed, parity, StPopSz)))+
+  geom_boxplot()+
+  theme_bw()+
+  facet_wrap(~StPopSz + speed, ncol = 6)+
+  scale_colour_discrete(guide = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+
+genlam2plot <- genlamlong[genlamlong$index %in% c("annlamAvg","genlamAvg"),]
+genlam2plot$index <- as.character(genlam2plot$index)
+genlam2plot$index[genlam2plot$index == "annlamAvg"] <- "L_a"
+genlam2plot$index[genlam2plot$index == "genlamAvg"] <- "L_g"
+
+# interaction(index, StPopSz)
+ggplot(genlam2plot, aes(index, value, colour = interaction(speed, parity, StPopSz)))+
+  geom_boxplot()+
+  theme_bw()+
+  facet_wrap(~ speed + parity + StPopSz, scales = "free_x", ncol = 12)+
+  scale_colour_discrete(guide = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  xlab("")+
+  ylab(expression("Average "~lambda ~ "by year (a) or generation (g)"))
+
+ggplot(genlam2plot, aes(index, value, colour = interaction(speed, parity, StPopSz)))+
+  geom_boxplot()+
+  theme_bw()+
+  facet_wrap(~ interaction(speed, parity, StPopSz), scales = "free_x", ncol = 8)+
+  scale_colour_discrete(guide = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  xlab("")+
+  ylab(expression("Average "~lambda ~ "by year (a) or generation (g)"))
+```
+
+
+```{r}
+## Pop size by pop size
+
+lambda10 <- ggplot(genlam2plot[genlam2plot$StPopSz == 10,], aes(index, value, colour = interaction(speed, parity, StPopSz)))+
+  geom_boxplot()+
+  theme_bw()+
+  facet_wrap(~ interaction(speed, parity, StPopSz), scales = "free_x", ncol = 8)+
+  scale_colour_discrete(guide = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  xlab("")+
+  ylab(expression("Average "~lambda~"year:" ~ lambda[a] ~ "; generation:" ~ lambda[g]))
+
+pop10 <- ggplot(all_simulation[all_simulation$StPopSz == 10,], 
+                aes(Year, log(PopSize), 
+                    group = interaction(speed, parity, StPopSz,Replicate), 
+                    colour = Time2Extinction))+
+  geom_line()+
+  facet_wrap(~ interaction(speed, parity, StPopSz), scales = "free_x", ncol = 8)+
+  theme_bw()+
+  scale_colour_continuous(guide = FALSE)
+
+cdf10 <- ggplot(all_simulation[all_simulation$StPopSz == 10,], 
+        aes(Time2Extinction, colour =interaction(parity, speed)))+
+  # stat_smooth()
+  stat_ecdf()+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 4)+
+   scale_colour_discrete(name = "Pace and Parity",
+                        labels = c("Iteroparous fast",
+                                   "Semelparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous slow"))+
+  ylab("Extinction risk")+
+  xlab("T")+
+  xlim(c(0,150))
+
+time210 <- ggplot(all_simulation[all_simulation$StPopSz == 10,],
+                  aes(interaction(speed, parity, sep=":"), Time2Extinction))+
+  geom_violin(scale = "width")+
+  geom_jitter(height = 0,width = 0.2, cex= 0.2, alpha = 0.2)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab("Initial Conditions")+
+  ylab("Years to Extinction")+
+  ylim(c(0,500))
+
+time25000 <- ggplot(all_simulation[all_simulation$StPopSz == 5000,],
+                  aes(interaction(speed, parity, sep=":"), Time2Extinction))+
+  geom_violin(scale = "width")+
+  geom_jitter(height = 0.001,width = 0.2, cex= 0.2, alpha = 0.2)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab("Initial Conditions")+
+  ylab("Years to Extinction")+
+  ylim(c(0,500))
+
+time21000 <- ggplot(all_simulation[all_simulation$StPopSz == 1000,],
+                  aes(interaction(speed, parity, sep=":"), Time2Extinction))+
+  geom_violin(scale = "width")+
+  geom_jitter(height = 0.001,width = 0.2, cex= 0.2, alpha = 0.2)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab("Initial Conditions")+
+  ylab("Years to Extinction")+
+  ylim(c(0,500))
+
+
+## plotting doesn't handle NA values 
+## pre-calculate values using dplyr
+incomplete_cdf <- function(x, gmin, gmax) {
+  cdf <- rle(sort(na.omit(x)))
+  obsx <- cdf$values
+  obsy <- cumsum(cdf$lengths)/length(x)
+  data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
+}
+
+allincompCDF <- all_simulation
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_10.jpg",
+allincompCDF[allincompCDF$StPopSz == 10,] %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, color=interaction(parity,speed))) +
+  geom_step()+
+  theme_bw()+
+     scale_colour_discrete(name = "Pace and Parity",
+                        labels = c("Iteroparous fast",
+                                   "Semelparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous slow")),
+width=100, height=70,units='mm', dpi=300)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/PopSz10.jpg",
+       
+       lambda10/pop10,
+       width=200, height=150,units='mm', dpi=300)
+
+
+
+lambda5000 <- ggplot(genlam2plot[genlam2plot$StPopSz == 5000,], aes(index, value, colour = interaction(speed, parity, StPopSz)))+
+  geom_boxplot()+
+  theme_bw()+
+  facet_wrap(~ interaction(speed, parity, StPopSz), scales = "free_x", ncol = 8)+
+  scale_colour_discrete(guide = FALSE)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  xlab("")+
+  ylab(expression("Average "~lambda~"year:" ~ lambda[a] ~ "; generation:" ~ lambda[g]))
+
+pop5000 <- ggplot(all_simulation[all_simulation$StPopSz == 5000,], 
+                aes(Year, log(PopSize), 
+                    group = interaction(speed, parity, StPopSz,Replicate), 
+                    colour = Time2Extinction))+
+  geom_line()+
+  facet_wrap(~ interaction(speed, parity, StPopSz), scales = "free_x", ncol = 8)+
+  theme_bw()+
+  scale_colour_continuous(guide = FALSE)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/PopSz5000.jpg",
+       
+       lambda5000/pop5000,
+       width=200, height=150,units='mm', dpi=300)
+
+
+
+```
+
+
+
+```{r}
+
+ggplot(genlamlong, aes(Time2Ext, colour = interaction(speed, parity)))+
+  stat_ecdf()+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  ylab("Extinction Risk")+
+  xlab("Generation Time")
+
+ggplot(iterofast_gentime_lam, aes(Year, log(PopSize), colour = as.factor(Replicate)))+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~StPopSz)+
+  scale_colour_discrete(guide = FALSE)
+
+
 
 aggregate(GenTime ~ parity + speed,
           data = all_simulation, FUN = mean)
