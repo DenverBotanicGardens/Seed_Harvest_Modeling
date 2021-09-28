@@ -158,6 +158,68 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
 }
 ```
 
+# test harvesting (reducing fecundity)
+```{r}
+
+harvestPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", annualYN = FALSE, reps = 1000, simlength = 500, harvestintensity = 0.10, harvestfrequency = 0.10){
+  # replicate simulations
+  dfout <- do.call(rbind,lapply(1:reps, function(repl){
+    Nx <- stable.stage(mean(MPMs))
+    if(annualYN){
+      vec1 <- matrix(round(Nx*(StartPopSize/Nx[2]),0), ncol = 1)
+    } else {
+      vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+    }
+    
+    # Initialize for loop
+    Extant <- c()
+    yr <- c()
+    mats <- list()
+    gentim <- c()
+    netrep <- c()
+    popsz <- c()
+    detlam <- c()
+    Time2Ext <- NA
+    harvestyrs <- sample(1:simlength, size = floor(simlength*harvestfrequency))
+    # so really gets us to year simlength+1
+    for(i in 1:simlength){
+      # Harvest == 10% reduction in fecundity 10% of the time
+      yr[i] <- i
+      mats[[i]] <- sample(MPMs,size = 1)[[1]]
+      if(i %in% harvestyrs) mats[[i]][1,2] <- mats[[i]][1,2]*harvestintensity
+      if(annualYN){
+        gentim[i] <- popbio::generation.time(mats[[i]], r = c(1,2), c = 2)
+        netrep[i] <- net.reproductive.rate(mats[[i]], r=c(1,2), c=2)
+      } else {
+        gentim[i] <- popbio::generation.time(mats[[i]])
+        netrep[i] = net.reproductive.rate(mats[[i]])
+      }
+      detlam[i] <- popbio::lambda(mean(mats))
+      vec1 <- floor(mats[[i]]%*%vec1)
+      if(annualYN){
+        popsz[i] <- vec1[2]
+      } else {
+        popsz[i] <- sum(vec1)
+      }
+      Extant[i] <- if(popsz[i]<1) 0 else 1
+      if(Extant[i] == 0) Time2Ext <- i
+      if(popsz[i] == 0) break
+    }
+    
+    dfMPM <- data.frame(PopSize = popsz, Year = yr, parity = parity, speed = speed, GenTime = gentim,
+                        netrep = netrep,
+                        Extant = Extant, StPopSz = StartPopSize, Time2Extinction = Time2Ext,
+                        Replicate = repl, detlam = detlam)
+    dfMPM
+  }))
+  dfout
+}
+
+
+```
+
+
+
 ```{r}
 semel_fecundsurv <- function(s){
   12.5*((s - 0.9)^2) - 0.125
@@ -265,6 +327,7 @@ MPMs_unif <- do.call(c, lapply(2:length(bins2sample), function(b){
   sample(MPMs[which(lambdas >= bins2sample[b-1] & lambdas < bins2sample[b])], 10, replace = TRUE)
   }))
 hist(unlist(lapply(MPMs_unif, function(x) lambda(x))), breaks = bins2sample)
+# now also drop down to run the harvest model
 
 iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ #, 10000
   virtualPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000)
@@ -274,6 +337,19 @@ datetoday <- as.character(Sys.Date())
 save(iterofast_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA",datetoday,".Rda", sep=""))
 ```
 
+Harvest for Iteroparous fast
+```{r}
+
+iterofast_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ 
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000)
+}))
+
+datetoday <- as.character(Sys.Date())
+save(iterofast_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest",datetoday,".Rda", sep=""))
+
+```
+
+
 
 ```{r}
 ggplot(iterofast_simulation, aes(Year, log(PopSize)), group = Replicate)+
@@ -282,6 +358,14 @@ ggplot(iterofast_simulation, aes(Year, log(PopSize)), group = Replicate)+
 nrow(iterofast_simulation[iterofast_simulation$Extant == 0,])/max(iterofast_simulation$Replicate) # 1.175
 head(iterofast_simulation[iterofast_simulation$Extant == 0,])
 
+
+ggplot(iterofast_harvest, aes(Year, log(PopSize)), group = Replicate)+
+  geom_line()
+
+nrow(iterofast_harvest[iterofast_harvest$Extant == 0,])/max(iterofast_harvest$Replicate) # 3.262
+head(iterofast_harvest[iterofast_harvest$Extant == 0,])
+head(iterofast_harvest)
+
 ```
 
 
@@ -289,6 +373,7 @@ head(iterofast_simulation[iterofast_simulation$Extant == 0,])
 Iteroparous slow
 ```{r}
 dev.off()
+rm(lambdas);rm(MPMs);rm(MPMs_unif)
 lambdas <- iteroslow[[3]]$lam
 hist(lambdas)
 MPMs <- iteroslow[[1]]
@@ -308,6 +393,17 @@ save(iteroslow_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Garden
 ```
 
 
+# harvest Iteroparous slow   
+```{r}
+iteroslow_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "itero", reps = 1000)
+}))
+
+
+save(iteroslow_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest",datetoday,".Rda", sep=""))
+```
+
+
 
 ```{r}
 ggplot(iteroslow_simulation, aes(Year, log(PopSize)), group = Replicate)+
@@ -315,6 +411,13 @@ ggplot(iteroslow_simulation, aes(Year, log(PopSize)), group = Replicate)+
 
 head(iteroslow_simulation[iteroslow_simulation$Extant == 0,])
 nrow(iteroslow_simulation[iteroslow_simulation$Extant == 0,])/max(iteroslow_simulation$Replicate) # 1.927
+
+
+ggplot(iteroslow_harvest, aes(Year, log(PopSize)), group = Replicate)+
+  geom_line()
+
+head(iteroslow_harvest[iteroslow_harvest$Extant == 0,])
+nrow(iteroslow_harvest[iteroslow_harvest$Extant == 0,])/max(iteroslow_harvest$Replicate) # 4.69
 
 ```
 
@@ -793,6 +896,8 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
 
        width=250, height=120,units='mm', dpi=300)
 
+
+
  CDF_all <-
 ggplot(all_simulation[all_simulation$StPopSz < 5000 & all_simulation$StPopSz > 10,], 
         aes(Time2Extinction, colour =interaction(parity, speed)))+
@@ -884,6 +989,72 @@ ggplot(all_simulation[all_simulation$StPopSz == 50,],
 
 ```
 
+## Incomplete CDF
+```{r}
+#[all_simulation$speed == "fast",]
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_all.jpg",
+all_simulation %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, color=interaction(parity,speed), linetype = interaction(parity,speed))) +   # 
+  # geom_step(position = position_dodge(width = 0.5),size = 1.1, linetype = "dashed")+ # 
+  geom_step(position = position_dodge(width = 1), size = 1.1)+
+  theme_bw()+
+  facet_wrap(~StPopSz, ncol = 6)+
+  scale_colour_discrete(name = "Pace and Parity",
+                        labels = c("Iteroparous fast",
+                                   "Semelparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous slow"))+
+  scale_linetype_discrete(name = "Pace and Parity",
+                        labels = c("Iteroparous fast",
+                                   "Semelparous fast",
+                                   "Iteroparous slow",
+                                   "Semelparous slow"))+
+  xlab("Year")+
+  ylab("Extinction risk")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)),
+width=250, height=60,units='mm', dpi=300)
+
+```
+
+```{r}
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_all_scaleyfree.jpg",
+all_simulation %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, color=interaction(parity,speed), linetype = interaction(parity,speed))) +   # 
+    # geom_step(position = position_dodge(width = 0.5),size = 1.1, linetype = "dashed")+ # 
+    geom_hline(yintercept = 0.05, linetype = "dashed")+
+    geom_vline(xintercept = 100, linetype = "dashed")+
+    geom_step(position = position_dodge(width = 1), size = 1.1)+
+    theme_bw()+
+    facet_wrap(~StPopSz, ncol = 6, scales = "free_y")+
+    scale_colour_discrete(name = "Pace and Parity",
+                          labels = c("Iteroparous fast",
+                                     "Semelparous fast",
+                                     "Iteroparous slow",
+                                     "Semelparous slow"))+
+    scale_linetype_discrete(name = "Pace and Parity",
+                          labels = c("Iteroparous fast",
+                                     "Semelparous fast",
+                                     "Iteroparous slow",
+                                     "Semelparous slow"))+
+    xlab("Year")+
+    ylab("Extinction risk")+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)),
+width=290, height=60,units='mm', dpi=300)
+
+
+```
+
+
+
 comparisons of point estimates at short-term (max of 3 generations or 10 years) and long (100 years)
 ```{r}
 # NAs for time to extinction removed
@@ -968,44 +1139,58 @@ ggplot(all_simulation[all_simulation$StPopSz < 5000,], aes(as.factor(StPopSz), T
 width=70, height=70,units='mm', dpi=300)
 
 # Pace
-ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Pace_300years.jpg",
- 
-ggplot(all_simulation[all_simulation$StPopSz < 5000,], aes(as.factor(StPopSz), Time2Extinction, colour = speed))+
-  geom_boxplot()+
-  scale_colour_discrete(name = "Pace")+
+# ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Pace_300years.jpg",
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Pace_500years.jpg", 
+ggplot(all_simulation[!is.na(all_simulation$Time2Extinction),], aes(as.factor(StPopSz), Time2Extinction, fill = speed))+
+  geom_violin(scale = "width")+
+  scale_fill_manual(name = "Pace", values = c("red","blue"))+
   theme_bw()+
   ylab("Time to extinction")+
   xlab("Starting population size"),
-width=100, height=70,units='mm', dpi=300)
+width=110, height=80,units='mm', dpi=300)
 
 # Parity
-ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Parity_300years.jpg",
-ggplot(all_simulation[all_simulation$StPopSz < 5000,], aes(as.factor(StPopSz), Time2Extinction, colour = parity))+
-  geom_boxplot()+
-  scale_colour_discrete(name = "Parity",
+# ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Parity_300years.jpg",
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Parity_500years.jpg",
+# ggplot(all_simulation[all_simulation$StPopSz < 5000,], aes(as.factor(StPopSz), Time2Extinction, colour = parity))+
+ggplot(all_simulation[!is.na(all_simulation$Time2Extinction),], aes(as.factor(StPopSz), Time2Extinction, fill = parity))+
+  # geom_boxplot()+
+  geom_violin(scale = "width")+
+  # geom_point(position = position_jitterdodge(), shape = 16)+
+  # scale_colour_discrete(name = "Parity",
+  #                       labels = c("Iteroparous",
+  #                                  "Semelparous"))+
+  scale_fill_manual(name = "Parity",
                         labels = c("Iteroparous",
-                                   "Semelparous"))+
+                                   "Semelparous"),
+                      values = c("purple","yellow"))+
   theme_bw()+
   ylab("Time to extinction")+
   xlab("Starting population size"),
-width=120, height=70,units='mm', dpi=300)
+# width=120, height=70,units='mm', dpi=300)
+width=110, height=80,units='mm', dpi=300)
+
 
 
 # Interactions
-ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Interaction_300years.jpg",
-ggplot(all_simulation[all_simulation$StPopSz < 5000,], aes(as.factor(StPopSz), Time2Extinction, colour = interaction(parity, speed)))+
-  geom_boxplot(varwidth = TRUE)+
+# ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Interaction_300years.jpg",
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Interaction_500years.jpg",
+ggplot(all_simulation[!is.na(all_simulation$Time2Extinction),], aes(as.factor(StPopSz), Time2Extinction, fill = interaction(parity, speed)))+
+  # geom_boxplot(varwidth = TRUE)+
+  geom_violin(scale = "width")+
   # geom_jitter(alpha = 0.2)+
-  scale_colour_discrete(name = "Pace and parity",
+  scale_fill_manual(name = "Pace and parity",
                         labels = c("Iteroparous slow",
                                    "Semelparous slow",
                                    "Iteroparous fast",
-                                   "Semelparous fast"))+
+                                   "Semelparous fast"),
+                    values = c("darkorchid1",
+                               "green","darkslateblue","orange"))+
   # scale_shape_discrete(guide=FALSE)+
   theme_bw()+
   ylab("Time to extinction")+
   xlab("Starting population size"),
-width=120, height=70,units='mm', dpi=300)
+width=110, height=80,units='mm', dpi=300)
 
 ```
 
