@@ -12,11 +12,222 @@ library(devtools)
 library(patchwork)
 require(AICcmodavg)
 library(lme4)
+library(xkcd)
+library(extrafont)
+library(extrafontdb)
 rm(list=ls())
-source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/VitalRates.R")
-source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/Virtual_iteroparous.R")
+# source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/VitalRates.R")
+# source("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/R/Virtual_iteroparous.R")
 
 ```
+
+Heuristic of how lambda and year and lambda and generation time should behave    
+```{r}
+
+# if(! "xkcd" %in% fonts()) {
+#   xkcdFontURL <- "http://simonsoftware.se/other/xkcd.ttf"
+#   download.file(xkcdFontURL,dest="xkcd.ttf")
+#   font_import(".") ## because we downloaded to working directory
+#   loadfonts()
+# }
+
+# download.file("http://simonsoftware.se/other/xkcd.ttf", dest="xkcd.ttf")
+# system("mkdir ~/.fonts")
+# system("cp xkcd.tff -t ~/.fonts")
+# font_import()
+# loadfonts()
+
+xkcd_line <- function(x, y, color) {
+  len <- length(x);
+  rg <- par("usr");
+  yjitter <- (rg[4] - rg[3]) / 1000;
+  xjitter <- (rg[2] - rg[1]) / 1000;
+  x_mod <- x + rnorm(len) * xjitter;
+  y_mod <- y + rnorm(len) * yjitter;
+  lines(x_mod, y_mod, col='white', lwd=10);
+  lines(x_mod, y_mod, col=color, lwd=5);
+}
+ 
+repro_lambda <- data.frame(dl = seq(-1,1, length.out = 100), 
+                           rs = seq(-1,1, length.out = 100),
+                           Pace = sample(c("Fast","Slow"), 100, replace = TRUE))
+# repro_lambda$JitPnts <- repro_lambda$dl + rnorm(100, mean = 0, sd = 0.001)
+repro_lambda$Pace[repro_lambda$dl < 0] <- sample(c("Fast","Fast","Fast","Fast","Fast","Fast","Slow"),
+                                              length(repro_lambda$Pace[repro_lambda$dl < 0]), 
+                                              replace = TRUE )
+repro_lambda$Pace[repro_lambda$dl < -0.25] <- "Fast"
+
+ 
+ mapping <- aes(x=x,
+               y=y,
+               scale=scale,
+               ratioxy=ratioxy,
+               angleofspine = angleofspine,
+               anglerighthumerus = anglerighthumerus,
+               anglelefthumerus = anglelefthumerus,
+               anglerightradius = anglerightradius,
+               angleleftradius = angleleftradius,
+               anglerightleg =  anglerightleg,
+               angleleftleg = angleleftleg,
+               angleofneck = angleofneck,
+               color = color )
+dataman <- data.frame(x=0,y=0, scale = 0.1, ratioxy = 1,
+              angleofspine = -1.5,
+              anglerighthumerus = -pi/6,
+              anglelefthumerus = pi + pi/6,
+              anglerightradius = 0,
+              angleleftradius = runif(1,- pi/4, pi/4),
+              angleleftleg = 3*pi/2  + pi / 12 ,
+              anglerightleg = 3*pi/2  - pi / 12,
+              angleofneck = runif(1, min = 3 * pi / 2 - pi/10 , max = 3 * pi / 2 + pi/10),
+              color="red")
+ 
+
+p_replam <- ggplot(repro_lambda, aes(rs, dl))+
+  geom_line()+
+  geom_jitter(height = 0.1, width = 0.1, aes(shape = Pace))+
+  ggtitle("a)")+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  scale_shape_manual(values = c(20,4))+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  geom_vline(xintercept = 0, linetype = "dashed")+
+  xlab("Reproductive strategy")+
+  ylab(expression(lambda))+
+  theme_xkcd()+
+  # theme(legend.position = c(0.5, -0.5))+
+  xkcdaxis(range(repro_lambda$rs)*1.15, range(repro_lambda$dl)*1.15)+
+  annotate("text", x = 0.75, y = -1.09, label = "iteroparity")+ # High net reproductive rate\n 
+  annotate("text", x = -0.68, y = -1.09, label = "semelparity")+ #Low net reproductive rate\n 
+  annotate("text", x = -1.1, y = 0.85, angle = 90, label = "growth")+ # population\ngrowth
+  annotate("text", x = -1.1, y = -0.75, angle = 90, label = "decline")
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Lambda_IUCN_heuristic.jpg",
+
+p_replam,
+
+       width=100, height=90,units='mm', dpi=300)
+  
+
+
+## if you collapse lambda and reproductive strategy because the two are 1:1 correlated, then across pace of life you are listed if you're fast, not if slow
+
+repro_lambda$IUCN <- "N"
+repro_lambda$IUCN[repro_lambda$Pace == "Fast" &
+                    repro_lambda$dl < -0.25] <- sample(c("Y","Y","Y","N"),
+                              length(repro_lambda$IUCN[repro_lambda$Pace == "Fast" &
+                    repro_lambda$dl < 0]), 
+                              replace = TRUE)
+
+# data.frame(pace = seq(-1,1, length.out = 100),
+#                   er = seq(1,-1, length.out = 100)), aes(pace, er)
+
+p_ERpace <- ggplot(repro_lambda, aes(rs, dl))+
+  geom_line()+
+  # geom_jitter(height = 0.1, width = 0.1)+ #, aes(shape = IUCN))+
+  ggtitle("b)")+
+  scale_shape_manual(values = c(4,17))+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  geom_hline(yintercept = 0.69, linetype = "dashed")+
+  # geom_vline(xintercept = 0.85, linetype = "dashed")+
+  xlab("Pace of life")+
+  ylab("Extinction Risk        ")+
+  theme_xkcd()+
+  xkcdaxis(range(repro_lambda$rs)*1.1, range(repro_lambda$dl)*1.1)+
+  annotate("text", x = -0.78, y = -1.05, label = "fast")+ 
+  annotate("text", x = 0.68, y = -1.05, label = "slow")+  
+  annotate("text", x = -1.1, y = 0.35, angle = 90, label = "low")+ 
+  annotate("text", x = -1.1, y = -0.75, angle = 90, label = "high")+
+  # annotate("text", x = -1.1, y = 0.7, angle = 90, label = "stable")+ 
+  # annotate("text", x = -1.1, y = 1, angle = 90, label = "IN")+
+  annotate("text", x = 0.12, y = 0.63, label = expression(lambda * "< 1"))+
+  annotate("text", x = 0.12, y = 0.78, label = expression(lambda * "> 1"))
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Lambda_IUCN_heuristic_ER_pace.jpg",
+       p_replam + p_ERpace, width=220, height=90,units='mm', dpi=300)
+  
+
+```
+
+
+
+# how clear are the time to extinction patterns   
+```{r}
+
+example1 <-data.frame(Time2Ext = rnorm(100, 100, 5),
+                  Species = 1)
+
+ggplot(example1, aes(Species, Time2Ext))+
+  geom_violin()+
+  geom_jitter(width = 0.1)+
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  scale_x_continuous(labels = NULL, breaks = NULL)+
+  # scale_shape_manual(values = c(20,4))+
+  xlab("")+
+  ylab("Time to Extinction")+
+  
+  theme_xkcd()+
+  # theme(legend.position = c(0.5, -0.5))+
+  xkcdaxis(c(0,2), c(80, max(example1$Time2Ext)+5))
+
+
+example2 <-data.frame(Time2Ext = c(rnorm(100, 100, 5), rnorm(100, 60, 2)),
+                  Species = c(rep(1, 100), rep(2,100)))
+
+ggplot(example2, aes(as.factor(Species), Time2Ext))+
+  geom_violin()+
+  geom_jitter(width = 0.1, height = 0)+
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  scale_x_discrete(labels = NULL, breaks = NULL)+
+  # scale_x_continuous(labels = NULL, breaks = NULL)+
+  xlab("")+
+  ylab("Time to Extinction")+
+  theme_xkcd()+
+  # theme(legend.position = c(0.5, -0.5))+
+  xkcdaxis(c(0.80,2.3), c(40, max(example2$Time2Ext)+5))+
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = -90, b = 0, l = 0)))
+  # theme(axis.text.y = element_text(hjust = -19))
+
+example3 <- data.frame(Time2Ext = c(rnorm(100, 100, 20), rnorm(100, 60, 5)),
+                  Species = c(rep(1, 100), rep(2,100)))
+# two different species but time horizon doesn't cover the distribution of extinction events for one
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TwoSpeciesCommonTimeHorizon.jpg",
+
+ggplot(example3, aes(as.factor(Species), Time2Ext))+
+  geom_violin()+
+  geom_jitter(width = 0.1, height = 0)+
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  scale_x_discrete(labels = NULL, breaks = NULL)+
+  # scale_x_continuous(labels = NULL, breaks = NULL)+
+  xlab("")+
+  ylab("Time to Extinction")+
+  theme_xkcd()+
+  # geom_segment(x = .75, y = 100, xend = 2.5, yend = 100, colour = "red")+
+  xkcdaxis(c(0.80,2.3), c(20, max(example3$Time2Ext)+5))+
+  # annotate("text", x = 1.5, y = 103, label = "Time Horizon")+
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = -90, b = 0, l = 0))),
+width=130, height=90,units='mm', dpi=300)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/TwoSpeciesCommonTimeHorizon2.jpg",
+
+ggplot(example3[example3$Time2Ext<100,], aes(as.factor(Species), Time2Ext))+
+  geom_violin()+
+  geom_jitter(width = 0.1, height = 0)+
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  scale_x_discrete(labels = NULL, breaks = NULL)+
+  xlab("")+
+  ylab("Time to Extinction")+
+  theme_xkcd()+
+  geom_segment(x = .75, y = 100, xend = 2.5, yend = 100, colour = "red")+
+  xkcdaxis(c(0.80,2.3), c(20, max(example3$Time2Ext)+5))+
+  annotate("text", x = 1.5, y = 103, label = "Time Horizon")+
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = -90, b = 0, l = 0))),
+width=130, height=90,units='mm', dpi=300)
+
+  
+```
+
 
 
 
@@ -28,47 +239,250 @@ time in years to generation time
 years <- seq(50, 1500, by = 150)
 ExtRisk <- data.frame(Interval = rep(1:10, each = 1000), Time = rep(years, each = 1000), Time2Ext = unlist(lapply(years, function(x) rpois(1000, x))))
 
-# Extinction risk probability and cummulative distirbution function
-ggplot(ExtRisk, aes(Time2Ext, colour = as.factor(Time)))+
-  # stat_smooth()
-  geom_density()+
-  theme(legend.position = "none")
 
 # Illustrate large population vs. small
 largesmall <- ExtRisk[ExtRisk$Interval %in% c(3,10),]
-table(largesmall$Time, largesmall$Time2Ext)
 largesmall$Time2Ext[largesmall$Interval == 10] <- largesmall$Time2Ext[largesmall$Interval == 10] - 1000
 
 
-rho1 <- ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
-  # stat_smooth()
-  geom_density()+
-  scale_colour_discrete(guide=FALSE)+
-  theme_bw()+
-  # theme_void()+
-  scale_x_discrete(labels = NULL, breaks = NULL)+ 
-  scale_y_continuous(labels = NULL, breaks = NULL)+
-  ylab(expression(rho))+
-  xlab("T")
+#rho1 <- 
+# ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+#   # stat_smooth()
+#   geom_density()+
+#   scale_colour_discrete(guide=FALSE)+
+#   theme_bw()+
+#   # theme_void()+
+#   scale_x_discrete(labels = NULL, breaks = NULL)+ 
+#   scale_y_continuous(labels = NULL, breaks = NULL)+
+#   ylab(expression(rho))+
+#   geom_hline(yintercept = 0.005, linetype = "dashed")+
+#   xlab("T")
 
 
-cdf1 <- ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+cdf1 <-
+ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
   # stat_smooth()
   stat_ecdf()+
   scale_colour_discrete(guide=FALSE)+
   theme_bw()+
   # theme_void()+
-  scale_x_discrete(labels = NULL, breaks = NULL)+ 
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
   scale_y_continuous(labels = NULL, breaks = NULL)+
-  ylab("CDF")+
-  xlab("T")
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  xkcdaxis(range(largesmall$Time2Ext)*1.15, c())+ #, range(largesmall$Time)*1.15)+
+  geom_hline(yintercept = 0.25, linetype = "dashed")+
+  geom_vline(xintercept = 338, linetype = "dashed", colour = "blue")+
+  annotate("text", x = 329, y=0.5,label = "Time horizon", angle = 90)+
+  annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 375, y=0.8, label = "A")+
+  annotate("text", x = 430, y=0.7, label = "B")
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF.jpg",
+       cdf1,
+       width=80, height=80,units='mm', dpi=300)
+
+```
+
+For presentation, building plot (heuristic)   
+```{r}
+cdf_twospecies <-
+ggplot(largesmall[largesmall$Time == 350,], aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  # scale_colour_discrete(guide=FALSE)+
+  scale_colour_manual(guide = FALSE, labels = NULL, breaks = NULL,
+                      values = c(350 = "F8766D",1400 = "white" ))+
+  theme_bw()+
+  scale_x_continuous(labels = NULL, breaks = NULL, limits = c(0,max(largesmall$Time2Ext)))+
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  # xlim(0,max(largesmall$Time2Ext))+
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  # geom_hline(yintercept = 0.25, linetype = "dashed")+
+  # geom_vline(xintercept = 338, linetype = "dashed", colour = "blue")+
+  # annotate("text", x = 329, y=0.5,label = "Time horizon", angle = 90)+
+  # annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 375, y=0.8, label = "A") #+
+  # annotate("text", x = 430, y=0.7, label = "B")
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF_1.jpg",
+       cdf_twospecies,
+       width=80, height=80,units='mm', dpi=300)
+
+cdf_twospecies2 <-
+ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  # geom_hline(yintercept = 0.25, linetype = "dashed")+
+  # geom_vline(xintercept = 338, linetype = "dashed", colour = "blue")+
+  # annotate("text", x = 329, y=0.5,label = "Time horizon", angle = 90)+
+  # annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 375, y=0.8, label = "A")+
+  annotate("text", x = 430, y=0.7, label = "B")
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF_2.jpg",
+       cdf_twospecies2,
+       width=80, height=80,units='mm', dpi=300)
+
+cdf_twospecies3 <-
+ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  geom_hline(yintercept = 0.25, linetype = "dashed")+
+  # geom_vline(xintercept = 338, linetype = "dashed", colour = "blue")+
+  # annotate("text", x = 329, y=0.5,label = "Time horizon", angle = 90)+
+  annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 375, y=0.8, label = "A")+
+  annotate("text", x = 430, y=0.7, label = "B")
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF_3.jpg",
+       cdf_twospecies3,
+       width=80, height=80,units='mm', dpi=300)
+
+```
+
+## Seed harvest modeling - how it would change by time horizon by species   
+```{r}
+set.seed(1234)
+shm <- matrix(sort(runif(100, 0,1), decreasing = TRUE), nrow = 10)
+colnames(shm) <- paste0(seq(100,10, by = -10), "%")
+rownames(shm) <- paste0(seq(100,10, by = -10), "%")
+heatmap(shm, Rowv = NA, Colv = NA)
+
+
+unique(combn(rep(paste0(seq(100,10, by = -10), "%"),2),2, function(x) paste(x[1],x[2], sep="_")))
+
+```
+
+
+```{r}
+
+ER_values <- sort(runif(100, 0.2,1), decreasing = FALSE)+rnorm(100, 0,0.06)
+for(i in 1:100){
+  if(ER_values[i] > 1) ER_values[i] <- 1
+  if(ER_values[i] < 0) ER_values[i] <- 0
+}
+shm <- data.frame(Intensity = rep(seq(10,100,10), 10), #rep(paste0(seq(100,10, by = -10), "%"),10),
+                  Frequency = rep(seq(10,100,10), each = 10), # rep(paste0(seq(100,10, by = -10), "%"),each = 10),
+                  Prob_ext = ER_values)
+shm$Prob_ext[shm$Intensity > 70] <- runif(length(shm$Prob_ext[shm$Intensity > 40]), 0.75,1)
+shm$Prob_ext[shm$Intensity > 90] <- runif(10, 0.9,1)
+shm$Prob_ext[shm$Frequency > 90] <- runif(10, 0.9,1)
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IntFreq_heatmap_timelong.jpg",
+ggplot(shm, aes(Intensity, Frequency, fill = Prob_ext))+
+  geom_tile()+
+  scale_fill_viridis_c(option = "magma", direction = -1,
+                       name = "Probability\n of Extinction")+
+  scale_y_continuous(labels = scales::percent_format(scale = 1))+
+  scale_x_continuous(labels = scales::percent_format(scale = 1))+
+  theme_bw(),
+width=160, height=100,units='mm', dpi=300)
+
+
+shmShort <- shm
+shmShort$Prob_ext[shmShort$Intensity > 70] <- runif(length(shmShort$Prob_ext[shmShort$Intensity > 40]), 0.75,1)
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IntFreq_heatmap_timeshort.jpg",
+ggplot(shm, aes(Intensity, Frequency, fill = Prob_ext))+
+  geom_tile()+
+  scale_fill_viridis_c(option = "magma", direction = -1,
+                       name = "Probability\n of Extinction")+
+  scale_y_continuous(labels = scales::percent_format(scale = 1))+
+  scale_x_continuous(labels = scales::percent_format(scale = 1))+
+  theme_bw(),
+width=160, height=100,units='mm', dpi=300)
+
+```
 
 
 
 
-ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF.jpg",
-       rho1 / cdf1,
-       width=70, height=140,units='mm', dpi=300)
+
+## What if you looked at the change in Time horizon instead of chance of going over (or change in risk)
+
+```{r}
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF_change.jpg",
+       
+ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  geom_hline(yintercept = 0.25, linetype = "dashed")+
+  geom_vline(xintercept = 338, linetype = "solid", colour = "blue")+
+  geom_vline(xintercept = 374, linetype = "solid", colour = "blue")+
+  # geom_rect(aes(xmin = 338,xmax = 374, ymin = 0, ymax = 0.25), colour = rgb(0,0,0,0.05), alpha = 0.002)+
+  # annotate("text", x = 329, y=0.5,label = "Time horizon", angle = 90)+
+  annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 390, y=0.93, label = "A:1")+
+  annotate("text", x = 430, y=0.7, label = "A:2")+
+  geom_segment(aes(x = 338, y = 0.27, xend = 374, yend = 0.27), 
+               arrow = arrow(length = unit(0.5, "cm")), colour = "black"),
+       width=80, height=80,units='mm', dpi=300)
+
+```
+
+
+```{r}
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthCDF_scaled.jpg",
+
+ggplot(largesmall, aes(Time2Ext, colour = as.factor(Time)))+
+  # stat_smooth()
+  stat_ecdf()+
+  scale_colour_discrete(guide=FALSE)+
+  theme_bw()+
+  # theme_void()+
+  scale_x_continuous(labels = NULL, breaks = NULL)+ 
+  scale_y_continuous(labels = NULL, breaks = NULL)+
+  ylab("Extinction Risk")+
+  xlab("Time")+
+  geom_hline(yintercept = 0.25, linetype = "dashed")+
+  geom_vline(xintercept = 338, linetype = "dashed", colour = "blue")+
+  geom_vline(xintercept = 374, linetype = "dashed", colour = "blue")+
+  # geom_rect(aes(xmin = 338,xmax = 374, ymin = 0, ymax = 0.25), colour = rgb(0,0,0,0.05), alpha = 0.002)+
+  annotate("text", x = 329, y=0.5,label = "A Time horizon", angle = 90)+
+  annotate("text", x = 366, y=0.5,label = "B Time horizon", angle = 90)+
+  annotate("text", x = 450, y=0.29, label = "Risk threshold")+
+  annotate("text", x = 390, y=0.93, label = "A")+
+  annotate("text", x = 430, y=0.7, label = "B"),
+       width=80, height=80,units='mm', dpi=300)
+
+```
+
+
+```{r}
+hist(largesmall$Time2Ext)
+
+
+# ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF.jpg",
+#        rho1 / cdf1,
+#        width=70, height=140,units='mm', dpi=300)
 
 ExtRisk_error <- do.call(rbind, lapply(1:100, function(repl) data.frame(Replicate = paste(rep(c(350,1400), each = 1000),repl, sep = "_"), Interval = rep(c(350,1400), each = 1000), Time = rep(c(350,1400), each = 1000), Time2Ext = unlist(lapply(c(350,1400), function(x) rpois(1000, x))))))
 
@@ -108,9 +522,9 @@ cdf1_error <- ggplot(ExtRisk_error, aes(Time2Ext, colour = as.factor(Time), grou
 
 
 
-ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF_error.jpg",
-       rho1_error / cdf1_error,
-       width=70, height=140,units='mm', dpi=300)
+# ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/ProjectionLengthRhoCDF_error.jpg",
+#        rho1_error / cdf1_error,
+#        width=70, height=140,units='mm', dpi=300)
 
 
 df <- data.frame(Year = 51:150, Time2Ext = rlnorm(100,log(50),0.35),
@@ -207,7 +621,7 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
 ```
 
 
-Iteroparous fast
+Random matrices 
 ```{r}
   # stage1 <- 1
   # stage2 <- 3
@@ -363,6 +777,53 @@ plotItSlow <- ggplot(iteroslow_simulation, aes(Year, detlam, group = as.factor(R
 
 ```
 
+Semel fast
+```{r}
+
+
+lambdas <- semelfast[[3]]$lam
+hist(lambdas)
+MPMs <- semelfast[[1]]
+
+bins2sample <- seq(0.799,1.201,length.out = 5)
+MPMs_unif <- do.call(c, lapply(2:length(bins2sample), function(b){ 
+  sample(MPMs[which(lambdas >= bins2sample[b-1] & lambdas < bins2sample[b])], 10, replace = TRUE)
+  }))
+hist(unlist(lapply(MPMs_unif, function(x) lambda(x))))
+
+semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "semel", reps = 1000)
+}))
+
+
+save(semelfast_simulation, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA.Rda")
+
+
+```
+
+Semel slow
+```{r}
+
+
+lambdas <- semelslow[[3]]$lam
+hist(lambdas)
+MPMs <- semelslow[[1]]
+
+bins2sample <- seq(0.799,1.201,length.out = 5)
+MPMs_unif <- do.call(c, lapply(2:length(bins2sample), function(b){ 
+  sample(MPMs[which(lambdas >= bins2sample[b-1] & lambdas < bins2sample[b])], 10, replace = TRUE)
+  }))
+hist(unlist(lapply(MPMs_unif, function(x) lambda(x))))
+
+semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000, 10000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "semel", reps = 1000)
+}))
+
+
+save(semelslow_simulation, file = "C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA.Rda")
+
+
+```
 
 
 
@@ -428,16 +889,16 @@ Add semelparous slow once it works
 allparitypace <- do.call(rbind, list(iterofast_simulation, iteroslow_simulation, semelfast_simulation))
 
 # rho1_semelfast <- 
-ggplot(allparitypace[allparitypace$StPopSz < 500,], aes(Time2Extinction, fill = interaction(parity, speed))) + 
-  geom_density()+
-  # scale_colour_discrete(guide=FALSE)+
-  theme_bw()+
-  facet_wrap(~StPopSz, ncol = 7)+
-  # theme_void()+
-  # scale_x_discrete(labels = NULL, breaks = NULL)+ 
-  # scale_y_continuous(labels = NULL, breaks = NULL)+
-  ylab(expression(rho))+
-  xlab("T")
+# ggplot(allparitypace[allparitypace$StPopSz < 500,], aes(Time2Extinction, fill = interaction(parity, speed))) + 
+#   geom_density()+
+#   # scale_colour_discrete(guide=FALSE)+
+#   theme_bw()+
+#   facet_wrap(~StPopSz, ncol = 7)+
+#   # theme_void()+
+#   # scale_x_discrete(labels = NULL, breaks = NULL)+ 
+#   # scale_y_continuous(labels = NULL, breaks = NULL)+
+#   ylab(expression(rho))+
+#   xlab("T")
 
 
 cdf1_semelfast <- ggplot(semelfast_simulation[semelfast_simulation$StPopSz < 500,], aes(Time2Extinction))+ #, colour = as.factor(Replicate)
