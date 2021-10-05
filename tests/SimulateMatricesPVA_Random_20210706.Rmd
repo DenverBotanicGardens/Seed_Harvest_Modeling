@@ -21,8 +21,15 @@ library(DirichletReg)
 
 ```{r}
 
+incomplete_cdf <- function(x, gmin, gmax) {
+  cdf <- rle(sort(na.omit(x)))
+  obsx <- cdf$values
+  obsy <- cumsum(cdf$lengths)/length(x)
+  data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
+}
+
 RandomMatrix <- function(itero = TRUE, fast = TRUE, lambdarange = c(0.8,1.2),nummats = 100, fastslowcutoff = 5){
-  
+  set.seed(1234)
   mat_list <- list()
   i <- 1
   
@@ -109,6 +116,7 @@ Simulation
 
 virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", annualYN = FALSE, reps = 1000, simlength = 500){
   # replicate simulations
+  set.seed(1234)
   dfout <- do.call(rbind,lapply(1:reps, function(repl){
     Nx <- stable.stage(mean(MPMs))
     if(annualYN){
@@ -158,11 +166,14 @@ virtualPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
 }
 ```
 
-# test harvesting (reducing fecundity)
+# test harvesting (reducing fecundity)   
+# Ooops! have it as fecundity <- harvestintensity * fecundity so by having it be 0.10 it really simulated 90% harvest. Should be (1-harvestintensity)*fecundity
+_harvest2021-09-28 are all 90% intensity 10% of the time
 ```{r}
 
 harvestPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", annualYN = FALSE, reps = 1000, simlength = 500, harvestintensity = 0.10, harvestfrequency = 0.10){
   # replicate simulations
+  set.seed(1234)
   dfout <- do.call(rbind,lapply(1:reps, function(repl){
     Nx <- stable.stage(mean(MPMs))
     if(annualYN){
@@ -180,13 +191,14 @@ harvestPVA <- function(StartPopSize, MPMs, speed = "fast", parity = "itero", ann
     popsz <- c()
     detlam <- c()
     Time2Ext <- NA
+    # sample the number of years equal to the percent of the time to harvest
     harvestyrs <- sample(1:simlength, size = floor(simlength*harvestfrequency))
     # so really gets us to year simlength+1
     for(i in 1:simlength){
       # Harvest == 10% reduction in fecundity 10% of the time
       yr[i] <- i
       mats[[i]] <- sample(MPMs,size = 1)[[1]]
-      if(i %in% harvestyrs) mats[[i]][1,2] <- mats[[i]][1,2]*harvestintensity
+      if(i %in% harvestyrs) mats[[i]][1,2] <- mats[[i]][1,2]*(1-harvestintensity)
       if(annualYN){
         gentim[i] <- popbio::generation.time(mats[[i]], r = c(1,2), c = 2)
         netrep[i] <- net.reproductive.rate(mats[[i]], r=c(1,2), c=2)
@@ -314,6 +326,71 @@ dev.off()
 
 ```
 
+# try doing all three at once to get same set of matrices?
+```{r}
+lambdas <- iterofast[[3]]$lam
+MPMs <- iterofast[[1]]
+# bins2sample <- seq(0.8,1.201,length.out = 7)
+bins2sample <- seq(0.85,1.151,length.out = 7)
+MPMs_unif <- do.call(c, lapply(2:length(bins2sample), function(b){ 
+  sample(MPMs[which(lambdas >= bins2sample[b-1] & lambdas < bins2sample[b])], 10, replace = TRUE)
+  }))
+iterofast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ #, 10000
+  virtualPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000)
+}))
+
+datetoday <- as.character(Sys.Date())
+save(iterofast_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA",datetoday,".Rda", sep=""))
+
+# 90% of seed 10% of time
+iterofast_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ 
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000,
+             harvestintensity = 0.9, harvestfrequency = 0.10)
+}))
+
+save(iterofast_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest",datetoday,".Rda", sep=""))
+
+iterofast_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ 
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000,
+             harvestintensity = 0.10, harvestfrequency = 0.10)
+}))
+
+save(iterofast_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest10_",datetoday,".Rda", sep=""))
+
+rm(lambdas);rm(MPMs);rm(MPMs_unif)
+lambdas <- iteroslow[[3]]$lam
+MPMs <- iteroslow[[1]]
+
+bins2sample <- seq(0.799,1.201,length.out = 7)
+MPMs_unif <- do.call(c, lapply(2:length(bins2sample), function(b){ 
+  sample(MPMs[which(lambdas >= bins2sample[b-1] & lambdas < bins2sample[b])], 10, replace = TRUE)
+  }))
+
+iteroslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  virtualPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "itero", reps = 1000)
+}))
+
+save(iteroslow_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA",datetoday,".Rda", sep=""))
+
+iteroslow_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "itero", reps = 1000,
+             harvestintensity = 0.9, harvestfrequency = 0.10)
+}))
+
+save(iteroslow_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest",datetoday,".Rda", sep=""))
+
+iteroslow_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), 
+                                             function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "itero", reps = 1000,
+              harvestintensity = 0.10, harvestfrequency = 0.10)
+}))
+
+save(iteroslow_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest10_",datetoday,".Rda", sep=""))
+```
+
+
+
+
 Iteroparous fast
 ```{r}
 lambdas <- iterofast[[3]]$lam
@@ -337,7 +414,7 @@ datetoday <- as.character(Sys.Date())
 save(iterofast_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA",datetoday,".Rda", sep=""))
 ```
 
-Harvest for Iteroparous fast
+Harvest for Iteroparous fast *** due to mistake in code this was 90% harvest intensity (reduced fecundity to 10% of value) ****
 ```{r}
 
 iterofast_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ 
@@ -349,6 +426,17 @@ save(iterofast_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/C
 
 ```
 
+```{r}
+
+iterofast_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){ 
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "itero", reps = 1000,
+             harvestintensity = 0.10, harvestfrequency = 0.10)
+}))
+
+datetoday <- as.character(Sys.Date())
+save(iterofast_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest10_",datetoday,".Rda", sep=""))
+
+```
 
 
 ```{r}
@@ -403,6 +491,19 @@ iteroslow_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), functio
 save(iteroslow_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest",datetoday,".Rda", sep=""))
 ```
 
+# harvest Iteroparous slow   
+```{r}
+iteroslow_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), 
+                                             function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "itero", reps = 1000,
+              harvestintensity = 0.10, harvestfrequency = 0.10)
+}))
+
+
+save(iteroslow_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest10_",datetoday,".Rda", sep=""))
+```
+
+
 
 
 ```{r}
@@ -413,8 +514,24 @@ head(iteroslow_simulation[iteroslow_simulation$Extant == 0,])
 nrow(iteroslow_simulation[iteroslow_simulation$Extant == 0,])/max(iteroslow_simulation$Replicate) # 1.927
 
 
-ggplot(iteroslow_harvest, aes(Year, log(PopSize)), group = Replicate)+
-  geom_line()
+
+iteroslow_simulation %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed, StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, color=interaction(parity,speed))) +
+  facet_wrap(~StPopSz)+
+  geom_step()+
+  theme_bw()
+
+iteroslow_harvest %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, color=interaction(parity,speed))) +
+  facet_wrap(~StPopSz)+
+  geom_step()+
+  theme_bw()
 
 head(iteroslow_harvest[iteroslow_harvest$Extant == 0,])
 nrow(iteroslow_harvest[iteroslow_harvest$Extant == 0,])/max(iteroslow_harvest$Replicate) # 4.69
@@ -427,6 +544,8 @@ nrow(iteroslow_harvest[iteroslow_harvest$Extant == 0,])/max(iteroslow_harvest$Re
 Semelparous slow
 ```{r}
 dev.off()
+
+rm(lambdas);rm(MPMs);rm(MPMs_unif)
 lambdas <- semelslow[[3]]$lam
 hist(lambdas)
 MPMs <- semelslow[[1]]
@@ -445,6 +564,27 @@ semelslow_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), func
 save(semelslow_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA",datetoday,".Rda", sep=""))
 ```
 
+```{r}
+semelslow_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "semel", reps = 1000)
+}))
+
+
+save(semelslow_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest",datetoday,".Rda", sep=""))
+```
+
+
+```{r}
+semelslow_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "slow", parity = "semel", reps = 1000)
+}))
+
+
+save(semelslow_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest10_",datetoday,".Rda", sep=""))
+```
+
+
+
 
 ```{r}
 ggplot(semelslow_simulation, aes(Year, log(PopSize)), group = Replicate)+
@@ -460,10 +600,9 @@ nrow(semelslow_simulation[semelslow_simulation$Extant == 0,])/max(iteroslow_simu
 Semelparous fast
 ```{r}
 dev.off()
-rm(lambdas)
+rm(lambdas);rm(MPMs);rm(MPMs_unif)
 lambdas <- semelfast[[3]]$lam
 hist(lambdas, breaks = 8)
-rm(MPMs)
 MPMs <- semelfast[[1]]
 
 bins2sample <- seq(0.8,1.20001,length.out = 8)
@@ -480,6 +619,27 @@ semelfast_simulation <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), func
 save(semelfast_simulation, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA",datetoday,".Rda", sep=""))
 ```
 
+```{r}
+
+semelfast_harvest <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "semel", reps = 1000)
+}))
+
+
+save(semelfast_harvest, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest",datetoday,".Rda", sep=""))
+```
+
+
+
+```{r}
+
+semelfast_harvest10 <- do.call(rbind, lapply(c(10,50,100,500, 1000, 5000), function(StartPopSize){
+  harvestPVA(StartPopSize, MPMs_unif, speed = "fast", parity = "semel", reps = 1000)
+}))
+
+
+save(semelfast_harvest10, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest10_",datetoday,".Rda", sep=""))
+```
 
 ```{r}
 ggplot(semelfast_simulation, aes(Year, log(PopSize)), group = Replicate)+
@@ -516,8 +676,50 @@ load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHar
 load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA2021-09-22.Rda")
 load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA2021-09-22.Rda")
 
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest2021-09-28.Rda")
+
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest10_2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest10_2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest10_2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest10_2021-09-28.Rda")
+
+
+iteroslow_simulation$management <- "none"
+iteroslow_harvest$management <- "harvest90"
+iteroslow_harvest10$management <- "harvest10"
+iterofast_simulation$management <- "none"
+iterofast_harvest$management <- "harvest90"
+iterofast_harvest10$management <- "harvest10"
+semelslow_simulation$management <- "none"
+semelslow_harvest$management <- "harvest90"
+semelslow_harvest10$management <-"harvest10"
+semelfast_simulation$management <- "none"
+semelfast_harvest$management <- "harvest90"
+semelfast_harvest10$management <- "harvest10"
+
 
 ```
+
+
+# no reduction in fecundity has lower ER for iteroparous than 10%???
+```{r}
+
+head(iterofast_harvest10)
+hist(iterofast_harvest10$detlam, col = rgb(1,0,0,0.3))
+hist(iterofast_simulation$detlam, add = TRUE, col = rgb(0,1,1,0.3)) ## Oh, lower for the ones happened to get picked for none than for 
+hist(iterofast_harvest$detlam, col = rgb(0,0,1,0.3), add = TRUE)
+
+hist(semelfast_harvest10$detlam, col = rgb(1,0,0,0.3))
+hist(semelfast_simulation$detlam, add = TRUE, col = rgb(0,1,1,0.3)) ## these are much more similar 
+
+
+
+```
+
+
 
 Or load the ones over 300 years and fast is <= 5 years, slow is >= 10 years
 ```{r}
@@ -589,9 +791,19 @@ ggplot(iterofast_gentime_lam, aes(Year, log(PopSize), colour = as.factor(Replica
   theme_bw()+
   facet_wrap(~StPopSz)+
   scale_colour_discrete(guide = FALSE)
-
-                                
+```
+   
+```{r}                                
 all_simulation <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation))
+
+
+all_managment <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation,
+     iteroslow_harvest,iterofast_harvest,semelslow_harvest,semelfast_harvest,
+     iteroslow_harvest10, iterofast_harvest10, semelslow_harvest10, semelfast_harvest10))
+
+head(all_managment)
+ggplot(all_managment[all_managment$parity == "itero",], aes(detlam))+
+  geom_boxplot
 
 rm(iterofast_simulation);rm(iteroslow_simulation);rm(semelfast_simulation);rm(semelslow_simulation)
 
@@ -726,10 +938,10 @@ incomplete_cdf <- function(x, gmin, gmax) {
   data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
 }
 
-allincompCDF <- all_simulation
+# allincompCDF <- all_simulation
 
 ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_10.jpg",
-allincompCDF[allincompCDF$StPopSz == 10,] %>% 
+all_simulation[all_simulation$StPopSz == 10,] %>% 
   mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
   group_by(parity,speed) %>% 
   summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
@@ -776,6 +988,90 @@ ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/M
 
 
 ```
+
+
+# Compare harvest and none   
+```{r}
+incomp_points <- all_managment %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,management,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax))) 
+
+incomp_points_df <- (as.data.frame(incomp_points))
+
+x <- split(incomp_points, list(incomp_points$parity,incomp_points$speed,
+                                 incomp_points$StPopSz,incomp_points$management))[[1]]
+
+ERat100yrs <- do.call(rbind,lapply(split(incomp_points, list(incomp_points$parity,incomp_points$speed,
+                                 incomp_points$StPopSz,incomp_points$management)),
+             function(x){
+               # for some, the CDF reaches 100% after 100 years and no values are recorded at 100
+               if(max(x$x[x$x < 101])){
+                 data.frame(x[1,], PercERat100yrs = x$y[x$x == max(x$x[x$x < 101])])
+               } else {
+                 # When there is never any extinctions, years are 2 and 500
+                 if(max(x$y) == 0 & min(x$x[-1]) > 100){
+                   data.frame(x[1,], PercERat100yrs = 0)
+                 } else {
+                 data.frame(x[1,], PercERat100yrs = x$y[x$x == min(100, max(x$x))])
+                   }
+                 }
+               }))
+
+
+## To match Menges et al. 2004 figure
+ggplot(ERat100yrs[ERat100yrs$management != "harvest90",], aes(interaction(management, speed, parity), PercERat100yrs, 
+                       fill = interaction(speed, parity),
+                       alpha = management))+  
+  facet_wrap(~StPopSz, scales = "free_x")+
+  theme_bw()+
+  scale_alpha_manual(values = c(harvest10 = 1, 
+                                # harvest90 = 0.5, 
+                                none = 0.2),
+                     name = "Management",
+                     labels = c("10% harvest intensity\n and frequency",
+                                # "90% harvest intensity\n and 10% frequency",
+                                "none")) +
+  # geom_point()+
+  geom_bar(stat = "identity")+
+  theme(# axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  ylab("Percent extinction probability at 100 years")+
+  geom_hline(yintercept = 0.05)
+
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_harvest.jpg",
+all_managment %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,management,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, 
+             color= management, linetype= management)) +
+  geom_step()+
+  # facet_wrap(~StPopSz+speed+parity, ncol = 4)+
+  facet_wrap(~interaction(StPopSz,speed,parity), ncol = 6)+
+  geom_text(data = ERat100yrs, label = round(ERat100yrs$PercERat100yrs,2), 
+            aes(x = 110, y = PercERat100yrs), hjust = 0,
+            show.legend = FALSE, size = 2)+
+  theme_bw()+
+  geom_vline(xintercept = 100)+
+     # scale_colour_discrete(name = "Management",
+     #                    labels = c(harvest10 = "10% harvest",
+     #                               harvest90 = "90% harvest (10% frequency)",
+     #                               none = "none"))+
+     # scale_linetype_discrete(name = "Management",
+     #                    labels = c(harvest10 = "10% harvest",
+     #                               harvest90 = "90% harvest (10% frequency)",
+     #                               none = "none"))+
+  ylab("Extinction Risk")+
+  xlab("Year"),
+width=250, height=170,units='mm', dpi=300)
+
+```
+
+
 
 
 
