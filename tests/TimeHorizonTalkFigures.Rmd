@@ -1,0 +1,297 @@
+---
+title: "TimeHorizon_talkfigures"
+author: "Michelle DePrenger-Levin"
+date: "10/4/2021"
+output: html_document
+---
+
+```{r}
+library(popbio)
+library(ggplot2)
+library(devtools)
+library(patchwork)
+require(AICcmodavg)
+library(lme4)
+library(xkcd)
+library(extrafont)
+library(extrafontdb)
+library(dplyr)
+rm(list=ls())
+
+
+incomplete_cdf <- function(x, gmin, gmax) {
+  cdf <- rle(sort(na.omit(x)))
+  obsx <- cdf$values
+  obsy <- cumsum(cdf$lengths)/length(x)
+  data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
+}
+
+
+```
+
+
+```{r}
+
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_PVA2021-09-22.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_PVA2021-09-22.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_PVA2021-10-01.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_PVA2021-10-01.Rda")
+
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest2021-10-01.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest2021-10-01.Rda")
+
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelslow_harvest10_2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/semelfast_harvest10_2021-09-28.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iteroslow_harvest10_2021-10-01.Rda")
+load("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/iterofast_harvest10_2021-10-01.Rda")
+
+
+iteroslow_simulation$management <- "none"
+iteroslow_harvest$management <- "harvest90"
+iteroslow_harvest10$management <- "harvest10"
+iterofast_simulation$management <- "none"
+iterofast_harvest$management <- "harvest90"
+iterofast_harvest10$management <- "harvest10"
+semelslow_simulation$management <- "none"
+semelslow_harvest$management <- "harvest90"
+semelslow_harvest10$management <-"harvest10"
+semelfast_simulation$management <- "none"
+semelfast_harvest$management <- "harvest90"
+semelfast_harvest10$management <- "harvest10"
+
+
+
+```
+
+
+
+```{r}
+                            
+all_simulation <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation))
+
+
+all_managment <- do.call(rbind, list(iteroslow_simulation,iterofast_simulation,semelslow_simulation,semelfast_simulation,
+     iteroslow_harvest,iterofast_harvest,semelslow_harvest,semelfast_harvest,
+     iteroslow_harvest10, iterofast_harvest10, semelslow_harvest10, semelfast_harvest10))
+
+rm(iteroslow_harvest); rm(iterofast_harvest); rm(semelfast_harvest); rm(semelslow_harvest)
+rm(iteroslow_harvest10); rm(iterofast_harvest10); rm(semelfast_harvest10); rm(semelslow_harvest10)
+rm(iteroslow_simulation); rm(iterofast_simulation); rm(semelfast_simulation); rm(semelslow_simulation)
+
+gc()
+
+```
+
+
+
+```{r}
+
+lm1 <- glm(Time2Extinction ~ GenTime*parity*detlam + StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+summary(lm1)
+
+lm3 <- glm(Time2Extinction ~ parity + StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+
+lm5 <- glm(Time2Extinction ~ parity + GenTime, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm6 <- glm(Time2Extinction ~ StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm7 <- glm(Time2Extinction ~ GenTime, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm8 <- glm(Time2Extinction ~ detlam, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm9 <- glm(Time2Extinction ~ detlam + StPopSz + parity, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm10 <- glm(Time2Extinction ~ detlam + StPopSz , data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm11 <- glm(Time2Extinction ~ GenTime*parity + StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm12 <- glm(Time2Extinction ~ netrep*parity*detlam + StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+summary(lm12)
+lm13 <- glm(Time2Extinction ~ netrep*detlam + StPopSz, data =  all_simulation[all_simulation$Extant==0,], family = "poisson") 
+
+lm14 <- glm(Time2Extinction ~ parity + netrep, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm15 <- glm(Time2Extinction ~ netrep, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm16 <- glm(Time2Extinction ~ netrep*parity + StPopSz, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+
+
+lm.list <- list( lm3,   lm5, lm6,lm8, lm9, lm10, lm12,  lm14, lm15,lm16)
+lm.names <- as.character(unlist(lapply(lm.list,formula)))
+(lm.results <- aictab(lm.list, modnames=lm.names))
+#evidence ratio 
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+
+# It's generation time, parity, deterministic lambda and starting population size
+# or now it's netrep rate * parity * detlam +stpopsiz
+
+lm17 <- glm(Time2Extinction ~ (speed + parity + StPopSz)^2, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm18 <- glm(Time2Extinction ~ (speed + parity)^2, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm19 <- glm(Time2Extinction ~ (speed + StPopSz)^2, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm20 <- glm(Time2Extinction ~ (parity + StPopSz)^2, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm21 <- glm(Time2Extinction ~ parity, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+lm22 <- glm(Time2Extinction ~ speed, data = all_simulation[all_simulation$Extant==0,], family = "poisson") 
+
+# just compare pace, parity, and popsize
+lm.list <- list(lm3,   lm5, lm6, lm7, lm11, lm17, lm18, lm19,lm20, lm21, lm22)
+lm.names <- as.character(unlist(lapply(lm.list,formula)))
+(lm.results <- aictab(lm.list, modnames=lm.names))
+#evidence ratio 
+for(i in 2:length(lm.list)){
+  print(exp(0.5*lm.results$Delta_AICc[i]))
+}
+```
+
+```{r}
+ggplot(all_simulation[all_simulation$Extant == 0,], 
+       aes(detlam, Time2Extinction, colour = netrep))+
+  geom_point()+
+  facet_wrap(~StPopSz)+
+  scale_colour_viridis_b()+
+  theme_bw()
+
+
+ggplot(all_simulation[all_simulation$Extant == 0,], 
+       aes(netrep, Time2Extinction, colour = detlam))+
+  geom_point()+
+  facet_wrap(~StPopSz)+
+  scale_colour_viridis_b()+
+  theme_bw()
+
+```
+
+```{r}
+
+all_simulation[all_simulation$Extant == 0,] %>%  
+  group_by(speed, StPopSz) %>% 
+  summarise(n=round((n()/2000)*100, 2), avg = median(Time2Extinction)) -> Summary.data.pace
+
+
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Pace_500years_points.jpg",
+ggplot(all_simulation[all_simulation$Extant == 0,], aes(as.factor(StPopSz), Time2Extinction, fill = speed))+
+  geom_violin(scale = "width")+
+  geom_point(position = position_jitterdodge(), size = 0.1, alpha = 0.5,colour = "grey")+
+  scale_fill_manual(name = "Pace", values = c(slow = "coral",fast = "cornflowerblue"))+
+  theme_bw()+
+  geom_text(data = Summary.data.pace, 
+            aes(x = as.factor(StPopSz), y = avg, label = n, colour = speed), fontface = 2,
+            size = 3,
+            position = position_dodge(width = 1))+
+  scale_colour_manual(guide = "none", values = c(slow = "black", fast = "black"))+ # name = "Pace", 
+  ylab("Time to extinction")+
+  xlab("Starting population size"),
+width=130, height=80,units='mm', dpi=300)
+
+```
+
+labels = scales::percent_format(scale = 1)
+
+```{r}
+all_simulation[all_simulation$Extant == 0,] %>%  
+  group_by(parity, StPopSz) %>% 
+  summarise(n=round((n()/2000)*100, 2), avg = median(Time2Extinction)) -> Summary.data.parity
+
+
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Parity_500years_points.jpg",
+ggplot(all_simulation[all_simulation$Extant == 0,], aes(as.factor(StPopSz), Time2Extinction, fill = parity))+
+  # geom_boxplot()+
+  geom_violin(scale = "width")+
+  geom_point(position = position_jitterdodge(), size = 0.1, alpha = 0.5, colour = "grey")+
+  scale_fill_manual(name = "Parity",
+                        labels = c(itero = "Iteroparous",
+                                   semel = "Semelparous"),
+                      values = c(itero = "darkorchid2",semel = "gold"))+
+  theme_bw()+
+  geom_text(data = Summary.data.parity, 
+            aes(x = as.factor(StPopSz), y = avg, label = n, colour = parity), fontface = 2,
+            position = position_dodge(width = 1))+
+  scale_colour_manual(guide = "none", values = c(itero = "black", semel = "black"))+
+  ylab("Time to extinction")+
+  xlab("Starting population size"),
+width=160, height=80,units='mm', dpi=300)
+
+```
+
+```{r}
+all_simulation[all_simulation$Extant == 0,] %>%  
+  group_by(speed, parity, StPopSz) %>% 
+  summarise(n=round((n()/1000)*100, 2), avg = median(Time2Extinction)) -> Summary.data.interaction
+
+
+ggsave("C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/Interaction_500years_points.jpg",
+ggplot(all_simulation[all_simulation$Extant == 0,], aes(as.factor(StPopSz), Time2Extinction, fill = interaction(parity, speed)))+
+  geom_violin(scale = "width")+
+  geom_point(position = position_jitterdodge(), size = 0.1, alpha = 0.5, colour = "grey")+
+  scale_fill_manual(name = "Pace and parity",
+                        labels = c("Iteroparous slow",
+                                   "Semelparous slow",
+                                   "Iteroparous fast",
+                                   "Semelparous fast"),
+                    values = c("darkorchid1",
+                               "green","darkslateblue","orange"))+
+  theme_bw()+
+  # geom_text(data = Summary.data.parity, 
+  #           aes(x = as.factor(StPopSz), y = avg, label = n), fontface = 2,
+  #           position = position_dodge(width = 1))+
+  # scale_colour_manual(guide = "none")+
+  ylab("Time to extinction")+
+  xlab("Starting population size"),
+width=180, height=80,units='mm', dpi=300)
+
+```
+
+```{r}
+incomp_points <- all_managment %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,management,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))
+
+ERat100yrs <- do.call(rbind,lapply(split(incomp_points, list(incomp_points$parity,incomp_points$speed,
+                                 incomp_points$StPopSz,incomp_points$management)),
+             function(x){
+               # for some, the CDF reaches 100% after 100 years and no values are recorded at 100
+               if(max(x$x[x$x < 101])){
+                 data.frame(x[1,], PercERat100yrs = x$y[x$x == max(x$x[x$x < 101])])
+               } else {
+                 # When there is never any extinctions, years are 2 and 500
+                 if(max(x$y) == 0 & min(x$x[-1]) > 100){
+                   data.frame(x[1,], PercERat100yrs = 0)
+                 } else {
+                 data.frame(x[1,], PercERat100yrs = x$y[x$x == min(100, max(x$x))])
+                   }
+                 }
+               }))
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/IncompleteCDF_harvest_20211004.jpg",
+all_managment %>% 
+  mutate(gmin =min(Time2Extinction, na.rm=TRUE), gmax=max(Time2Extinction, na.rm=TRUE)) %>% 
+  group_by(parity,speed,management,StPopSz) %>% 
+  summarize(incomplete_cdf(Time2Extinction, first(gmin), first(gmax)))%>% 
+  ggplot(aes(x=x, y=y, 
+             color= management, linetype= management)) +
+  geom_step()+
+  # facet_wrap(~StPopSz+speed+parity, ncol = 4)+
+  facet_wrap(~interaction(StPopSz,speed,parity), ncol = 6)+
+  geom_text(data = ERat100yrs, label = round(ERat100yrs$PercERat100yrs,2), 
+            aes(x = 110, y = PercERat100yrs), hjust = 0,
+            show.legend = FALSE, size = 2)+
+  theme_bw()+
+  geom_vline(xintercept = 100)+
+     scale_colour_discrete(name = "Management",
+                        labels = c(harvest10 = "10% harvest",
+                                   harvest90 = "90% harvest",
+                                   none = "none"))+
+     scale_linetype_discrete(name = "Management",
+                        labels = c(harvest10 = "10% harvest",
+                                   harvest90 = "90% harvest",
+                                   none = "none"))+
+  ylab("Extinction Risk")+
+  xlab("Year"),
+width=290, height=170,units='mm', dpi=300)
+
+```
+
+
+## find the inflection points (where the function changes concavity) i.e. where the second derivative changes signs   
+```{r}
+
+
+
+```
+
+
