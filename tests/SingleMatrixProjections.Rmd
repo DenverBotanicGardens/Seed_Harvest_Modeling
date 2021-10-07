@@ -1,0 +1,217 @@
+---
+title: "SingleMatrixProjections"
+author: "Michelle DePrenger-Levin"
+date: "10/6/2021"
+output: html_document
+---
+
+1. Randomly create matrix models that are fast or slow, itero or semel, with deterministic lambda between 0.6 and 4.5 from Salguero-Gomez 2017
+2. Select one matrix and multply that out every year (simulating that deterministic lambda) for 500 years 
+3. look at distribution of time to extinction
+4. focus in on conservation focused time horizon (30-100 years)
+5. Look at how across life history and pop size aspects (likely going to be population size most important) on how each speeds up time to extinction ** This is the tool for making conservation decisions ** what to address
+6. Likely still conclusion is that more important to estimate population size than these stochastic simulations of time to extinction   
+
+7. ??? with AIC and glm of time2ext ~ pace, parity, and population size, which are important in predicting and how impacts
+
+Range of $\lambda = (0.6,4.5)$
+Range of Reproduction = (0.01, )
+
+```{r}
+
+library(tidyr)
+library(popbio)
+library(ggplot2)
+library(devtools)
+library(patchwork)
+require(AICcmodavg)
+library(lme4)
+library(DirichletReg)
+
+```
+
+What is the variation in reproductive rates within COMPADRE?
+```{r}
+library(Rcompadre)
+
+load("C:/Users/deprengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/PVA/Paniw etal/patterns_temporal_autocorrelation-master/COMPADRE_v.4.0.0.RData")
+
+x <- compadre[[2]][[100]]
+
+which(sapply(compadre[[2]], function(x) any(x$MatrixClassOrganized == "prop")) )
+
+
+# matF fecundity matrices of non manipulated populations
+Fmats <- sapply(compadre[[3]][sapply(compadre[[2]], function(x) !any(x$MatrixClassOrganized == "prop")) &
+                                compadre[[1]]$MatrixTreatment == "Unmanipulated" &
+                                compadre[[1]]$OrganismType != "Algae" &
+                                compadre[[1]]$SurvivalIssue < 1], '[[', 3)
+Fmats[sapply(Fmats, function(x) sum(x) > 0)]
+Fmats[sapply(Fmats, function(x) sum(x) > 100)]
+sum(Fmats[[1]])
+totF <- unlist(lapply(Fmats, function(x) sum(x)))
+hist(unlist(totF))
+hist(unlist(totF[totF < 11]))
+max(totF, na.rm = TRUE) # 4526000 is rediculous
+Fmats[totF > 99 & totF < 100 & !is.null(Fmats)]
+
+foo <- NA
+if(!is.na(foo)){ 
+  if(foo > 100) TRUE } else {
+    FALSE
+  }
+# Some may be only clonal/asexual reproduction
+x <- compadre[[3]][compadre[[1]]$MatrixTreatment == "Unmanipulated"][[1]]
+sp_highfecund <- unique(compadre[[1]]$SpeciesAuthor[sapply(compadre[[3]][compadre[[1]]$MatrixTreatment == "Unmanipulated"], 
+                                   function(x){
+                                     if(!is.na(sum(x$matF))){
+                                       if(sum(x$matF) > 10){ 
+                                       out <- TRUE
+                                     } else {
+                                        out <- FALSE
+                                     }} else {
+                                       out <- FALSE}
+                                     out
+                                     })])
+
+length(sp_highfecund) #403
+# Check that some have survival much greater than 1 (so new indiviuals are produced out of thin air??)
+compadre[[1]][compadre[[1]]$SpeciesAuthor %in% sp_highfecund & compadre[[1]]$SurvivalIssue < 1,]
+# table(compadre[[1]]$OrganismType)
+compadre[[1]][compadre[[1]]$SpeciesAuthor %in% sp_highfecund & compadre[[1]]$SurvivalIssue < 1 &
+                compadre[[1]]$OrganismType != "Algae",]
+compadre[[3]][compadre[[1]]$SpeciesAuthor == sp_highfecund[[5]]] # "Arenaria_serpyllifolia"
+# has matF with huge values in strange places 
+
+compadre[[3]][compadre[[1]]$SpeciesAuthor == sp_highfecund[[10]]] # Wait what? non of these has sum so big
+lapply(compadre[[3]][compadre[[1]]$SpeciesAuthor == sp_highfecund[[10]]], function(x){
+  sum(x$matF)
+})
+
+hist(unlist(lapply(Fmats, function(x) sum(x))), xlim = c(0,10))
+sort(unlist(lapply(Fmats, function(x) sum(x))), decreasing = TRUE)
+
+```
+
+
+```{r}
+matrix_elast <- function(Mx_dim = 2){
+  x <- matrix(rep("L",Mx_dim^2), ncol = Mx_dim)
+  x[lower.tri(x)] <- "G"
+  x[upper.tri(x)] <- "R" # retrogressive growth
+  x[1,Mx_dim] <- "F" # fecundity
+  x
+}
+generic_mat <- matrix_elast(2)
+```
+
+```{r}
+
+
+incomplete_cdf <- function(x, gmin, gmax) {
+  cdf <- rle(sort(na.omit(x)))
+  obsx <- cdf$values
+  obsy <- cumsum(cdf$lengths)/length(x)
+  data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
+}
+
+singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), nummats = 500, 
+                                   management = TRUE, StartPopSize = 100,
+                                   reps = 1000, simlength = 500, harvestintensity = 0.10, harvestfrequency = 0.10){
+  set.seed(1234)
+  # simulation projection with/out management 
+  dfout <- do.call(rbind,lapply(1:reps, function(repl){
+    
+    lmbd <- 0
+    ###########################################################################################
+    while(lmbd <= lambdarange[1] & lmbd <= lambdarange[2] ){ #While outside this range, keep trying
+    if(itero){
+      col1 <- rdirichlet(1,c(1,1,1)) # S1 ca. 0, growth, death
+      col2 <- rdirichlet(1, c(1,1)) # S2, death
+      f <- runif(1, 0.01,20)
+      t_ij <- matrix(c(col1[1], col1[2],
+                       f, col2[1]),
+                     nrow = 2)
+      } else {
+        # Semelparous
+        col1 <- rdirichlet(1,c(1,1,1)) # S1, growth, death
+        col2 <- rdirichlet(1, c(1,1)) # S2, death
+        f <- runif(1, 0.01, 20)
+        t_ij <- matrix(c(col1[1], col1[2],
+                         f, 0),
+                       nrow = 2)
+        } # end parity
+      lmbd <- lambda(t_ij)
+      gt <- generation.time(t_ij)
+      net.rep <- net.reproductive.rate(t_ij)
+      } # Picked a t_ij that works!
+    ###########################################################################################
+    
+    e_ij <- popbio::elasticity(t_ij)
+    survivalElast <- sum(e_ij[which(generic_mat == "L")])
+    growthElast <- sum(e_ij[which(generic_mat == "G")])
+    fecundElast <- sum(e_ij[which(generic_mat == "F")])
+    Elasts <- data.frame(S = survivalElast, G = growthElast, R = fecundElast)
+    
+    ## Initialize projections
+    Nx <- stable.stage(t_ij)
+    manvec1 <- vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+    # Initialize management MPM
+    man.t_ij <- t_ij 
+    man.t_ij[1,2] <- man.t_ij[1,2]*(1-harvestintensity)
+    # Initialize for loop
+    Extant <- c()
+    manExtant <- c()
+    yr <- c()
+    popsz <- c()
+    manpopsz <- c()
+    Time2Ext <- NA
+    manTime2Ext <- NA
+    # freq <- sort(sample(1:simlength,size = floor(simlength*harvestfrequency))) # Really, randomly through time?
+    startyr <- sample(1:(simlength - (floor(simlength*harvestfrequency))), size = 1)
+    freq <- startyr:(startyr +( floor(simlength*harvestfrequency)-1)) # Consecutive years of harvest
+    
+    ############################### Projection ##############################
+    for(i in 1:simlength){
+      yr[i] <- i
+      vec1 <- floor(t_ij%*%vec1)
+      popsz[i] <- sum(vec1)
+      if(management){
+        if(i %in% freq){
+          manvec1 <- floor(man.t_ij%*%manvec1)
+          manpopsz[i] <- sum(manvec1)
+        } else {
+          manvec1 <- floor(t_ij%*%manvec1)
+          manpopsz[i] <- sum(manvec1)
+        }
+      }
+      Extant[i] <- if(popsz[i]<1) 0 else 1
+      manExtant[i] <- if(manpopsz[i]<1) 0 else 1
+      if(Extant[i] == 0) Time2Ext <- i
+      if(manExtant[i] == 0) manTime2Ext <- i
+      if(popsz[i] == 0 & manpopsz[i] == 0) break
+    }
+    #########################################################################
+    if(itero){ parity <- "itero"} else {parity <- "semel"}
+    dfMPM <- data.frame(Elasts, lam = lmbd, gentim = gt,
+                        lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+                        netrep = net.rep, PopSize = popsz, ManagPopSize = manpopsz, Year = yr, parity = parity, 
+                        GenTime = gt, netrep = net.rep, Extant = Extant, manExtant = manExtant, 
+                        StPopSz = StartPopSize, Time2Extinction = Time2Ext, manTime2Extinction = manTime2Ext,
+                        Replicate = repl)
+    dfMPM
+  })) # end replicates and bind rows
+} # end function
+  
+```
+
+
+```{r}
+
+
+
+```
+
+
+
+
