@@ -116,16 +116,17 @@ incomplete_cdf <- function(x, gmin, gmax) {
   data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
 }
 
-singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, StartPopSize = 100,
-                                   reps = 1000, simlength = 500, harvestintensity = 0.10, harvestfrequency = 0.10,
+singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, StartPopSize = 10,
+                                   reps = 100, simlength = 500, harvestintensity = c(0,0.1,0.5,0.9), 
+                                   harvestfrequency = c(0,0.1,0.5,0.9), freq.dist = "random",
                                    timepoints = c(1,10,30,100)){
   set.seed(1234)
+  
   # simulation projection with/out management 
-  dfout <- do.call(rbind,lapply(1:reps, function(repl){
-    
+  dfout <- do.call(rbind,lapply(1:reps, function(repl){ 
     lmbd <- 0
     ###########################################################################################
-    while(lmbd <= lambdarange[1] & lmbd <= lambdarange[2] ){ #While outside this range, keep trying
+    while(lmbd <= lambdarange[1] | lmbd >= lambdarange[2] ){ #While outside this range, keep trying
     if(itero){
       col1 <- rdirichlet(1,c(1,1,1)) # S1 ca. 0, growth, death
       col2 <- rdirichlet(1, c(1,1)) # S2, death
@@ -137,7 +138,7 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
         # Semelparous
         col1 <- rdirichlet(1,c(1,1,1)) # S1, growth, death
         col2 <- rdirichlet(1, c(1,1)) # S2, death
-        f <- runif(1, 0.01, 20)
+        f <- runif(1, 0.01, 10)
         t_ij <- matrix(c(col1[1], col1[2],
                          f, 0),
                        nrow = 2)
@@ -159,13 +160,28 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
     man.t_ij[1,2] <- man.t_ij[1,2]*(1-harvestintensity)
     manlmbd <- lambda(man.t_ij)
     mangt <- generation.time(man.t_ij)
+    
     man.e_ij <- popbio::elasticity(man.t_ij)
     mansurvivalElast <- sum(man.e_ij[which(generic_mat == "L")])
     mangrowthElast <- sum(man.e_ij[which(generic_mat == "G")])
     manfecundElast <- sum(man.e_ij[which(generic_mat == "F")])
     manElasts <- data.frame(S = mansurvivalElast, G = mangrowthElast, R = manfecundElast)
     
+    # 100 replicates for each lambda
     repsXlambda <- do.call(rbind,lapply(1:100, function(lambdrep){
+      
+      freq.hrvt <- lapply(harvestfrequency[harvestfrequency>0], function(hf){
+        # Harvest
+          if(freq.dist == "random") freq <- sort(sample(1:simlength,size = floor(simlength*hf))) 
+          if(freq.dist == "intervals") freq <- floor(seq(1,simlength, length.out = floor(simlength*hf)))
+          if(freq.dist == "clustered"){
+            starts <- floor(seq(1, simlength-2, length.out = ((simlength)/3)*hf))
+            freq <- unlist(lapply(starts, function(x) x:(x+2)))
+          }
+          freq
+      })
+      
+      
       ## Initialize projections
       Nx <- stable.stage(t_ij)
       manvec1 <- vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
@@ -178,16 +194,17 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
       manpopsz <- c()
       Time2Ext <- NA
       manTime2Ext <- NA
-      freq <- sort(sample(1:simlength,size = floor(simlength*harvestfrequency))) # Really, randomly through time?
-      # startyr <- sample(1:(simlength - (floor(simlength*harvestfrequency))), size = 1)
-      # freq <- startyr:(startyr +( floor(simlength*harvestfrequency)-1)) # Consecutive years of harvest
+      relativepopsz <- matrix(c(NA), nrow = 2, ncol = simlength)
       
       ############################### Projection ##############################
       for(i in 1:simlength){
         yr[i] <- i
+        fixedvec1 <- vec1
         vec1 <- floor(t_ij%*%vec1)
         popsz[i] <- sum(vec1)
-        # if(management){
+        # relativepopsz[,i] <- vec1/fixedvec1 
+        
+        for(fr in 1:length(harvestfrequency[harvestfrequency>0])){
           if(i %in% freq){
             manvec1 <- floor(man.t_ij%*%manvec1)
             manpopsz[i] <- sum(manvec1)
@@ -195,66 +212,77 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
             manvec1 <- floor(t_ij%*%manvec1)
             manpopsz[i] <- sum(manvec1)
           }
-        # }
+        }
         Extant[i] <- if(popsz[i]<1) 0 else 1
         manExtant[i] <- if(manpopsz[i]<1) 0 else 1
-        if(Extant[i] == 0) Time2Ext <- i
-        if(manExtant[i] == 0) manTime2Ext <- i
+        # if(Extant[i] == 0) Time2Ext <- i
+        # if(manExtant[i] == 0) manTime2Ext <- i
         if(any(is.infinite(popsz[i]), is.infinite(manpopsz[i])) ) break
         if(popsz[i] == 0 & manpopsz[i] == 0) break
       }
+      if(any(Extant == 0)) Time2Ext <- min(which(Extant == 0))
+      if(any(manExtant == 0)) manTime2Ext <- min(which(manExtant == 0)) # if(manpopsz[i]<1) i
       
       ## TESTING
-      # plot(yr, manpopsz, col = "red", type = "l")
-      # lines(yr, popsz, col = "blue")
+      # plot(yr,  popsz, col = "red", type = "l")
+      # lines(yr,manpopsz, col = "blue")
+      
       #########################################################################
-      yrout <- yr[yr %in% c(yr[Extant == 0],yr[manExtant == 0], freq, timepoints, 
-                            simlength)]
+      yrout <- yr[yr %in% c(Time2Ext, manTime2Ext, # freq, 
+                            timepoints, simlength)]
       
       if(itero){ parity <- "itero"} else {parity <- "semel"}
+      if(gt > 5) {pace <- "slow"} else {pace <- "fast"}
       dfMPM <- data.frame(Elasts, lam = lmbd, manlam = manlmbd, GenTime = gt, manGenTime = mangt,
                           lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
-                          netrep = net.rep, 
+                          netrep = net.rep, parity = parity, pace = pace, 
+                          StPopSz = StartPopSize, Replicate = paste(parity,pace,lmbd,repl,lambdrep, sep="_"),
+                          harvestfrequency = harvestfrequency, harvestintensity = harvestintensity,
+                          Year = yrout,
                           # PopSize = popsz, ManagPopSize = manpopsz, Year = yr, 
                           # manageYN = c(rep("N", length(popsz[yrout])), rep("Y", length(manpopsz[yrout]))),
+                          ### End population size ###
                           PopSize = popsz[yrout], 
                           ManagPopSize = manpopsz[yrout], 
-                          PopSizeDiff = popsz[yrout] - manpopsz[yrout] ,Year = yrout,
+                          PopSizeDiff = popsz[yrout] - manpopsz[yrout] ,
                           # PopSize = c(popsz[yrout], manpopsz[yrout]), Year = rep(yrout,2),  # Will this break if too big
-                          parity = parity, pace = if(gt > 5) "slow" else "fast", netrep = net.rep, 
                           # Extant = Extant, manExtant = manExtant, 
-                          Extant = Extant[yrout], manExtant = manExtant[yrout], 
+                          # Extant = Extant[yrout], manExtant = manExtant[yrout], 
+                          ### Time to Extinction ###
                           medianTime2Ext = median(Time2Ext, na.rm = FALSE), 
                           medianManTime2Ext = median(manTime2Ext, na.rm = FALSE),
                           medianTime2Extdiff = median(Time2Ext, na.rm = FALSE) - median(manTime2Ext, na.rm = FALSE),
-                          StPopSz = StartPopSize, Time2Extinction = Time2Ext, manTime2Extinction = manTime2Ext,
-                          Replicate = paste(repl,lambdrep, sep="_"),
-                          harvestfrequency = harvestfrequency, harvestintensity = harvestintensity)
+                          Time2Extinction = Time2Ext, manTime2Extinction = manTime2Ext)
       dfMPM
     }))
+    
+    table(repsXlambda$Time2Extinction)
+                          ### Percent extinct ####
+                          # percExt = length()
+                          
     repsXlambda
   })) # end replicates and bind rows
 } # end function
   
 ```
 
-
 ```{r}
 
 itero.single <- singlematrixprojection(itero = TRUE, management = TRUE, StartPopSize = 100, reps = 300,
-                                       simlength = 500, harvestintensity = 0.75, harvestfrequency = 0.3)
+                                       simlength = 100, harvestintensity = 0.75, harvestfrequency = 0.3)
 
-ggplot(itero.single, aes(Year, log(PopSize), group = as.factor(Replicate), colour = lifeexpectancy))+
+ggplot(itero.single, aes(Year, log(PopSize), group = as.factor(Replicate), colour = lam))+
   geom_line()+
   theme_bw()+
-  facet_wrap(~manageYN + pace)+
-  scale_color_viridis_c()+
+  facet_wrap(~parity + pace)+
+  # scale_color_viridis_c()+
+  scale_colour_gradient2(low = "red", mid = "orange", high = "blue", midpoint = 1)+
   ggtitle("Itero")#+
   # scale_colour_discrete(guide = FALSE)
 
 ggplot(itero.single[itero.single$Year == 30,], aes(GenTime, log(PopSize)))+
   geom_point()+
-  facet_wrap(~manageYN + pace)+
+  facet_wrap(~ pace)+
   theme_bw()+
   ggtitle("Itero")
 
@@ -265,7 +293,6 @@ ggplot(itero.single[itero.single$Year == 30,], aes(netrep, log(PopSize)))+
   ggtitle("Itero")
 
 ```
-
 
 ```{r}
 semel.single <- singlematrixprojection(itero = FALSE, management = TRUE, StartPopSize = 100, reps = 300,
@@ -297,12 +324,12 @@ ggplot(semel.single[semel.single$Year == 30,], aes(netrep, log(PopSize)))+
 ```
 
 ```{r}
-all_sim500 <- do.call(rbind, lapply(c(10,100,1000,10000), function(startpopsz){  # exp(2:10)
-  manout <- do.call(rbind, lapply(c(TRUE,FALSE), function(iterosemel){
+all_sim500 <- do.call(rbind, lapply(floor(exp(c(2,4,6,8,10))), function(startpopsz){  # floor(exp(2:10))  c(10,100,1000,10000)
+  manout <- do.call(rbind, lapply(c(TRUE,FALSE), function(iterosemel){ # T: iteroparous, F: semelparous
     harvestintout <- do.call(rbind, lapply(c(0,0.1,0.5,0.9), function(harint){  # seq(0.1,1,by=0.1)
       harvestfreqout <- do.call(rbind, lapply(c(0,0.1,0.5,0.9), function(harfreq){
         
-    singlematrixprojection(itero = iterosemel, StartPopSize = startpopsz, reps = 100, simlength = 100,
+    singlematrixprojection(itero = iterosemel, StartPopSize = startpopsz, reps = 100, simlength = 500,
                            harvestintensity = harint, harvestfrequency = harfreq, timepoints = c(10,30,50))
       }))
       harvestfreqout
@@ -311,6 +338,20 @@ all_sim500 <- do.call(rbind, lapply(c(10,100,1000,10000), function(startpopsz){ 
   }))
   manout
 }))
+
+datetoday <- as.character(Sys.Date())
+save(all_sim500, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/singleMPM_harvest",datetoday,".Rda", sep=""))
+
+ggsave(filename = "C:/Users/DePrengm/OneDrive - Denver Botanic Gardens/P drive/My Documents/UCDenver_phd/Dissertation/Chapter3/Figures/PopSize_singleMPM.jpg",
+
+ggplot(all_sim500[all_sim500$harvestfrequency == 0 & all_sim500$harvestintensity==0,], aes(Year, log(PopSize), group = as.factor(Replicate), colour = lam))+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~parity + pace + StPopSz)+
+  scale_colour_gradient2(low = "red", mid = "blue", high = "orange", midpoint = 2.5),
+width=200, height=180,units='mm', dpi=300)
+
+
 
 # ggplot(all_sim500[all_sim500$Year == 30,], aes(interaction(harvestfrequency,harvestintensity), log(PopSize), 
 #                                                colour = manageYN))+
@@ -366,6 +407,185 @@ ggplot(all_sim500[all_sim500$Year == 30,], aes(harvestintensity, Time2Extinction
 
 
 ```
+
+
+But I want environmental stochasticity where a group of matrices that represent the process of short or long and itero or semel are selected at as iid environments
+```{r}
+
+environstoch_singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, 
+                                                StartPopSize = 10,
+                                                reps = 1000, simlength = 500, 
+                                                harvestintensity = 0.10, harvestfrequency = 0.10,
+                                                timepoints = c(1,10,30,100)){
+  set.seed(1234)
+  freq <- sort(sample(1:simlength,size = floor(simlength*harvestfrequency))) # Really, randomly through time?
+  
+  # simulation projection with/out management 
+  dfout <- do.call(rbind,lapply(1:reps, function(repl){
+    # startyr <- sample(1:(simlength - (floor(simlength*harvestfrequency))), size = 1)
+    # freq <- startyr:(startyr +( floor(simlength*harvestfrequency)-1)) # Consecutive years of harvest    
+    lmbd <- 0
+    ###########################################################################################
+    while(lmbd <= lambdarange[1] | lmbd >= lambdarange[2] ){ #While outside this range, keep trying
+    if(itero){
+      col1 <- rdirichlet(1,c(1,1,1)) # S1 ca. 0, growth, death
+      col2 <- rdirichlet(1, c(1,1)) # S2, death
+      f <- runif(1, 0.01,20)
+      t_ij <- matrix(c(col1[1], col1[2],
+                       f, col2[1]),
+                     nrow = 2)
+      } else {
+        # Semelparous
+        col1 <- rdirichlet(1,c(1,1,1)) # S1, growth, death
+        col2 <- rdirichlet(1, c(1,1)) # S2, death
+        f <- runif(1, 0.01, 10)
+        t_ij <- matrix(c(col1[1], col1[2],
+                         f, 0),
+                       nrow = 2)
+        } # end parity
+      lmbd <- lambda(t_ij)
+      gt <- generation.time(t_ij)
+      net.rep <- net.reproductive.rate(t_ij)
+      } # Picked a t_ij that works!
+    ###########################################################################################
+    lmbd.stoch <- lmbd
+    ## Create more matrices within range of lambda and generation time
+     #if still close, add
+    mat <- list()
+    i <- 1
+    while(i < 11){
+    if(itero){
+      col1 <- rdirichlet(1,c(t_ij[,1], (1-sum(t_ij[,1])))) # S1 ca. 0, growth, death
+      col2 <- rdirichlet(1, c(t_ij[2,2],(1-t_ij[2,2]))) # S2, death
+      f <- runif(1, 0.01,20)
+      t_ij.st <- matrix(c(col1[1], col1[2],
+                       f, col2[1]),
+                     nrow = 2)
+      } else {
+        # Semelparous
+        col1 <- rdirichlet(1,c(1,1,1)) # S1, growth, death
+        col2 <- rdirichlet(1, c(1,1)) # S2, death
+        f <- runif(1, 0.01, 20)
+        t_ij.st <- matrix(c(col1[1], col1[2],
+                         f, 0),
+                       nrow = 2)
+        } # end parity
+      lmbd.stoch <- lambda(t_ij.st)
+      if(lmbd.stoch >= lmbd.stoch-0.05 & lmbd.stoch <= lmbd.stoch+0.05 ){
+        mat[[i]] <- t_ij.st
+        gt.stoch <- generation.time(t_ij.st)
+        net.rep.stoch <- net.reproductive.rate(t_ij.st)
+        i = i+1
+      } # Picked a t_ij that works!
+    }
+
+    lapply(mat, function(x) generation.time(x))
+    lapply(mat, function(x) lambda(x))
+    # Covariance matrix
+    cov(t_ij)
+    t_ij_rand <- t_ij * rnorm(4, mean = 1, sd = 0.1)
+    
+    e_ij <- popbio::elasticity(t_ij)
+    survivalElast <- sum(e_ij[which(generic_mat == "L")])
+    growthElast <- sum(e_ij[which(generic_mat == "G")])
+    fecundElast <- sum(e_ij[which(generic_mat == "F")])
+    Elasts <- data.frame(S = survivalElast, G = growthElast, R = fecundElast)
+    
+    # Initialize management MPM
+    man.t_ij <- t_ij 
+    man.t_ij[1,2] <- man.t_ij[1,2]*(1-harvestintensity)
+    manlmbd <- lambda(man.t_ij)
+    mangt <- generation.time(man.t_ij)
+    man.e_ij <- popbio::elasticity(man.t_ij)
+    mansurvivalElast <- sum(man.e_ij[which(generic_mat == "L")])
+    mangrowthElast <- sum(man.e_ij[which(generic_mat == "G")])
+    manfecundElast <- sum(man.e_ij[which(generic_mat == "F")])
+    manElasts <- data.frame(S = mansurvivalElast, G = mangrowthElast, R = manfecundElast)
+    
+    # 100 replicates for each lambda
+    repsXlambda <- do.call(rbind,lapply(1:100, function(lambdrep){
+      ## Initialize projections
+      Nx <- stable.stage(t_ij)
+      manvec1 <- vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+  
+      # Initialize for loop
+      Extant <- c()
+      manExtant <- c()
+      yr <- c()
+      popsz <- c()
+      manpopsz <- c()
+      Time2Ext <- NA
+      manTime2Ext <- NA
+      relativepopsz <- matrix(c(NA), nrow = 2, ncol = simlength)
+      
+      ############################### Projection ##############################
+      for(i in 1:simlength){
+        yr[i] <- i
+        fixedvec1 <- vec1
+        vec1 <- floor(t_ij%*%vec1)
+        popsz[i] <- sum(vec1)
+        relativepopsz[,i] <- vec1/fixedvec1 
+        if(i %in% freq){
+          manvec1 <- floor(man.t_ij%*%manvec1)
+          manpopsz[i] <- sum(manvec1)
+        } else {
+          manvec1 <- floor(t_ij%*%manvec1)
+          manpopsz[i] <- sum(manvec1)
+        }
+        
+        Extant[i] <- if(popsz[i]<1) 0 else 1
+        manExtant[i] <- if(manpopsz[i]<1) 0 else 1
+        # if(Extant[i] == 0) Time2Ext <- i
+        # if(manExtant[i] == 0) manTime2Ext <- i
+        if(any(is.infinite(popsz[i]), is.infinite(manpopsz[i])) ) break
+        if(popsz[i] == 0 & manpopsz[i] == 0) break
+      }
+      if(any(Extant == 0)) Time2Ext <- min(which(Extant == 0))
+      if(any(manExtant == 0)) manTime2Ext <- min(which(manExtant == 0)) # if(manpopsz[i]<1) i
+      
+      ## TESTING
+      # plot(yr,  popsz, col = "red", type = "l")
+      # lines(yr,manpopsz, col = "blue")
+      
+      #########################################################################
+      yrout <- yr[yr %in% c(Time2Ext, manTime2Ext, freq, timepoints, simlength)]
+      
+      if(itero){ parity <- "itero"} else {parity <- "semel"}
+      dfMPM <- data.frame(Elasts, lam = lmbd, manlam = manlmbd, GenTime = gt, manGenTime = mangt,
+                          lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+                          netrep = net.rep, parity = parity, pace = if(gt > 5) "slow" else "fast", 
+                          StPopSz = StartPopSize, Replicate = paste(repl,lambdrep, sep="_"),
+                          harvestfrequency = harvestfrequency, harvestintensity = harvestintensity,
+                          Year = yrout,
+                          # PopSize = popsz, ManagPopSize = manpopsz, Year = yr, 
+                          # manageYN = c(rep("N", length(popsz[yrout])), rep("Y", length(manpopsz[yrout]))),
+                          ### End population size ###
+                          PopSize = popsz[yrout], 
+                          ManagPopSize = manpopsz[yrout], 
+                          PopSizeDiff = popsz[yrout] - manpopsz[yrout] ,
+                          # PopSize = c(popsz[yrout], manpopsz[yrout]), Year = rep(yrout,2),  # Will this break if too big
+                          # Extant = Extant, manExtant = manExtant, 
+                          # Extant = Extant[yrout], manExtant = manExtant[yrout], 
+                          ### Time to Extinction ###
+                          medianTime2Ext = median(Time2Ext, na.rm = FALSE), 
+                          medianManTime2Ext = median(manTime2Ext, na.rm = FALSE),
+                          medianTime2Extdiff = median(Time2Ext, na.rm = FALSE) - median(manTime2Ext, na.rm = FALSE),
+                          Time2Extinction = Time2Ext, manTime2Extinction = manTime2Ext)
+      dfMPM
+    }))
+    
+    table(repsXlambda$Time2Extinction)
+                          ### Percent extinct ####
+                          # percExt = length()
+                          
+    repsXlambda
+  })) # end replicates and bind rows
+} # end function
+  
+```
+
+
+
 
 
 
