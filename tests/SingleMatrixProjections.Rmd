@@ -117,8 +117,8 @@ incomplete_cdf <- function(x, gmin, gmax) {
 }
 
 singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, StartPopSize = 10,
-                                   reps = 100, simlength = 500, harvestintensity = c(0,0.1,0.5,0.9), 
-                                   harvestfrequency = c(0,0.1,0.5,0.9), freq.dist = "random",
+                                   reps = 100, simlength = 500, harvestintensity = c(0.1,0.5,0.9), 
+                                   harvestfrequency = c(0.1,0.5,0.9), freq.dist = "random",
                                    timepoints = c(1,10,30,100)){
   set.seed(1234)
   
@@ -156,16 +156,24 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
     Elasts <- data.frame(S = survivalElast, G = growthElast, R = fecundElast)
     
     # Initialize management MPM
-    man.t_ij <- t_ij 
-    man.t_ij[1,2] <- man.t_ij[1,2]*(1-harvestintensity)
-    manlmbd <- lambda(man.t_ij)
-    mangt <- generation.time(man.t_ij)
+    man.t_ij <- lapply(1:length(harvestintensity[harvestintensity > 0]), function(x) t_ij)
+    manlmbd <- c()
+    mangt <- c()
+    for(it in 1:length(harvestintensity[harvestintensity > 0])){
+      man.t_ij[[it]][1,2] <- man.t_ij[[it]][1,2]*(1-harvestintensity[harvestintensity > 0][it])
+      manlmbd[it] <- lambda(man.t_ij[[it]])
+      mangt[it] <- generation.time(man.t_ij[[it]])
+    }
     
-    man.e_ij <- popbio::elasticity(man.t_ij)
-    mansurvivalElast <- sum(man.e_ij[which(generic_mat == "L")])
-    mangrowthElast <- sum(man.e_ij[which(generic_mat == "G")])
-    manfecundElast <- sum(man.e_ij[which(generic_mat == "F")])
-    manElasts <- data.frame(S = mansurvivalElast, G = mangrowthElast, R = manfecundElast)
+    manElasts <- do.call(rbind,lapply(man.t_ij, function(m){
+      man.e_ij <- popbio::elasticity(m)
+      mansurvivalElast <- sum(man.e_ij[which(generic_mat == "L")])
+      mangrowthElast <- sum(man.e_ij[which(generic_mat == "G")])
+      manfecundElast <- sum(man.e_ij[which(generic_mat == "F")])
+      data.frame(S = mansurvivalElast, G = mangrowthElast, R = manfecundElast)
+    }))  
+    manElasts$har.int <- harvestintensity[harvestintensity > 0]
+
     
     # 100 replicates for each lambda
     repsXlambda <- do.call(rbind,lapply(1:100, function(lambdrep){
@@ -181,20 +189,29 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
           freq
       })
       
-      
+      freq_int <- apply(expand_grid(harvestfrequency[harvestfrequency>0],harvestintensity[harvestintensity>0]),
+                         1, function(x) paste(x, collapse = "_"))
       ## Initialize projections
       Nx <- stable.stage(t_ij)
-      manvec1 <- vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
-  
+      vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+      manvec1 <- lapply(1:(length(harvestfrequency[harvestfrequency>0])*
+                             length(harvestintensity[harvestintensity>0])), function(mv) vec1)
+      names(manvec1) <- freq_int
       # Initialize for loop
       Extant <- c()
-      manExtant <- c()
+      manExtant <- vector(mode = "list", length = length(harvestfrequency[harvestfrequency>0])*
+                                                          length(harvestintensity[harvestintensity>0]))
+      names(manExtant) <- freq_int
       yr <- c()
       popsz <- c()
-      manpopsz <- c()
+      manpopsz <- vector(mode = "list", length = length(harvestfrequency[harvestfrequency>0])*
+                                                          length(harvestintensity[harvestintensity>0]))
+      names(manpopsz) <- freq_int
       Time2Ext <- NA
-      manTime2Ext <- NA
-      relativepopsz <- matrix(c(NA), nrow = 2, ncol = simlength)
+      manTime2Ext <- vector(mode = "list", length = length(harvestfrequency[harvestfrequency>0])*
+                                                          length(harvestintensity[harvestintensity>0]))
+      names(manTime2Ext) <- freq_int
+      # relativepopsz <- matrix(c(NA), nrow = 2, ncol = simlength)
       
       ############################### Projection ##############################
       for(i in 1:simlength){
@@ -203,36 +220,40 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
         vec1 <- floor(t_ij%*%vec1)
         popsz[i] <- sum(vec1)
         # relativepopsz[,i] <- vec1/fixedvec1 
-        
-        for(fr in 1:length(harvestfrequency[harvestfrequency>0])){
-          if(i %in% freq){
-            manvec1 <- floor(man.t_ij%*%manvec1)
-            manpopsz[i] <- sum(manvec1)
-          } else {
-            manvec1 <- floor(t_ij%*%manvec1)
-            manpopsz[i] <- sum(manvec1)
-          }
-        }
         Extant[i] <- if(popsz[i]<1) 0 else 1
-        manExtant[i] <- if(manpopsz[i]<1) 0 else 1
-        # if(Extant[i] == 0) Time2Ext <- i
-        # if(manExtant[i] == 0) manTime2Ext <- i
-        if(any(is.infinite(popsz[i]), is.infinite(manpopsz[i])) ) break
-        if(popsz[i] == 0 & manpopsz[i] == 0) break
+        
+        # cycle through a harvest frequency at each harvest intensities
+        for(fr in 1:length(harvestfrequency[harvestfrequency>0])){
+          for(it in 1:length(harvestintensity[harvestintensity>0])){
+              ind <- paste(harvestfrequency[harvestfrequency>0][[fr]],
+                             harvestintensity[harvestintensity>0][[it]],sep="_")
+              
+            if(i %in% freq.hrvt[fr]){
+              manvec1[[ind]] <- floor(man.t_ij[[it]]%*%manvec1[[ind]])
+              manpopsz[[ind]][i] <- sum(manvec1[[ind]])
+              } else {
+                manvec1[[ind]] <- floor(t_ij%*%manvec1[[ind]])
+                manpopsz[[ind]][i] <- sum(manvec1[[ind]])
+              }
+              manExtant[[ind]][i] <- if(manpopsz[[ind]][i]<1) 0 else 1
+              if(any(manExtant[[ind]] == 0)) manTime2Ext[[ind]] <- min(which(manExtant == 0)) 
+              } # end harvest intensities
+          } # end harvest frequencies
+        
+        if(any(is.infinite(popsz[i]), is.infinite(unlist(manpopsz))) ) break
+        if(popsz[i] == 0) break # & manpopsz[i]  == 0
       }
       if(any(Extant == 0)) Time2Ext <- min(which(Extant == 0))
-      if(any(manExtant == 0)) manTime2Ext <- min(which(manExtant == 0)) # if(manpopsz[i]<1) i
-      
-      ## TESTING
-      # plot(yr,  popsz, col = "red", type = "l")
-      # lines(yr,manpopsz, col = "blue")
-      
+
       #########################################################################
-      yrout <- yr[yr %in% c(Time2Ext, manTime2Ext, # freq, 
+      yrout <- yr[yr %in% c(Time2Ext, unlist(manTime2Ext), # freq, 
                             timepoints, simlength)]
       
       if(itero){ parity <- "itero"} else {parity <- "semel"}
       if(gt > 5) {pace <- "slow"} else {pace <- "fast"}
+      # metadata out
+      Elasts <- rbind(data.frame(Elasts, har.int = 0),manElasts)
+      # Projection out
       dfMPM <- data.frame(Elasts, lam = lmbd, manlam = manlmbd, GenTime = gt, manGenTime = mangt,
                           lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
                           netrep = net.rep, parity = parity, pace = pace, 
