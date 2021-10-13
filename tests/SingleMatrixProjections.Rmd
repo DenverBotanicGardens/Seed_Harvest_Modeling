@@ -147,6 +147,7 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
       gt <- generation.time(t_ij)
       net.rep <- net.reproductive.rate(t_ij)
       } # Picked a t_ij that works!
+    lmbd
     ###########################################################################################
 
     e_ij <- popbio::elasticity(t_ij)
@@ -176,7 +177,7 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
 
     
     # 100 replicates for each lambda
-    repsXlambda <- do.call(rbind,lapply(1:100, function(lambdrep){
+    repsXlambda <- lapply(1:3, function(lambdrep){
       
       freq.hrvt <- lapply(harvestfrequency[harvestfrequency>0], function(hf){
         # Harvest
@@ -208,15 +209,14 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
                                                           length(harvestintensity[harvestintensity>0]))
       names(manpopsz) <- freq_int
       Time2Ext <- NA
-      manTime2Ext <- vector(mode = "list", length = length(harvestfrequency[harvestfrequency>0])*
-                                                          length(harvestintensity[harvestintensity>0]))
+      manTime2Ext <- lapply(1:length(freq_int), function(m) NA) 
       names(manTime2Ext) <- freq_int
       # relativepopsz <- matrix(c(NA), nrow = 2, ncol = simlength)
       
       ############################### Projection ##############################
       for(i in 1:simlength){
         yr[i] <- i
-        fixedvec1 <- vec1
+        # fixedvec1 <- vec1
         vec1 <- floor(t_ij%*%vec1)
         popsz[i] <- sum(vec1)
         # relativepopsz[,i] <- vec1/fixedvec1 
@@ -228,60 +228,77 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
               ind <- paste(harvestfrequency[harvestfrequency>0][[fr]],
                              harvestintensity[harvestintensity>0][[it]],sep="_")
               
-            if(i %in% freq.hrvt[fr]){
+            if(i %in% freq.hrvt[[fr]]){
               manvec1[[ind]] <- floor(man.t_ij[[it]]%*%manvec1[[ind]])
               manpopsz[[ind]][i] <- sum(manvec1[[ind]])
               } else {
                 manvec1[[ind]] <- floor(t_ij%*%manvec1[[ind]])
                 manpopsz[[ind]][i] <- sum(manvec1[[ind]])
               }
+              
               manExtant[[ind]][i] <- if(manpopsz[[ind]][i]<1) 0 else 1
-              if(any(manExtant[[ind]] == 0)) manTime2Ext[[ind]] <- min(which(manExtant == 0)) 
+              if(any(manExtant[[ind]] == 0)){ 
+                manTime2Ext[[ind]][i] <- min(which(manExtant[[ind]] == 0)) 
+              } else {
+                  manTime2Ext[[ind]][[i]] <- NA
+                  }
               } # end harvest intensities
           } # end harvest frequencies
         
         if(any(is.infinite(popsz[i]), is.infinite(unlist(manpopsz))) ) break
-        if(popsz[i] == 0) break # & manpopsz[i]  == 0
-      }
+        # if(popsz[i] == 0) break # & manpopsz[i]  == 0
+      } # end projection loop
       if(any(Extant == 0)) Time2Ext <- min(which(Extant == 0))
 
       #########################################################################
-      yrout <- yr[yr %in% c(Time2Ext, unlist(manTime2Ext), # freq, 
-                            timepoints, simlength)]
+      # yrout <- yr[yr %in% c(Time2Ext, unlist(manTime2Ext), # freq, 
+      #                       timepoints, simlength)]
+      yrout <- yr[yr %in% c(10,25,50,75,100,simlength)]
       
       if(itero){ parity <- "itero"} else {parity <- "semel"}
       if(gt > 5) {pace <- "slow"} else {pace <- "fast"}
       # metadata out
-      Elasts <- rbind(data.frame(Elasts, har.int = 0),manElasts)
+      metaMPM <- data.frame(HarvestFreq_Intensity = c("0_0",freq_int),
+                            rbind(data.frame(Elasts, har.int = 0),manElasts[rep(seq_len(nrow(manElasts)),
+                                                       length(harvestfrequency[harvestfrequency>0])),]),
+                            lambdas = c(lmbd, rep(manlmbd, length(harvestfrequency[harvestfrequency>0]))),
+                            GenTime = c(gt, rep(mangt, length(harvestfrequency[harvestfrequency>0]))),
+                            lifeexpectancy = c(sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+                                               rep(unlist(lapply(man.t_ij, function(x){
+                                                 sum(fundamental.matrix(x, r = 1, c=2)$meaneta)
+                            })), length(harvestfrequency[harvestfrequency>0]))),
+                            parity = parity, pace = pace, 
+                            harvest.dist = freq.dist, Replicate = repl)
+
       # Projection out
-      dfMPM <- data.frame(Elasts, lam = lmbd, manlam = manlmbd, GenTime = gt, manGenTime = mangt,
-                          lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
+      # print(metaMPM)
+      print(lmbd)
+      # print(paste("years",length(rep(yrout, length(freq_int)+1))))
+      # print(paste("pop sz",length(c(popsz[yrout], unlist(lapply(manpopsz, function(x) x[yrout]))))))
+      # print(paste("harvest int freq",length(rep(c("0_0", freq_int), each = length(yrout)))))
+      # print(paste("Time2Ext",length(rep(c(Time2Ext, unlist(manTime2Ext)), each = length(yrout)))))
+      print(yrout)
+      # print(rep(c(Time2Ext, unlist(manTime2Ext)), each = length(yrout)))
+      
+      dfMPM <- data.frame(Lambda = lmbd, GenTime = gt, lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
                           netrep = net.rep, parity = parity, pace = pace, 
-                          StPopSz = StartPopSize, Replicate = paste(parity,pace,lmbd,repl,lambdrep, sep="_"),
-                          harvestfrequency = harvestfrequency, harvestintensity = harvestintensity,
-                          Year = yrout,
-                          # PopSize = popsz, ManagPopSize = manpopsz, Year = yr, 
-                          # manageYN = c(rep("N", length(popsz[yrout])), rep("Y", length(manpopsz[yrout]))),
-                          ### End population size ###
-                          PopSize = popsz[yrout], 
-                          ManagPopSize = manpopsz[yrout], 
-                          PopSizeDiff = popsz[yrout] - manpopsz[yrout] ,
-                          # PopSize = c(popsz[yrout], manpopsz[yrout]), Year = rep(yrout,2),  # Will this break if too big
-                          # Extant = Extant, manExtant = manExtant, 
-                          # Extant = Extant[yrout], manExtant = manExtant[yrout], 
-                          ### Time to Extinction ###
-                          medianTime2Ext = median(Time2Ext, na.rm = FALSE), 
-                          medianManTime2Ext = median(manTime2Ext, na.rm = FALSE),
-                          medianTime2Extdiff = median(Time2Ext, na.rm = FALSE) - median(manTime2Ext, na.rm = FALSE),
-                          Time2Extinction = Time2Ext, manTime2Extinction = manTime2Ext)
-      dfMPM
-    }))
+                          StPopSz = StartPopSize, Replicate = paste(repl,lambdrep, sep="_"),
+                          Year = rep(yrout, length(freq_int)+1),  
+                          PopSize = c(popsz[yrout], unlist(lapply(manpopsz, function(x) x[yrout]))),
+                          # Time2Ext = rep(c(Time2Ext, unlist(manTime2Ext)), each = length(yrout)),
+                          Time2Ext = c(Time2Ext[yrout], unlist(lapply(manTime2Ext, function(x) x[yrout]))),
+                          freq_intensity = rep(c("0_0", freq_int), each = length(yrout)))
+      # print(dfMPM)
+      list(metaMPM,dfMPM)
+    }) # End lapply for lambdrep replicates per lambda
     
-    table(repsXlambda$Time2Extinction)
-                          ### Percent extinct ####
-                          # percExt = length()
-                          
-    repsXlambda
+    pva <- do.call(rbind, lapply(repsXlambda,'[[',  2))
+    meta <- do.call(rbind, lapply(repsXlambda, '[[', 1))
+    # aggregate(Time2Ext ~ freq_intensity, data = pva, function(x) median(x))
+    # pva[!is.na(pva$Time2Ext),]
+    list(meta,pva)
+      
+  ### 2Extinction = Time2Ext, manTime2Extinction = manTime2Ext)    
   })) # end replicates and bind rows
 } # end function
   
@@ -345,20 +362,14 @@ ggplot(semel.single[semel.single$Year == 30,], aes(netrep, log(PopSize)))+
 ```
 
 ```{r}
-all_sim500 <- do.call(rbind, lapply(floor(exp(c(2,4,6,8,10))), function(startpopsz){  # floor(exp(2:10))  c(10,100,1000,10000)
-  manout <- do.call(rbind, lapply(c(TRUE,FALSE), function(iterosemel){ # T: iteroparous, F: semelparous
-    harvestintout <- do.call(rbind, lapply(c(0,0.1,0.5,0.9), function(harint){  # seq(0.1,1,by=0.1)
-      harvestfreqout <- do.call(rbind, lapply(c(0,0.1,0.5,0.9), function(harfreq){
+all_sim500 <- lapply(c(100,1000,10000), function(startpopsz){  # floor(exp(2:10))  c(10,100,1000,10000) floor(exp(c(2,6,10)))
+  manout <- lapply(c(TRUE,FALSE), function(iterosemel){ # T: iteroparous, F: semelparous
         
-    singlematrixprojection(itero = iterosemel, StartPopSize = startpopsz, reps = 100, simlength = 500,
-                           harvestintensity = harint, harvestfrequency = harfreq, timepoints = c(10,30,50))
-      }))
-      harvestfreqout
-    }))
-    harvestintout
-  }))
+    singlematrixprojection(itero = iterosemel, StartPopSize = startpopsz, reps = 100, simlength = 100,
+                           harvestintensity = c(0.1,0.5,0.9), harvestfrequency = c(0.1,0.5,0.9))
+  })
   manout
-}))
+})
 
 datetoday <- as.character(Sys.Date())
 save(all_sim500, file = paste("C:/Users/DePrengm/Denver Botanic Gardens/Conservation - Demography/SeedHarvestModelling/Seed_Harvest_Modeling/Data/singleMPM_harvest",datetoday,".Rda", sep=""))
