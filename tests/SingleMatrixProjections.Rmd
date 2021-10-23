@@ -27,6 +27,8 @@ library(patchwork)
 require(AICcmodavg)
 library(lme4)
 library(DirichletReg)
+
+library(matrixcalc)
 rm(list=ls())
 
 ```
@@ -116,7 +118,8 @@ incomplete_cdf <- function(x, gmin, gmax) {
   data.frame(x = c(gmin, obsx, gmax) , y=c(0, obsy, tail(obsy, 1)))
 }
 
-singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, StartPopSize = 10,
+singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), management = TRUE, 
+                                   StartPopSize = c(10,100,1000,10000),
                                    reps = 100, simlength = 500, harvestintensity = c(0.1,0.5,0.9), 
                                    harvestfrequency = c(0.1,0.5,0.9), freq.dist = "random",
                                    timepoints = c(1,10,30,100)){
@@ -192,9 +195,14 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
       
       freq_int <- apply(expand_grid(harvestfrequency[harvestfrequency>0],harvestintensity[harvestintensity>0]),
                          1, function(x) paste(x, collapse = "_"))
+      
+      ##############################################################################################
+      ## Across population sizes ###########
+      stpopszlist <- lapply(StartPopSize, function(stpsz){
+      
       ## Initialize projections
       Nx <- stable.stage(t_ij)
-      vec1 <- matrix(floor(Nx*(StartPopSize/sum(Nx))), ncol = 1)
+      vec1 <- matrix(floor(Nx*(stpsz/sum(Nx))), ncol = 1)
       manvec1 <- lapply(1:(length(harvestfrequency[harvestfrequency>0])*
                              length(harvestintensity[harvestintensity>0])), function(mv) vec1)
       names(manvec1) <- freq_int
@@ -217,8 +225,13 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
       for(i in 1:simlength){
         yr[i] <- i
         # fixedvec1 <- vec1
-        vec1 <- floor(t_ij%*%vec1)
-        popsz[i] <- sum(vec1)
+        if(sum(vec1[i]) < 2^1000){
+          vec1 <- floor(t_ij%*%vec1)
+          popsz[i] <- sum(vec1)
+        } else {
+            popsz[i] <- sum(vec1)
+          }
+        
         # relativepopsz[,i] <- vec1/fixedvec1 
         Extant[i] <- if(popsz[i]<1) 0 else 1
         
@@ -227,26 +240,32 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
           for(it in 1:length(harvestintensity[harvestintensity>0])){
               ind <- paste(harvestfrequency[harvestfrequency>0][[fr]],
                              harvestintensity[harvestintensity>0][[it]],sep="_")
-              
-            if(i %in% freq.hrvt[[fr]]){
-              manvec1[[ind]] <- floor(man.t_ij[[it]]%*%manvec1[[ind]])
-              manpopsz[[ind]][i] <- sum(manvec1[[ind]])
-              } else {
-                manvec1[[ind]] <- floor(t_ij%*%manvec1[[ind]])
+              ## Can't get too large so stop growing if getting too big
+              if(sum(manvec1[[ind]][i]) < 2^1000){
+                if(i %in% freq.hrvt[[fr]]){
+                manvec1[[ind]] <- floor(man.t_ij[[it]]%*%manvec1[[ind]])
                 manpopsz[[ind]][i] <- sum(manvec1[[ind]])
+                } else {
+                  manvec1[[ind]] <- floor(t_ij%*%manvec1[[ind]])
+                  manpopsz[[ind]][i] <- sum(manvec1[[ind]])
+                }
+                 
+                manExtant[[ind]][i] <- if(manpopsz[[ind]][i]<1) 0 else 1
+                if(any(manExtant[[ind]] == 0)){ 
+                  manTime2Ext[[ind]][i] <- min(which(manExtant[[ind]] == 0)) 
+                } else {
+                    manTime2Ext[[ind]][[i]] <- NA
+                }
+              } else { # only progress if not too big
+                manpopsz[[ind]][i] <- sum(manvec[[ind]])
               }
               
-              manExtant[[ind]][i] <- if(manpopsz[[ind]][i]<1) 0 else 1
-              if(any(manExtant[[ind]] == 0)){ 
-                manTime2Ext[[ind]][i] <- min(which(manExtant[[ind]] == 0)) 
-              } else {
-                  manTime2Ext[[ind]][[i]] <- NA
-                  }
-              } # end harvest intensities
+                } # end harvest intensities
           } # end harvest frequencies
         
-        if(any(is.infinite(popsz[i]), is.infinite(unlist(manpopsz))) ) break
+        # if(any(is.infinite(popsz[i]), is.infinite(unlist(manpopsz))) ) break
         # if(popsz[i] == 0) break # & manpopsz[i]  == 0
+        
       } # end projection loop
       if(any(Extant == 0)) Time2Ext <- min(which(Extant == 0))
 
@@ -282,7 +301,7 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
       
       dfMPM <- data.frame(Lambda = lmbd, GenTime = gt, lifeexpectancy = sum(fundamental.matrix(t_ij, r = 1, c=2)$meaneta),
                           netrep = net.rep, parity = parity, pace = pace, 
-                          StPopSz = StartPopSize, Replicate = paste(repl,lambdrep, sep="_"),
+                          StPopSz = stpsz, Replicate = paste(repl,lambdrep, sep="_"),
                           Year = rep(yrout, length(freq_int)+1),  
                           PopSize = c(popsz[yrout], unlist(lapply(manpopsz, function(x) x[yrout]))),
                           # Time2Ext = rep(c(Time2Ext, unlist(manTime2Ext)), each = length(yrout)),
@@ -290,6 +309,8 @@ singlematrixprojection <- function(itero = TRUE, lambdarange = c(0.6,4.5), manag
                           freq_intensity = rep(c("0_0", freq_int), each = length(yrout)))
       # print(dfMPM)
       list(metaMPM,dfMPM)
+    }) # end Population size list of lists 
+      stpopszlist
     }) # End lapply for lambdrep replicates per lambda
     
     pva <- do.call(rbind, lapply(repsXlambda,'[[',  2))
@@ -430,15 +451,231 @@ ggplot(all_sim500, aes(interaction(harvestintensity, harvestfrequency), manTime2
 
 
 
-ggplot(all_sim500[all_sim500$Year == 30,], aes(harvestintensity, Time2Extinction, 
-                                               colour = interaction(manageYN))+
-  geom_point()+
-  theme_bw()+
-  facet_wrap(~ interaction(pace,parity,harvestfrequency))
+# ggplot(all_sim500[all_sim500$Year == 30,], aes(harvestintensity, Time2Extinction, 
+#                                                colour = interaction(manageYN))+
+#   geom_point()+
+#   theme_bw()+
+#   facet_wrap(~ interaction(pace,parity,harvestfrequency))
   
 
 
 ```
+
+
+
+## Jeppsson and Forslund 2012 demographic stochasticity 
+$\alpha& = age of maturation (matrixes are alpha+1)
+P_a = adult survival
+m = fecundity  
+Limit to when P_j is < 0.99
+Constant environment (I'll extend) and no density dependence  
+Characteristic equation for age-classified model   
+determinant seems to say multiply one matrix element * the rows and columns not including that matrix element   
+ 
+```{r}
+
+# Equation 1 - general model of stochastic population growth rate accounting for demographic and environmental stochasticity on population growth rate; r is mean population growth rate, sigma squared for environmental and demographic stochasticity and N is the population size 
+PopGrowthRate <- function(r, sig2_environ, sig2_demo, N){
+  loglambda <- r - (1/2)*sig2_environ - (1/2*N)*sig2_demo
+  loglambda
+}
+
+
+# Equation 2 - make a Leslie (age based matrix) can control for age of maturity 
+MatrixDemoStoch <- function(m, P_a, lambda_a, alpha){
+  P_j <- JuvenileSurvival(m = m, P_a = P_a, lambda_a = lambda_a, 
+                          alpha = alpha)
+  Amat_mat <- diag(P_j, nrow = alpha, ncol = alpha)
+  Amat_mat2 <- rbind(c(rep(0,alpha-1), P_j*m), Amat_mat)
+  Amat_mat3 <- cbind(Amat_mat2, c(m*P_a, rep(0, alpha-1), P_a))
+  Amat_mat3
+}
+
+
+# Equation 3: estimate survival of juveniles from survival of adults, offspring (m) and age of maturing (alpha)
+JuvenileSurvival <- function(m, P_a, lambda_a, alpha){
+  ((m/lambda_a) + ((P_a*m)/( (lambda_a^(alpha+1)) - P_a*(lambda_a)^alpha )))^(-1/alpha)
+}
+
+
+
+# Equation 5: demographic variances of population growth (sigma squared_d) with trait specific contribution to variance 
+sig2_d <- function(MPM){
+  w <- stable.stage(MPM) 
+  # sig2_survival <- c(sapply(1:(dim(MPM)[1]-1), function(i){
+  #   MPM[i+1, i]*(1-(MPM[i+1, i]))
+  # }), MPM[dim(MPM)[1],dim(MPM)[2]]*(1- MPM[dim(MPM)[1],dim(MPM)[2]]))
+  sig2_survival <- vapply(MPM[-1,], function(x) x*(1-x))
+  sig2_fertility <- MPM[1,]
+  # Sensitivities
+  s <- sensitivity(MPM)
+  rbind(sig2_fertility)
+  
+  for(i in 1:(dim(MPM)[1]-1)){
+    (w[i]^(-1)) * (s[1,i]*sig2_fertility[i] + s[i+1,i]*sig2_survival[i])
+  }
+}
+
+
+
+# F_x = P_x * m; P_x is binomially distributed; F_x is Poisson, so for binomial, prob is the survival probablility, number of trial (size) is the number of individuals in that age class, I _think_ n number of observations is 1, an individual lives or not
+BranchingMPM <- function(MPM, popsz, t_year){
+  n_vec <- matrix(round(stable.stage(MPM)*popsz, 0), nrow = 1)
+  for(tt in 1:t_year){
+    surv_j <- c(0, sapply(1:(dim(MPM)[1]-1), function(i){
+      rbinom(1, n_vec[tt,i], prob = MPM[i+1, i])
+      })) 
+    surv_a <- c(rep(0,(dim(MPM)[1]-1)),rbinom(1, n_vec[tt,dim(MPM)[1]], prob = MPM[dim(MPM)[1],dim(MPM)[2]]))
+    if(n_vec[tt,dim(MPM)[[1]]] > 0){
+      repro <- c(sum(sapply(MPM[1,], function(x) rpois(1, x))), rep(0, dim(MPM)[1]-1))
+    } else {
+      repro <- rep(0,dim(MPM)[1])
+    }
+    n_vec <- rbind(n_vec, surv_j + surv_a + repro)
+    }
+  n_vec
+}
+
+# equation 4: population extinction over t years. The product of the extinction of each stage by time t. the probability that each stage goes extinct by time t. They set to starting pop size of 100 and time being 100 years
+Q_t <- function(q_i, t, n, P_a, m, alpha, lambda_a){
+  
+}
+
+```
+
+From the paper
+```{r}
+alphaD <- 1:15
+m = c(0.5, 1, 1.5, 2:30)
+P_a <- seq(0, 0.95, by = 0.025) # semelparous to degrees of iteroparity
+
+
+params <- do.call(rbind,lapply(alphaD, function(al){
+  mout <- do.call(rbind,lapply(m, function(m1){
+    Pout <- do.call(rbind,lapply(P_a, function(Pa){
+      data.frame(P_j = JuvenileSurvival(m1, Pa, lambda_a = 1, al),
+                 alpha = al, m = m1, P_a = Pa)
+    }))
+    Pout
+  }))
+  mout
+}))
+
+nrow(params)
+nrow(params[params$P_j <= 0.99 & params$P_j > 0,])
+
+
+Amats <- lapply(c(1,5,10,20), function(alpha_age){
+  parity <- lapply(seq(0,0.99, length.out = 5), function(P_a){
+    fecundity <- lapply(seq(1,16, by = 3), function(m){
+    MatrixDemoStoch(m, P_a, lambda_a = 1, alpha = alpha_age)
+    })
+    fecundity
+    })
+  parity
+  })
+
+
+foo1 <- lapply(c(10,50,100,500,1000), function(psz){
+  reps <- do.call(rbind,lapply(1:100, function(rps){
+    out <- BranchingMPM(MPM = Amats[[1]][[1]][[1]], popsz = psz, t = 100)
+    data.frame(Year = c(1,10,30,50,100), Replicate = rps, out[c(1,10,30,50,100),], 
+               N = rowSums(out[c(1,10,30,50,100),]))
+  }))
+  reps
+})
+
+ggplot(foo1[[2]], aes(Year, N, colour = as.factor(Replicate), group = as.factor(Replicate)))+  
+  # geom_boxplot()+
+  geom_line()+
+  # geom_jitter(height = 0)+
+  theme_bw()+
+  # scale_colour_discrete(guides = FALSE)
+  theme(legend.position = "none")
+
+# Percent extinct 
+for(i in 1:5){
+  print(length(foo1[[i]]$N[foo1[[i]]$Year == 100][foo1[[i]]$N[foo1[[i]]$Year == 100]==0])/1000)
+}
+
+```
+
+
+Testing
+```{r}
+
+params_rational <- params[params$P_j <= 0.99 & params$P_j > 0,]
+for(i in 1:nrow(params_rational)){
+  Amat <- MatrixDemoStoch(m = params_rational$m[i],  P_a = params_rational$P_a[i], lambda_a = 1, 
+                  alpha = params_rational$alpha[i])
+  
+  if(is.singular.matrix(Amat)) print(lambda(Amat))
+  print(generation.time(Amat, r = 1, c = params_rational$alpha[i]:(params_rational$alpha[i]+1)))
+  print(sum(fundamental.matrix(Amat, r=1,  c = (params_rational$alpha[i]:(params_rational$alpha[i]+1)))$meaneta))
+}
+
+
+params2keep <- lapply(1:nrow(params_rational), function(i){
+  P_j <- JuvenileSurvival(m = params_rational$m[i], P_a = params_rational$P_a[i], lambda_a = 1, 
+                          alpha = params_rational$alpha[i])
+  Amat_mat <- diag(P_j, nrow = params_rational$alpha[i], ncol = params_rational$alpha[i])
+  Amat_mat2 <- rbind(c(rep(0,params_rational$alpha[i]-1), P_j*params_rational$m[i]), Amat_mat)
+  Amat_mat3 <- cbind(Amat_mat2, c(params_rational$m[i]*params_rational$P_a[i], rep(0, params_rational$alpha[i]-1), 
+                                  params_rational$P_a[i]))
+  Amat_mat3
+  # if(!is.singular.matrix(Amat_mat3)) params_rational[i,]
+})
+
+nrow(params2keep)
+
+P_j <- JuvenileSurvival(m = m[15], P_a = P_a[3], lambda_a = 1, alpha = alphaD[4])
+
+Amat_mat <- diag(P_j, nrow = alphaD[4], ncol = alphaD[4])
+Amat_mat2 <- rbind(c(rep(0,alphaD[4]-1), P_j*m[15]), Amat_mat)
+Amat_mat3 <- cbind(Amat_mat2, c(m[15]*P_a[3], rep(0, alphaD[4]-1), P_a[3]))
+lambda(Amat_mat3)
+
+# But they have Fertility = P_j(of last age class of juvenile) * m and P_a * m . When semelparous looks like no reproduction 
+Amat <- matrix(c(0, 0,0, P_j*m[15], (m[15]*P_a[3]),
+                 P_j, 0, 0, 0, 0,
+                 0, P_j, 0, 0,0,
+                 0, 0, P_j, 0, 0,
+                 0, 0, 0, P_j, P_a[3]), nrow = alphaD[4]+1, byrow = TRUE)
+
+# Amat <- matrix(c(0, P_j*m[15], P_a[3]*m[15],
+#                  P_j, 0,0,
+#                  0, P_j, P_a[3]), nrow = 3, byrow = TRUE)
+
+lambda(Amat)
+generation.time(Amat,  r = 1, c = (alphaD[4]-1):alphaD[4])
+# Life length
+sum(fundamental.matrix(Amat, r=1, c=(alphaD[4]-1):alphaD[4])$meaneta)
+
+i <- 2
+(P_a[i])
+(alpha[i]) # age at maturity
+(m[i]) # offspring
+P_j <- JuvenileSurvival(m = m[i], P_a = P_a[i], lambda_a = 1.1, alpha = alpha[15])
+
+# But they have Fertility = P_j(of last age class of juvenile) * m and P_a * m . When semelparous looks like no reproduction 
+Amat <- matrix(c(P_j*m[i], (m[1]*P_a[i]),
+                 P_j, P_a[i]), nrow = 2, byrow = TRUE)
+
+lambda(Amat)
+generation.time(Amat, r = 1, c = 1:2)
+sum(fundamental.matrix(Amat, r=1, c=1:2)$meaneta)
+
+# Flip it to characteristic equation with lambda = 1 for solve for P_a WRONG WRONG WRON!!
+AdultSurvival <- function(m, P_j, alpha){
+  (-m/(P_j^alpha))+1
+}
+
+params[100,]
+P_a <- AdultSurvival(m = params$m[100], P_j = params$P_j[100], alpha = params$alpha[100])
+P_a; params$P_a[100]
+```
+
+
 
 
 But I want environmental stochasticity where a group of matrices that represent the process of short or long and itero or semel are selected at as iid environments
