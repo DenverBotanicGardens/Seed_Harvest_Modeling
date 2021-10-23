@@ -1,0 +1,167 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+
+```{r}
+
+library(tidyr)
+library(popbio)
+library(ggplot2)
+library(devtools)
+library(patchwork)
+require(AICcmodavg)
+library(lme4)
+# library(DirichletReg)
+
+library(matrixcalc)
+rm(list=ls())
+
+```
+
+
+## Jeppsson and Forslund 2012 demographic stochasticity 
+$\alpha& = age of maturation (matrixes are alpha+1)
+P_a = adult survival
+m = fecundity  
+Limit to when P_j is < 0.99
+Constant environment (I'll extend) and no density dependence  
+Characteristic equation for age-classified model   
+determinant seems to say multiply one matrix element * the rows and columns not including that matrix element   
+ 
+```{r}
+
+# Equation 1 - general model of stochastic population growth rate accounting for demographic and environmental stochasticity on population growth rate; r is mean population growth rate, sigma squared for environmental and demographic stochasticity and N is the population size 
+PopGrowthRate <- function(r, sig2_environ, sig2_demo, N){
+  loglambda <- r - (1/2)*sig2_environ - (1/2*N)*sig2_demo
+  loglambda
+}
+
+
+# Equation 2 - make a Leslie (age based matrix) can control for age of maturity 
+MatrixDemoStoch <- function(m, P_a, lambda_a, alpha){
+  P_j <- JuvenileSurvival(m = m, P_a = P_a, lambda_a = lambda_a, 
+                          alpha = alpha)
+  Amat_mat <- diag(P_j, nrow = alpha, ncol = alpha)
+  Amat_mat2 <- rbind(c(rep(0,alpha-1), P_j*m), Amat_mat)
+  Amat_mat3 <- cbind(Amat_mat2, c(m*P_a, rep(0, alpha-1), P_a))
+  Amat_mat3
+}
+
+
+# Equation 3: estimate survival of juveniles from survival of adults, offspring (m) and age of maturing (alpha)
+JuvenileSurvival <- function(m, P_a, lambda_a, alpha){
+  ((m/lambda_a) + ((P_a*m)/( (lambda_a^(alpha+1)) - P_a*(lambda_a)^alpha )))^(-1/alpha)
+}
+
+
+
+# Equation 5: demographic variances of population growth (sigma squared_d) with trait specific contribution to variance 
+sig2_d <- function(MPM, tau = 0){
+  w <- stable.stage(MPM) 
+  # sig2_survival <- c(sapply(1:(dim(MPM)[1]-1), function(i){
+  #   MPM[i+1, i]*(1-(MPM[i+1, i]))
+  # }), MPM[dim(MPM)[1],dim(MPM)[2]]*(1- MPM[dim(MPM)[1],dim(MPM)[2]]))
+  sig2_survival <- structure(vapply(MPM[-1,], function(x) x*(1-x), numeric(1)), dim = dim(MPM[-1,]))
+  sig2_fertility <- MPM[1,]
+  # Sensitivities
+  s <- sensitivity(MPM)
+  sig2matrix <- rbind(sig2_fertility, sig2_survival)
+  
+  for(i in 1:dim(MPM)[1]){
+    (w[i]^(-1)) * (s[1,i]*sig2_fertility[i] + max(s[-1,i]*sig2_survival[,i]) +
+                     2*(s[1,i]*s[,i][which(sig2matrix[,i] != 0)])) # but won't get P_a
+  }
+}
+
+
+
+# F_x = P_x * m; P_x is binomially distributed; F_x is Poisson, so for binomial, prob is the survival probablility, number of trial (size) is the number of individuals in that age class, I _think_ n number of observations is 1, an individual lives or not
+## Tau is the covariance of reprodution and survival of stage i - kept as zero for their study but could reflect the trade off
+BranchingMPM <- function(MPM, popsz, t_year){
+  n_vec <- matrix(round(stable.stage(MPM)*popsz, 0), nrow = 1)
+  for(tt in 1:t_year){
+    surv_j <- c(0, sapply(1:(dim(MPM)[1]-1), function(i){
+      rbinom(1, n_vec[tt,i], prob = MPM[i+1, i])
+      })) 
+    surv_a <- c(rep(0,(dim(MPM)[1]-1)),rbinom(1, n_vec[tt,dim(MPM)[1]], prob = MPM[dim(MPM)[1],dim(MPM)[2]]))
+    if(n_vec[tt,dim(MPM)[[1]]] > 0){
+      repro <- c(sum(sapply(MPM[1,], function(x) rpois(1, x))), rep(0, dim(MPM)[1]-1))
+    } else {
+      repro <- rep(0,dim(MPM)[1])
+    }
+    n_vec <- rbind(n_vec, surv_j + surv_a + repro)
+    }
+  n_vec
+}
+
+# equation 4: population extinction over t years. The product of the extinction of each stage by time t. the probability that each stage goes extinct by time t. They set to starting pop size of 100 and time being 100 years
+Q_t <- function(q_i, t, n, P_a, m, alpha, lambda_a){
+  
+}
+
+```
+
+From the paper
+```{r}
+alphaD <- 1:15
+m = c(0.5, 1, 1.5, 2:30)
+P_a <- seq(0, 0.95, by = 0.025) # semelparous to degrees of iteroparity
+
+
+params <- do.call(rbind,lapply(alphaD, function(al){
+  mout <- do.call(rbind,lapply(m, function(m1){
+    Pout <- do.call(rbind,lapply(P_a, function(Pa){
+      data.frame(P_j = JuvenileSurvival(m1, Pa, lambda_a = 1, al),
+                 alpha = al, m = m1, P_a = Pa)
+    }))
+    Pout
+  }))
+  mout
+}))
+
+nrow(params)
+nrow(params[params$P_j <= 0.99 & params$P_j > 0,])
+
+
+Amats <- lapply(c(1,5,10,20), function(alpha_age){
+  parity <- lapply(seq(0,0.99, length.out = 5), function(P_a){
+    fecundity <- lapply(seq(1,16, by = 3), function(m){
+    MatrixDemoStoch(m, P_a, lambda_a = 1, alpha = alpha_age)
+    })
+    fecundity
+    })
+  parity
+  })
+
+MPM <- Amats[[1]][[2]][[3]]
+lambda(MPM)
+generation.time(MPM)
+
+foo1 <- lapply(c(10,50,100,500,1000), function(psz){
+  reps <- do.call(rbind,lapply(1:100, function(rps){
+    out <- BranchingMPM(MPM = Amats[[1]][[1]][[1]], popsz = psz, t = 100)
+    data.frame(Year = c(1,10,30,50,100), Replicate = rps, out[c(1,10,30,50,100),], 
+               N = rowSums(out[c(1,10,30,50,100),]))
+  }))
+  reps
+})
+
+ggplot(foo1[[2]], aes(Year, N, colour = as.factor(Replicate), group = as.factor(Replicate)))+  
+  # geom_boxplot()+
+  geom_line()+
+  # geom_jitter(height = 0)+
+  theme_bw()+
+  # scale_colour_discrete(guides = FALSE)
+  theme(legend.position = "none")
+
+# Percent extinct 
+for(i in 1:5){
+  print(length(foo1[[i]]$N[foo1[[i]]$Year == 100][foo1[[i]]$N[foo1[[i]]$Year == 100]==0])/1000)
+}
+
+```
